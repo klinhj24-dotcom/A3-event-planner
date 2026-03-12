@@ -1,8 +1,12 @@
 import { Router } from "express";
+import { google } from "googleapis";
 import { db } from "@workspace/db";
-import { commScheduleRulesTable, commTasksTable, eventsTable } from "@workspace/db";
+import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 import { addDays, subDays } from "date-fns";
+import { createAuthedClient } from "../lib/google";
+
+const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
 const router = Router();
 
@@ -184,21 +188,70 @@ router.post("/comm-schedule/tasks/generate", async (req, res) => {
   }
 });
 
-// PATCH /comm-schedule/tasks/:id — update task status / notes
+// PATCH /comm-schedule/tasks/:id — update task status / notes + sync Google Calendar title
 router.patch("/comm-schedule/tasks/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
     const { status, notes, googleCalendarEventId } = req.body;
+
     const [task] = await db
       .update(commTasksTable)
       .set({ status, notes, googleCalendarEventId, updatedAt: new Date() })
       .where(eq(commTasksTable.id, id))
       .returning();
+
     if (!task) {
       res.status(404).json({ error: "Task not found" });
       return;
     }
+
+    // If status changed and the task has a linked Google Calendar event, update the title
+    if (status && task.googleCalendarEventId) {
+      try {
+        const userId = (req.user as any).id;
+        const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+
+        if (user?.googleAccessToken && user?.googleRefreshToken) {
+          const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, task.eventId));
+
+          // Reconstruct the original title (same formula used when creating it)
+          const baseTitle = [
+            event?.title,
+            task.messageName || task.commType,
+            task.channel ? `(${task.channel})` : null,
+          ].filter(Boolean).join(" — ");
+
+          const newTitle = status === "done" ? `✅ DONE — ${baseTitle}` : baseTitle;
+
+          const auth = createAuthedClient(
+            user.googleAccessToken,
+            user.googleRefreshToken,
+            user.googleTokenExpiry
+          );
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({
+                googleAccessToken: tokens.access_token,
+                googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
+                googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+              }).where(eq(usersTable.id, userId));
+            }
+          });
+
+          const calendar = google.calendar({ version: "v3", auth });
+          await calendar.events.patch({
+            calendarId: TMS_COMMS_CALENDAR_ID,
+            eventId: task.googleCalendarEventId,
+            requestBody: { summary: newTitle },
+          });
+        }
+      } catch (calErr) {
+        // Non-fatal — task is already saved, just log the calendar sync failure
+        console.error("Calendar title sync failed:", calErr);
+      }
+    }
+
     res.json(task);
   } catch (err) {
     console.error("updateTask error:", err);
