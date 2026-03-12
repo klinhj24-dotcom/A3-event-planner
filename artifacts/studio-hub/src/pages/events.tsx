@@ -6,18 +6,218 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2, List, CalendarDays, Radio } from "lucide-react";
-import { format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import {
+  Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle
+} from "lucide-react";
+import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
+import { useCommTasks, useUpdateCommTask, type CommTask } from "@/hooks/use-team";
 
+// ─── Channel icon map ─────────────────────────────────────────────────────────
+const CHANNEL_ICONS: Record<string, React.ReactNode> = {
+  "Email": <Mail className="h-3.5 w-3.5" />,
+  "Email to Past Clients": <Mail className="h-3.5 w-3.5" />,
+  "Email to Enrolled Students": <Mail className="h-3.5 w-3.5" />,
+  "Email to Enrolled Clients": <Mail className="h-3.5 w-3.5" />,
+  "Instagram Post": <Instagram className="h-3.5 w-3.5" />,
+  "Instagram Story": <Instagram className="h-3.5 w-3.5" />,
+  "Print": <Printer className="h-3.5 w-3.5" />,
+  "Website": <Globe className="h-3.5 w-3.5" />,
+};
+
+const COMM_TYPE_COLORS: Record<string, string> = {
+  "Email": "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  "Social Media": "bg-pink-500/10 text-pink-400 border-pink-500/20",
+  "In-Studio": "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  "Print": "bg-green-500/10 text-green-400 border-green-500/20",
+  "Website": "bg-purple-500/10 text-purple-400 border-purple-500/20",
+};
+
+// ─── CommTasksSheet ───────────────────────────────────────────────────────────
+function CommTasksSheet({
+  event,
+  open,
+  onClose,
+}: {
+  event: { id: number; title: string; type: string; startDate?: string | null } | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { data: tasks = [], isLoading } = useCommTasks(event?.id ?? null);
+  const { mutate: updateTask } = useUpdateCommTask();
+  const { mutate: pushComms, isPending: pushing } = useMutation({
+    mutationFn: () =>
+      fetch(`/api/calendar/push-comms/${event!.id}`, { method: "POST", credentials: "include" }).then(r => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, event?.id] }),
+  });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  if (!event) return null;
+
+  const sorted = [...tasks].sort((a, b) => {
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+  });
+
+  const doneCount = tasks.filter(t => t.status === "done").length;
+  const total = tasks.length;
+  const progressPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+
+  function toggle(task: CommTask) {
+    const newStatus = task.status === "done" ? "pending" : "done";
+    updateTask(
+      { id: task.id, eventId: event!.id, status: newStatus },
+      {
+        onError: () => toast({ title: "Failed to update task", variant: "destructive" }),
+      }
+    );
+  }
+
+  function handlePushComms() {
+    pushComms(undefined, {
+      onSuccess: (data: any) => {
+        if (data?.error) { toast({ title: data.error, variant: "destructive" }); return; }
+        if (data?.pushed === 0 && data?.message) {
+          toast({ title: "No rules matched", description: data.message, variant: "destructive" });
+          return;
+        }
+        toast({ title: `${data?.pushed} comm tasks generated & pushed to calendar` });
+      },
+      onError: () => toast({ title: "Failed to push comms", variant: "destructive" }),
+    });
+  }
+
+  function dueDateLabel(dateStr: string | null | undefined) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    const daysUntil = differenceInDays(d, new Date());
+    if (isPast(d) && daysUntil < 0) return { text: `${Math.abs(daysUntil)}d overdue`, cls: "text-destructive" };
+    if (daysUntil <= 3) return { text: `In ${daysUntil}d`, cls: "text-amber-400" };
+    return { text: format(d, "MMM d"), cls: "text-muted-foreground" };
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto flex flex-col gap-0 p-0">
+        {/* Header */}
+        <div className="p-6 border-b border-border/50 bg-muted/10">
+          <SheetHeader className="space-y-1">
+            <SheetTitle className="font-display text-lg leading-tight">{event.title}</SheetTitle>
+            <SheetDescription className="text-xs">{event.type}</SheetDescription>
+          </SheetHeader>
+
+          {total > 0 ? (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-foreground">
+                  {doneCount} of {total} tasks complete
+                </span>
+                <span className={`font-semibold text-sm ${progressPct === 100 ? "text-emerald-400" : "text-primary"}`}>
+                  {progressPct}%
+                </span>
+              </div>
+              <Progress value={progressPct} className="h-2 rounded-full" />
+            </div>
+          ) : (
+            <div className="mt-4 text-sm text-muted-foreground">
+              No comm tasks yet — push to generate them.
+            </div>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-4 rounded-xl w-full border-[#00b199]/40 text-[#00b199] hover:bg-[#00b199]/10 hover:text-[#00b199]"
+            onClick={handlePushComms}
+            disabled={pushing}
+          >
+            {pushing
+              ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              : <Radio className="h-3.5 w-3.5 mr-2" />}
+            {total > 0 ? "Regenerate & push to Comms Calendar" : "Generate & push to Comms Calendar"}
+          </Button>
+        </div>
+
+        {/* Task list */}
+        <div className="flex-1 p-4 space-y-2">
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : sorted.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground space-y-2">
+              <ClipboardList className="h-10 w-10 mx-auto opacity-20" />
+              <p className="text-sm">No tasks yet. Hit the button above to generate them.</p>
+            </div>
+          ) : (
+            sorted.map(task => {
+              const isDone = task.status === "done";
+              const dateInfo = dueDateLabel(task.dueDate);
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => toggle(task)}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none
+                    ${isDone
+                      ? "bg-muted/20 border-border/30 opacity-60"
+                      : "bg-card border-border/50 hover:border-primary/30 hover:bg-primary/5"
+                    }`}
+                >
+                  <Checkbox
+                    checked={isDone}
+                    onCheckedChange={() => toggle(task)}
+                    onClick={e => e.stopPropagation()}
+                    className="mt-0.5 shrink-0 rounded-md"
+                  />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className={`text-sm font-medium leading-snug ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                      {task.messageName || task.commType}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {task.commType && (
+                        <Badge variant="outline" className={`text-[10px] rounded-md px-1.5 ${COMM_TYPE_COLORS[task.commType] || "bg-muted/40 text-muted-foreground"}`}>
+                          {task.commType}
+                        </Badge>
+                      )}
+                      {task.channel && (
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          {CHANNEL_ICONS[task.channel]}
+                          {task.channel}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {dateInfo && (
+                    <div className={`shrink-0 text-[11px] font-medium flex items-center gap-1 ${dateInfo.cls}`}>
+                      {dateInfo.cls === "text-destructive" && <AlertCircle className="h-3 w-3" />}
+                      {dateInfo.text}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Sync buttons ─────────────────────────────────────────────────────────────
 function CalendarPushButton({ eventId }: { eventId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -31,13 +231,13 @@ function CalendarPushButton({ eventId }: { eventId: number }) {
     onError: () => toast({ title: "Failed to push to calendar", variant: "destructive" }),
   });
   return (
-    <Button size="sm" variant="ghost" title="Push to Events Calendar" className="h-7 px-2 text-xs rounded-lg text-primary hover:bg-primary/10" onClick={() => push()} disabled={isPending}>
-      {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarCheck className="h-3 w-3" />}
+    <Button size="sm" variant="ghost" title="Push to Events Calendar" className="h-7 w-7 p-0 rounded-lg text-primary hover:bg-primary/10" onClick={() => push()} disabled={isPending}>
+      {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarCheck className="h-3.5 w-3.5" />}
     </Button>
   );
 }
 
-function CommsPushButton({ eventId, eventTitle }: { eventId: number; eventTitle: string }) {
+function CommsPushButton({ eventId, eventTitle, onPushed }: { eventId: number; eventTitle: string; onPushed?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { mutate: pushComms, isPending } = useMutation({
@@ -46,28 +246,24 @@ function CommsPushButton({ eventId, eventTitle }: { eventId: number; eventTitle:
     onSuccess: (data) => {
       if (data.error) { toast({ title: data.error, variant: "destructive" }); return; }
       if (data.pushed === 0 && data.message) {
-        toast({ title: `No rules matched`, description: data.message, variant: "destructive" });
+        toast({ title: "No rules matched", description: data.message, variant: "destructive" });
         return;
       }
-      toast({ title: `${data.pushed} comm tasks pushed to calendar`, description: `For: ${eventTitle}` });
+      toast({ title: `${data.pushed} comm tasks pushed`, description: eventTitle });
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, eventId] });
+      onPushed?.();
     },
     onError: () => toast({ title: "Failed to push comms to calendar", variant: "destructive" }),
   });
   return (
-    <Button
-      size="sm"
-      variant="ghost"
-      title="Generate & push comm schedule to Comms Calendar"
-      className="h-7 px-2 text-xs rounded-lg text-[#00b199] hover:bg-[#00b199]/10"
-      onClick={() => pushComms()}
-      disabled={isPending}
-    >
-      {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Radio className="h-3 w-3" />}
+    <Button size="sm" variant="ghost" title="Push comm schedule to Comms Calendar" className="h-7 w-7 p-0 rounded-lg text-[#00b199] hover:bg-[#00b199]/10" onClick={() => pushComms()} disabled={isPending}>
+      {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
     </Button>
   );
 }
 
+// ─── Event schema ─────────────────────────────────────────────────────────────
 const eventSchema = z.object({
   title: z.string().min(1, "Title is required"),
   type: z.string().min(1, "Type is required"),
@@ -80,6 +276,7 @@ const eventSchema = z.object({
   cost: z.coerce.number().optional(),
 });
 
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function Events() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"list" | "calendar">("list");
@@ -87,6 +284,7 @@ export default function Events() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
 
   const { mutate: createEvent, isPending } = useCreateEvent({
     mutation: {
@@ -103,18 +301,16 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: {
-      title: "", type: "Recital", status: "planning", isPaid: false
-    }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false }
   });
 
-  const filteredEvents = events?.filter(e => 
-    e.title.toLowerCase().includes(search.toLowerCase()) || 
+  const filteredEvents = events?.filter(e =>
+    e.title.toLowerCase().includes(search.toLowerCase()) ||
     e.location?.toLowerCase().includes(search.toLowerCase())
   );
 
   const getStatusColor = (status: string) => {
-    switch(status) {
+    switch (status) {
       case 'confirmed': return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
       case 'completed': return "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20";
       case 'cancelled': return "bg-destructive/15 text-destructive border-destructive/20";
@@ -125,151 +321,147 @@ export default function Events() {
   return (
     <AppLayout>
       <div className="space-y-6">
+        {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="font-display text-3xl font-bold tracking-tight">Events</h1>
             <p className="text-muted-foreground mt-1">Manage studio events, shows, and gigs.</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* View toggle */}
             <div className="flex items-center rounded-xl border border-border/60 bg-muted/30 p-1 gap-1">
-              <button
-                onClick={() => setView("list")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
+              <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                 <List className="h-3.5 w-3.5" /> List
               </button>
-              <button
-                onClick={() => setView("calendar")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === "calendar" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
+              <button onClick={() => setView("calendar")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === "calendar" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                 <CalendarDays className="h-3.5 w-3.5" /> Calendar
               </button>
             </div>
+
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
-                <Plus className="h-4 w-4 mr-2" /> Create Event
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] rounded-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="font-display text-2xl">Create Event</DialogTitle>
-                <DialogDescription>Schedule a new event and configure sync tags.</DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => createEvent({ data }))} className="space-y-5 py-4">
-                  <FormField control={form.control} name="title" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Event Title *</FormLabel>
-                      <FormControl><Input placeholder="Summer Recital 2026" className="rounded-xl" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}/>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="type" render={({ field }) => (
+              <DialogTrigger asChild>
+                <Button className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
+                  <Plus className="h-4 w-4 mr-2" /> Create Event
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px] rounded-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="font-display text-2xl">Create Event</DialogTitle>
+                  <DialogDescription>Schedule a new event and configure sync tags.</DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit((data) => createEvent({ data }))} className="space-y-5 py-4">
+                    <FormField control={form.control} name="title" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Type *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent className="max-h-72 overflow-y-auto">
-                            <SelectItem value="Recital">Recital</SelectItem>
-                            <SelectItem value="Student Band Show">Student Band Show</SelectItem>
-                            <SelectItem value="Songwriter Showcase / Studio Show">Songwriter Showcase / Studio Show</SelectItem>
-                            <SelectItem value="Open Mic">Open Mic</SelectItem>
-                            <SelectItem value="Festival / Community Event">Festival / Community Event</SelectItem>
-                            <SelectItem value="Workshop">Workshop</SelectItem>
-                            <SelectItem value="Studio Party">Studio Party</SelectItem>
-                            <SelectItem value="Studio Jam Night">Studio Jam Night</SelectItem>
-                            <SelectItem value="Studio Open House">Studio Open House</SelectItem>
-                            <SelectItem value="Rockin' Toddlers">Rockin' Toddlers</SelectItem>
-                            <SelectItem value="Chamber Ensemble">Chamber Ensemble</SelectItem>
-                            <SelectItem value="Enrichment Club">Enrichment Club</SelectItem>
-                            <SelectItem value="Instrument Demo (Waldorf)">Instrument Demo (Waldorf)</SelectItem>
-                            <SelectItem value="Instrument Demo (library)">Instrument Demo (library)</SelectItem>
-                            <SelectItem value="Little Rockers (library)">Little Rockers (library)</SelectItem>
-                            <SelectItem value="Holiday Closure">Holiday Closure</SelectItem>
-                            <SelectItem value="Holiday">Holiday</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <FormLabel>Event Title *</FormLabel>
+                        <FormControl><Input placeholder="Summer Recital 2026" className="rounded-xl" {...field} /></FormControl>
+                        <FormMessage />
                       </FormItem>
-                    )}/>
-                    <FormField control={form.control} name="status" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="planning">Planning</SelectItem>
-                            <SelectItem value="confirmed">Confirmed</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="cancelled">Cancelled</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}/>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="startDate" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date & Time</FormLabel>
-                        <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
-                      </FormItem>
-                    )}/>
-                    <FormField control={form.control} name="location" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl><Input placeholder="Main Stage" className="rounded-xl" {...field} /></FormControl>
-                      </FormItem>
-                    )}/>
-                  </div>
-                  <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
-                    <h4 className="font-semibold text-sm flex items-center"><DollarSign className="h-4 w-4 mr-1 text-primary" /> Financials</h4>
-                    <FormField control={form.control} name="isPaid" render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Paid Event?</FormLabel>
-                          <p className="text-[10px] text-muted-foreground">Are we receiving payment for sound/services?</p>
-                        </div>
-                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                      </FormItem>
-                    )}/>
+                    )} />
                     <div className="grid grid-cols-2 gap-4">
-                      <FormField control={form.control} name="revenue" render={({ field }) => (
+                      <FormField control={form.control} name="type" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Revenue ($)</FormLabel>
-                          <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          <FormLabel>Type *</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent className="max-h-72 overflow-y-auto">
+                              <SelectItem value="Recital">Recital</SelectItem>
+                              <SelectItem value="Student Band Show">Student Band Show</SelectItem>
+                              <SelectItem value="Songwriter Showcase / Studio Show">Songwriter Showcase / Studio Show</SelectItem>
+                              <SelectItem value="Open Mic">Open Mic</SelectItem>
+                              <SelectItem value="Festival / Community Event">Festival / Community Event</SelectItem>
+                              <SelectItem value="Workshop">Workshop</SelectItem>
+                              <SelectItem value="Studio Party">Studio Party</SelectItem>
+                              <SelectItem value="Studio Jam Night">Studio Jam Night</SelectItem>
+                              <SelectItem value="Studio Open House">Studio Open House</SelectItem>
+                              <SelectItem value="Rockin' Toddlers">Rockin' Toddlers</SelectItem>
+                              <SelectItem value="Chamber Ensemble">Chamber Ensemble</SelectItem>
+                              <SelectItem value="Enrichment Club">Enrichment Club</SelectItem>
+                              <SelectItem value="Instrument Demo (Waldorf)">Instrument Demo (Waldorf)</SelectItem>
+                              <SelectItem value="Instrument Demo (library)">Instrument Demo (library)</SelectItem>
+                              <SelectItem value="Little Rockers (library)">Little Rockers (library)</SelectItem>
+                              <SelectItem value="Holiday Closure">Holiday Closure</SelectItem>
+                              <SelectItem value="Holiday">Holiday</SelectItem>
+                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </FormItem>
-                      )}/>
-                      <FormField control={form.control} name="cost" render={({ field }) => (
+                      )} />
+                      <FormField control={form.control} name="status" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Cost ($)</FormLabel>
-                          <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          <FormLabel>Status *</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="planning">Planning</SelectItem>
+                              <SelectItem value="confirmed">Confirmed</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </FormItem>
-                      )}/>
+                      )} />
                     </div>
-                  </div>
-                  <FormField control={form.control} name="calendarTag" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
-                      <FormControl><Input placeholder="e.g. show-summer" className="rounded-xl" {...field} /></FormControl>
-                      <p className="text-[10px] text-muted-foreground mt-1">Tag used by website script to pull this event.</p>
-                    </FormItem>
-                  )}/>
-                  <DialogFooter className="pt-4">
-                    <Button type="submit" disabled={isPending} className="w-full rounded-xl h-11">
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Create Event
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="startDate" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date & Time</FormLabel>
+                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="location" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Location</FormLabel>
+                          <FormControl><Input placeholder="Main Stage" className="rounded-xl" {...field} /></FormControl>
+                        </FormItem>
+                      )} />
+                    </div>
+                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+                      <h4 className="font-semibold text-sm flex items-center"><DollarSign className="h-4 w-4 mr-1 text-primary" /> Financials</h4>
+                      <FormField control={form.control} name="isPaid" render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-sm font-medium">Paid Event?</FormLabel>
+                            <p className="text-[10px] text-muted-foreground">Are we receiving payment for sound/services?</p>
+                          </div>
+                          <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        </FormItem>
+                      )} />
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField control={form.control} name="revenue" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Revenue ($)</FormLabel>
+                            <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="cost" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Cost ($)</FormLabel>
+                            <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          </FormItem>
+                        )} />
+                      </div>
+                    </div>
+                    <FormField control={form.control} name="calendarTag" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
+                        <FormControl><Input placeholder="e.g. show-summer" className="rounded-xl" {...field} /></FormControl>
+                        <p className="text-[10px] text-muted-foreground mt-1">Tag used by website script to pull this event.</p>
+                      </FormItem>
+                    )} />
+                    <DialogFooter className="pt-4">
+                      <Button type="submit" disabled={isPending} className="w-full rounded-xl h-11">
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Create Event
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
+        {/* Calendar or list view */}
         {view === "calendar" ? (
           isLoading ? (
             <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -283,15 +475,15 @@ export default function Events() {
             <div className="p-4 border-b border-border/50 bg-muted/10">
               <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search events by title or location..." 
+                <Input
+                  placeholder="Search events by title or location..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9 rounded-xl border-border/60 bg-background focus-visible:ring-primary/20"
                 />
               </div>
             </div>
-            
+
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/30">
@@ -300,7 +492,7 @@ export default function Events() {
                     <TableHead className="font-semibold">Date & Location</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
                     <TableHead className="font-semibold">Financials</TableHead>
-                    <TableHead className="text-right font-semibold">Sync</TableHead>
+                    <TableHead className="text-right font-semibold">Sync & Tasks</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -313,9 +505,7 @@ export default function Events() {
                       <TableRow key={event.id} className="hover:bg-muted/20 transition-colors">
                         <TableCell>
                           <div className="font-medium text-foreground text-base">{event.title}</div>
-                          <span className="text-xs text-muted-foreground capitalize mt-0.5 block">
-                            {event.type.replace('_', ' ')}
-                          </span>
+                          <span className="text-xs text-muted-foreground mt-0.5 block">{event.type}</span>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1 text-sm">
@@ -345,20 +535,36 @@ export default function Events() {
                             )}
                             {(event.revenue || event.cost) && (
                               <span className="ml-3 text-xs text-muted-foreground font-mono">
-                                {event.revenue ? `+$${event.revenue}` : ''} {event.cost ? `-$${event.cost}` : ''}
+                                {event.revenue ? `+$${event.revenue}` : ''}{event.cost ? ` -$${event.cost}` : ''}
                               </span>
                             )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {event.calendarTag ? (
-                              <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50">
+                          <div className="flex items-center justify-end gap-1">
+                            {event.calendarTag && (
+                              <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50 mr-1">
                                 #{event.calendarTag}
                               </Badge>
-                            ) : null}
+                            )}
+                            {/* Push to Events Calendar */}
                             <CalendarPushButton eventId={event.id} />
-                            <CommsPushButton eventId={event.id} eventTitle={event.title} />
+                            {/* Generate & push comm tasks */}
+                            <CommsPushButton
+                              eventId={event.id}
+                              eventTitle={event.title}
+                              onPushed={() => setTasksEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate })}
+                            />
+                            {/* Open comm tasks checklist */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="View comm task checklist"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                              onClick={() => setTasksEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate })}
+                            >
+                              <ClipboardList className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -370,6 +576,13 @@ export default function Events() {
           </div>
         )}
       </div>
+
+      {/* Comm tasks slide-out panel */}
+      <CommTasksSheet
+        event={tasksEvent}
+        open={!!tasksEvent}
+        onClose={() => setTasksEvent(null)}
+      />
     </AppLayout>
   );
 }
