@@ -52,6 +52,7 @@ artifacts-monorepo/
 - **Settings page**: Tabbed: Gmail connection, email templates, Team management (admin only — set user roles).
 - **Staff Assignment**: Assign staff members to events in the Create Event form (checkbox-style multi-select) and in the Edit Event dialog (add/remove staff as tags). Staff assigned to events appear in the employee portal.
 - **Employee Portal (My Schedule)**: Employees see a focused nav (My Schedule, Settings) after login. `/my-schedule` shows all events they're assigned to, split into Upcoming and Past, with event type, status, date, location, and their assigned role.
+- **Band Lineup Builder**: Per-event lineup sheet accessible from the events table (music note icon). Left panel: global band/act roster (add, delete). Right panel: drag-to-reorder lineup slots using `@dnd-kit/sortable`. Slot types: Act (links to a saved band or custom label), Announcement, Break. Each slot: start time (manual or auto-calculated from previous slot's duration + buffer), duration, buffer after, overlap toggle (concurrent with previous act), notes/announcements field. Auto-calculates the show's end time at bottom. DB: `bandsTable` (global roster) + `eventLineupTable` (per-event ordered slots). API: `/api/bands` CRUD + `/api/events/:id/lineup` CRUD + `/api/events/:id/lineup/reorder`.
 
 ## Roles
 

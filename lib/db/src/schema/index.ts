@@ -5,3 +5,4 @@ export * from "./employees";
 export * from "./outreach";
 export * from "./assignments";
 export * from "./comm_schedule";
+export * from "./bands";
