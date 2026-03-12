@@ -1,0 +1,20 @@
+packages:
+  "framer-motion": "For smooth page transitions and micro-interactions"
+  "recharts": "For dashboard charts and visual statistics"
+  "date-fns": "For formatting event and outreach dates professionally"
+  "@hookform/resolvers": "For form validation with Zod"
+  "react-hook-form": "For robust form state management"
+
+images:
+  - path: "artifacts/studio-hub/public/images/login-bg.png"
+    description: "Dark atmospheric music studio mixing board with glowing studio monitors, cinematic lighting, shallow depth of field, sleek professional vibe"
+    aspect_ratio: "16:9"
+  - path: "artifacts/studio-hub/public/images/signup-bg.png"
+    description: "Live music concert stage from the crowd perspective, dark atmospheric lighting with striking blue and purple spotlights, premium energetic feel"
+    aspect_ratio: "16:9"
+
+notes:
+  - App uses Replit Auth for main routes (@workspace/replit-auth-web)
+  - Public signup route at /signup/:token does not require auth
+  - All API data fetching uses generated hooks from @workspace/api-client-react
+  - Standard shadcn components are assumed to be present in @/components/ui/

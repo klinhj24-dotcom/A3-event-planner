@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Studio Hub API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: contacts
+    description: Contact management
+  - name: events
+    description: Event management
+  - name: employees
+    description: Employee management
+  - name: outreach
+    description: Outreach history
+  - name: signups
+    description: Event sign-up management
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +34,621 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      operationId: getCurrentAuthUser
+      tags: [auth]
+      summary: Get current authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        "200":
+          description: Current auth state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetCurrentAuthUserResponse"
+
+  /login:
+    get:
+      operationId: beginBrowserLogin
+      tags: [auth]
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the OIDC authorization endpoint.
+
+  /callback:
+    get:
+      operationId: handleBrowserLoginCallback
+      tags: [auth]
+      summary: Complete the browser OIDC login flow
+      responses:
+        "302":
+          description: Redirect after login.
+
+  /logout:
+    get:
+      operationId: logoutBrowserSession
+      tags: [auth]
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        "302":
+          description: Redirect to OIDC logout URL.
+
+  /mobile-auth/token-exchange:
+    post:
+      operationId: exchangeMobileAuthorizationCode
+      tags: [auth]
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExchangeMobileAuthorizationCodeBody"
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeMobileAuthorizationCodeResponse"
+
+  /mobile-auth/logout:
+    post:
+      operationId: logoutMobileSession
+      tags: [auth]
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        "200":
+          description: Logout processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutMobileSessionResponse"
+
+  /contacts:
+    get:
+      operationId: listContacts
+      tags: [contacts]
+      summary: List all contacts
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contact"
+    post:
+      operationId: createContact
+      tags: [contacts]
+      summary: Create a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactBody"
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+
+  /contacts/{id}:
+    get:
+      operationId: getContact
+      tags: [contacts]
+      summary: Get a contact by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "404":
+          description: Not found
+    put:
+      operationId: updateContact
+      tags: [contacts]
+      summary: Update a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactBody"
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+    delete:
+      operationId: deleteContact
+      tags: [contacts]
+      summary: Delete a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /contacts/{id}/log-outreach:
+    post:
+      operationId: logOutreach
+      tags: [outreach]
+      summary: Log an outreach for a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOutreachBody"
+      responses:
+        "201":
+          description: Outreach logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Outreach"
+
+  /contacts/{id}/outreach:
+    get:
+      operationId: getContactOutreach
+      tags: [outreach]
+      summary: Get outreach history for a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of outreach records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Outreach"
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List all events
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: upcoming
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventBody"
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /events/{id}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get an event by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "404":
+          description: Not found
+    put:
+      operationId: updateEvent
+      tags: [events]
+      summary: Update an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventBody"
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /events/{id}/contacts:
+    get:
+      operationId: getEventContacts
+      tags: [events]
+      summary: Get contacts associated with an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of contacts for event
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contact"
+    post:
+      operationId: addEventContact
+      tags: [events]
+      summary: Associate a contact with an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddEventContactBody"
+      responses:
+        "201":
+          description: Contact added to event
+
+  /events/{id}/employees:
+    get:
+      operationId: getEventEmployees
+      tags: [events]
+      summary: Get employees assigned to an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of event employee assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventEmployee"
+    post:
+      operationId: addEventEmployee
+      tags: [events]
+      summary: Assign an employee to an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddEventEmployeeBody"
+      responses:
+        "201":
+          description: Employee assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEmployee"
+
+  /events/{id}/signups:
+    get:
+      operationId: getEventSignups
+      tags: [signups]
+      summary: Get signups for an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of signups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventSignup"
+
+  /events/{id}/notify:
+    post:
+      operationId: notifyEventSignup
+      tags: [signups]
+      summary: Send signup notification for an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotifyResponse"
+
+  /signup/{token}:
+    get:
+      operationId: getSignupPage
+      tags: [signups]
+      summary: Get event info for signup page (public, no auth)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Event signup info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupPageInfo"
+        "404":
+          description: Not found
+    post:
+      operationId: submitSignup
+      tags: [signups]
+      summary: Submit a signup for an event
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitSignupBody"
+      responses:
+        "201":
+          description: Signup submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSignup"
+
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [employees]
+      summary: List all employees
+      responses:
+        "200":
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /employees/{id}:
+    get:
+      operationId: getEmployee
+      tags: [employees]
+      summary: Get an employee by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    put:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update an employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Delete an employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [events]
+      summary: Get dashboard overview stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +658,467 @@ components:
       required:
         - status
 
+    GetCurrentAuthUserResponse:
+      type: object
+      properties:
+        isAuthenticated:
+          type: boolean
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
+      required:
+        - isAuthenticated
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+      required:
+        - id
+
+    ExchangeMobileAuthorizationCodeBody:
+      type: object
+      properties:
+        code:
+          type: string
+        code_verifier:
+          type: string
+        redirect_uri:
+          type: string
+        state:
+          type: string
+        nonce:
+          type: string
+      required:
+        - code
+        - code_verifier
+        - redirect_uri
+        - state
+
+    ExchangeMobileAuthorizationCodeResponse:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+
+    LogoutMobileSessionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        organization:
+          type: string
+        type:
+          type: string
+          description: "e.g. band_director, event_coordinator, venue, other"
+        notes:
+          type: string
+        lastOutreachAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - createdAt
+        - updatedAt
+
+    CreateContactBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        organization:
+          type: string
+        type:
+          type: string
+        notes:
+          type: string
+      required:
+        - name
+        - type
+
+    Outreach:
+      type: object
+      properties:
+        id:
+          type: integer
+        contactId:
+          type: integer
+        eventId:
+          type: integer
+        method:
+          type: string
+          description: "e.g. email, phone, in-person, text"
+        notes:
+          type: string
+        outreachAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - contactId
+        - method
+        - outreachAt
+        - createdAt
+
+    CreateOutreachBody:
+      type: object
+      properties:
+        method:
+          type: string
+        notes:
+          type: string
+        eventId:
+          type: integer
+        outreachAt:
+          type: string
+          format: date-time
+      required:
+        - method
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+          description: "student_showcase, community_event, recital, open_mic, other"
+        status:
+          type: string
+          description: "planning, confirmed, completed, cancelled"
+        description:
+          type: string
+        location:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        googleCalendarEventId:
+          type: string
+        calendarTag:
+          type: string
+          description: "Tag for website calendar script integration"
+        isPaid:
+          type: boolean
+          description: "Are we being paid for sound services?"
+        cost:
+          type: number
+          description: "Cost in dollars (what we pay)"
+        revenue:
+          type: number
+          description: "Revenue in dollars (what we receive)"
+        notes:
+          type: string
+        signupToken:
+          type: string
+        signupDeadline:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - type
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateEventBody:
+      type: object
+      properties:
+        title:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        googleCalendarEventId:
+          type: string
+        calendarTag:
+          type: string
+        isPaid:
+          type: boolean
+        cost:
+          type: number
+        revenue:
+          type: number
+        notes:
+          type: string
+        signupDeadline:
+          type: string
+          format: date-time
+      required:
+        - title
+        - type
+        - status
+
+    AddEventContactBody:
+      type: object
+      properties:
+        contactId:
+          type: integer
+        role:
+          type: string
+      required:
+        - contactId
+
+    Employee:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          description: "staff, intern"
+        isActive:
+          type: boolean
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - role
+        - isActive
+        - createdAt
+        - updatedAt
+
+    CreateEmployeeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        isActive:
+          type: boolean
+        notes:
+          type: string
+      required:
+        - name
+        - role
+
+    EventEmployee:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        employeeId:
+          type: integer
+        employeeName:
+          type: string
+        employeeRole:
+          type: string
+        role:
+          type: string
+          description: "Role at this specific event"
+        pay:
+          type: number
+        notes:
+          type: string
+      required:
+        - id
+        - eventId
+        - employeeId
+
+    AddEventEmployeeBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        role:
+          type: string
+        pay:
+          type: number
+        notes:
+          type: string
+      required:
+        - employeeId
+
+    EventSignup:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        notes:
+          type: string
+        status:
+          type: string
+          description: "pending, confirmed, declined"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - eventId
+        - name
+        - status
+        - createdAt
+
+    SubmitSignupBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        notes:
+          type: string
+      required:
+        - name
+
+    NotifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        signupUrl:
+          type: string
+      required:
+        - success
+        - message
+
+    SignupPageInfo:
+      type: object
+      properties:
+        eventTitle:
+          type: string
+        eventType:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        location:
+          type: string
+        description:
+          type: string
+        signupDeadline:
+          type: string
+          format: date-time
+      required:
+        - eventTitle
+        - eventType
+
+    DashboardStats:
+      type: object
+      properties:
+        totalContacts:
+          type: integer
+        upcomingEvents:
+          type: integer
+        totalEmployees:
+          type: integer
+        pendingSignups:
+          type: integer
+        recentOutreach:
+          type: array
+          items:
+            $ref: "#/components/schemas/Outreach"
+        upcomingEventsList:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+      required:
+        - totalContacts
+        - upcomingEvents
+        - totalEmployees
+        - pendingSignups
+        - recentOutreach
+        - upcomingEventsList
