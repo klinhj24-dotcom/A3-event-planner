@@ -11,9 +11,12 @@ import gmailRouter from "./gmail";
 import calendarRouter from "./calendar";
 import usersRouter from "./users";
 import commScheduleRouter from "./comm-schedule";
+import debriefRouter from "./debrief";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
+router.use(storageRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(contactsRouter);
@@ -26,5 +29,6 @@ router.use(gmailRouter);
 router.use(calendarRouter);
 router.use(usersRouter);
 router.use(commScheduleRouter);
+router.use(debriefRouter);
 
 export default router;

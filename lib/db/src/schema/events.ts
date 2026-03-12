@@ -1,4 +1,4 @@
-import { boolean, decimal, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, decimal, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { contactsTable } from "./contacts";
@@ -20,6 +20,7 @@ export const eventsTable = pgTable("events", {
   notes: text("notes"),
   signupToken: text("signup_token").unique(),
   signupDeadline: timestamp("signup_deadline", { withTimezone: true }),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -39,3 +40,26 @@ export type Event = typeof eventsTable.$inferSelect;
 export const insertEventContactSchema = createInsertSchema(eventContactsTable).omit({ id: true, createdAt: true });
 export type InsertEventContact = z.infer<typeof insertEventContactSchema>;
 export type EventContact = typeof eventContactsTable.$inferSelect;
+
+export const eventDebriefTable = pgTable("event_debriefs", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull().unique(),
+  timeIn: timestamp("time_in", { withTimezone: true }),
+  timeOut: timestamp("time_out", { withTimezone: true }),
+  greyInvolved: boolean("grey_involved"),
+  staffPresent: text("staff_present"),
+  crowdSize: integer("crowd_size"),
+  boothPlacement: text("booth_placement"),
+  soundSetupNotes: text("sound_setup_notes"),
+  whatWorked: text("what_worked"),
+  whatDidntWork: text("what_didnt_work"),
+  leadQuality: text("lead_quality"),
+  wouldRepeat: boolean("would_repeat"),
+  improvements: text("improvements"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertEventDebriefSchema = createInsertSchema(eventDebriefTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEventDebrief = z.infer<typeof insertEventDebriefSchema>;
+export type EventDebrief = typeof eventDebriefTable.$inferSelect;

@@ -1,0 +1,589 @@
+<div id="events-app" class="tms-events">
+  <div id="events-root"></div>
+</div>
+
+<style>
+/* ===== BASE CONTAINER ===== */
+.tms-events {
+  max-width: 1200px;
+  margin: 0 auto;
+  color: #fff;
+  font-family: 'Instrument Sans', sans-serif;
+}
+
+/* ===== MONTH BANNER ===== */
+.tms-month {
+  margin-bottom: 60px;
+  position: relative;
+}
+
+.tms-month-banner {
+  position: relative;
+  width: 100%;
+  height: 350px;
+  overflow: hidden;
+  z-index: 0;
+}
+.tms-month-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  position: relative;
+  z-index: 0;
+}
+.tms-banner-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(0,0,0,0.85) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+.tms-month-name {
+  position: absolute;
+  bottom: 25px;
+  left: 40px;
+  font-size: 56px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #fff;
+  z-index: 2;
+}
+.tms-arrows {
+  position: absolute;
+  right: 40px;
+  bottom: 30px;
+  display: flex;
+  gap: 12px;
+  z-index: 2;
+}
+.tms-arrows button {
+  background: #00b199;
+  border: none;
+  color: #fff;
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+.tms-arrows button:hover { transform: scale(1.1); }
+
+/* ===== HEADER LINE ===== */
+.tms-header-line {
+  width: 100%;
+  height: 4px;
+  background: #fff;
+  position: relative;
+  z-index: 3;
+}
+
+/* ===== EVENT LIST ===== */
+.tms-list {
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+
+/* ===== EVENT CARD ===== */
+.tms-card {
+  display: grid;
+  grid-template-columns: 220px 340px 1fr; /* fixed width for image column */
+  grid-template-rows: auto 1fr auto;
+  align-items: start;
+  background: #000;
+  color: #fff;
+  padding: 28px 0;
+  border-bottom: 2px solid rgba(255,255,255,0.3);
+
+  /* fade-in defaults */
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+.tms-card.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ===== DATE STYLES ===== */
+.tms-date {
+  text-align: center;
+  font-weight: 900;
+  line-height: 1;
+  grid-row: 1 / span 3;
+}
+.tms-date .day {
+  font-size: 140px;
+  margin: 0;
+}
+.tms-date .dow {
+  font-size: 28px;
+  text-transform: uppercase;
+  margin-top: 6px;
+  letter-spacing: 1px;
+}
+
+/* ===== PHOTO ===== */
+.tms-photo {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 340px;
+  min-width: 280px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.tms-photo img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: pointer;
+  display: block;
+  transition: transform 0.25s ease;
+}
+.tms-photo img:hover {
+  transform: scale(1.03);
+}
+
+/* ===== INFO TEXT ===== */
+.tms-body {
+  padding: 0 40px;
+  line-height: 1.3;
+  grid-row: 1 / 2;
+}
+.tms-titleline {
+  font-size: 42px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.tms-venue {
+  font-size: 22px;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+.tms-time {
+  font-weight: 900;
+  font-size: 28px;
+}
+
+/* ===== CTA BUTTON ===== */
+.tms-cta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding-right: 40px;
+  grid-column: 3;
+  grid-row: 3;
+}
+.tms-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: #000;
+  font-weight: 900;
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 18px 48px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.25s ease, color 0.25s ease;
+  white-space: nowrap;
+  border: 3px solid transparent;
+}
+
+/* Hover Colors by Tag */
+.tms-card[data-tag="TW"]   .tms-btn:hover { background: #bf1e0a; color: #fff; }
+.tms-card[data-tag="MSH"]  .tms-btn:hover { background: #2ed9b2; color: #000; }
+.tms-card[data-tag="MSS"]  .tms-btn:hover { background: #cddb29; color: #000; }
+.tms-card[data-tag="CF"]   .tms-btn:hover { background: #2e3bdb; color: #fff; } /* updated */
+.tms-card[data-tag="CAL"]  .tms-btn:hover { background: #7250ef; color: #fff; } /* new */
+.tms-card[data-tag="NONE"] .tms-btn:hover { background: #ff4329; color: #fff; }
+
+/* ===== DATE COLORS ===== */
+.tms-date[data-tag="TW"]   .day, .tms-date[data-tag="TW"]   .dow { color: #bf1e0a; }
+.tms-date[data-tag="MSH"]  .day, .tms-date[data-tag="MSH"]  .dow { color: #2ed9b2; }
+.tms-date[data-tag="MSS"]  .day, .tms-date[data-tag="MSS"]  .dow { color: #cddb29; }
+.tms-date[data-tag="CF"]   .day, .tms-date[data-tag="CF"]   .dow { color: #2e3bdb; } /* updated */
+.tms-date[data-tag="CAL"]  .day, .tms-date[data-tag="CAL"]  .dow { color: #7250ef; } /* new */
+.tms-date[data-tag="NONE"] .day, .tms-date[data-tag="NONE"] .dow { color: #fff; }
+
+/* ==== EVENT TYPE LABEL ==== */
+.tms-eventtype {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 6px;
+  opacity: 0.9;
+}
+.tms-eventtype[data-tag="TW"]  { color: #bf1e0a; }
+.tms-eventtype[data-tag="MSH"] { color: #2ed9b2; }
+.tms-eventtype[data-tag="MSS"] { color: #cddb29; }
+.tms-eventtype[data-tag="CF"]  { color: #2e3bdb; } /* updated */
+.tms-eventtype[data-tag="CAL"] { color: #7250ef; } /* new */
+
+/* ===== TABLET ADAPTATION ===== */
+@media (max-width: 1024px) {
+  .tms-month-banner { height: 280px; }
+  .tms-month-name { font-size: 42px; left: 24px; bottom: 20px; }
+  .tms-arrows { right: 24px; bottom: 20px; }
+  .tms-arrows button { width: 48px; height: 48px; font-size: 20px; }
+  .tms-card {
+    grid-template-columns: 160px 1fr 180px;
+    grid-template-rows: auto 1fr auto;
+    padding: 24px 16px;
+  }
+  .tms-titleline { font-size: 34px; }
+  .tms-date .day { font-size: 110px; }
+}
+
+/* ===== MOBILE ADAPTATION ===== */
+@media (max-width: 768px) {
+  .tms-month-banner { height: 220px; }
+  .tms-month-name { font-size: 32px; left: 16px; bottom: 16px; }
+  .tms-arrows { right: 16px; bottom: 16px; gap: 8px; }
+  .tms-arrows button { width: 42px; height: 42px; font-size: 18px; }
+
+  .tms-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+  }
+  .tms-date {
+    display: flex;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .tms-date .day { font-size: 64px; line-height: 1; }
+  .tms-date .dow { font-size: 20px; text-transform: uppercase; }
+
+  /* ===== OPTION A FIX (NO CROP ON MOBILE) ===== */
+  .tms-photo {
+    height: 180px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    background: #111; /* makes letterboxing look intentional */
+    max-width: 100%;
+    min-width: 0;
+  }
+  .tms-photo img {
+    width: 100%;
+    height: 100%;        /* key: fill the 180px box */
+    max-height: none;    /* key: remove 420px cap on mobile */
+    object-fit: contain; /* key: no cropping */
+    object-position: center;
+    display: block;
+  }
+
+  .tms-body { padding: 0; margin-bottom: 16px; }
+  .tms-titleline { font-size: 26px; line-height: 1.2; margin-bottom: 6px; }
+  .tms-venue { font-size: 18px; }
+  .tms-time { font-size: 20px; font-weight: 700; }
+  .tms-cta { justify-content: center; margin-top: auto; padding: 0; }
+  .tms-btn { width: 100%; max-width: 280px; padding: 14px 0; font-size: 16px; }
+}
+
+/* ===== EXTRA SMALL (phones under 480px) ===== */
+@media (max-width: 480px) {
+  .tms-month-name { font-size: 26px; }
+  .tms-card { padding: 16px 12px; }
+  .tms-date .day { font-size: 48px; }
+  .tms-date .dow { font-size: 16px; }
+  .tms-titleline { font-size: 22px; }
+  .tms-btn { font-size: 15px; padding: 12px; }
+}
+</style>
+
+<script>
+/* ===== CONFIG ===== */
+const API_KEY = "AIzaSyAS3_BH1NwfruxPmb2Jib6HsBowu_SJAzE";
+const CAL_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
+const TZ = "America/New_York";
+const TAGS = ["TW","MSH","MSS","CF","CAL"];
+const REQUIRE_TAGS = true;
+const TAG_REGEX = /\[(TW|MSH|MSS|CF|CAL)\]/i;
+let currentMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+/* ===== HELPERS ===== */
+function fmtMonthKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+function localDateFromISO(iso){ return iso.includes('T') ? new Date(iso) : new Date(`${iso}T00:00:00`); }
+function monthName(d){ return d.toLocaleString('en-US',{month:'long',year:'numeric',timeZone:TZ}); }
+function weekdayLong(d){ return d.toLocaleString('en-US',{weekday:'long',timeZone:TZ}); }
+function firstJpg(desc=""){ const m=desc.match(/https?:\/\/\S+\.(jpg|jpeg|png)/i); return m?m[0]:null; }
+
+/* ===== VENUE PARSER ===== */
+function extractVenue(desc="") {
+  const m = desc.match(/\[venue\]\s*([^\n]+)/i);
+  return m ? m[1].trim() : "";
+}
+function detectTag(s=""){ const t=TAGS.find(t=>s.includes(`[${t}]`)); return t||"NONE"; }
+function cleanTitle(s=""){ return s.replace(/\[(TW|MSH|MSS|CF|CAL|HEADER)\]\s*/g,"").trim(); }
+
+/* ===== CTA DETECTION ===== */
+function extractCTAs(desc = "") {
+  const clean = desc
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const re = /\[(TICKETS|REGISTER|SIGN UP|RSVP|INFO|FLYER)\][\s:—-]*?(https?:\/\/[^\s<]+)/ig;
+  const arr = [];
+  let m;
+  while ((m = re.exec(clean)) !== null) {
+    arr.push({ label: m[1].toUpperCase(), url: m[2].trim() });
+  }
+  return arr;
+}
+
+/* ===== FETCH EVENTS ===== */
+async function fetchEvents(startDate, endDate){
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CAL_ID)}/events`);
+  url.searchParams.set("key", API_KEY);
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("timeMin", startDate.toISOString());
+  url.searchParams.set("timeMax", endDate.toISOString());
+  url.searchParams.set("timeZone", TZ);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error("Calendar fetch failed");
+  const data = await res.json();
+  return (data.items || []).filter(ev => ev.status !== "cancelled");
+}
+
+/* ===== RENDER PIPELINE ===== */
+async function loadMonth(monthStart){
+  const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+  const events = await fetchEvents(monthStart, monthEnd);
+  const by = {};
+
+  for (const ev of events) {
+    const startISO = ev.start?.dateTime || ev.start?.date;
+    if (!startISO) continue;
+
+    const d = localDateFromISO(startISO);
+    const key = fmtMonthKey(d);
+    by[key] ??= { items: [], banner: null, monthDate: new Date(d.getFullYear(), d.getMonth(), 1) };
+
+    const title = ev.summary || "";
+    const desc = ev.description || "";
+
+    // HEADER events set month banner, regardless of tags
+    if (/\[HEADER\]/i.test(title)) {
+      const img = firstJpg(desc);
+      if (img) by[key].banner = img;
+      continue;
+    }
+
+    // If requiring tags, skip events without bracket tags
+    if (REQUIRE_TAGS && !TAG_REGEX.test(title)) continue;
+
+    by[key].items.push(ev);
+  }
+
+  render(by);
+}
+
+/* ===== DOM RENDER ===== */
+function render(eventsByMonth){
+  const root = document.getElementById("events-root");
+  root.innerHTML = "";
+
+  const keys = Object.keys(eventsByMonth).sort();
+  if (keys.length === 0) {
+    root.innerHTML = "<p style='text-align:center;padding:24px 16px;'>No events found.</p>";
+    return;
+  }
+
+  const key = keys[0];
+  const pack = eventsByMonth[key];
+
+  const monthWrap = document.createElement("section");
+  monthWrap.className = "tms-month";
+
+  /* Banner */
+  const banner = document.createElement("div");
+  banner.className = "tms-month-banner";
+  const bannerImg = pack.banner
+    ? `<img src="${pack.banner}" alt="">`
+    : `<div style='background:#000;height:350px;'></div>`;
+  banner.innerHTML = `
+    ${bannerImg}
+    <div class="tms-banner-gradient"></div>
+    <div class="tms-month-name">${monthName(pack.monthDate)}</div>
+    <div class="tms-arrows">
+      <button id="prevMonthBtn">←</button>
+      <button id="nextMonthBtn">→</button>
+    </div>`;
+  monthWrap.appendChild(banner);
+
+  /* Header Line */
+  const headerLine = document.createElement("div");
+  headerLine.className = "tms-header-line";
+  monthWrap.appendChild(headerLine);
+
+  /* If no tagged events, show message and stop */
+  if (!pack.items.length) {
+    const empty = document.createElement("p");
+    empty.style.textAlign = "center";
+    empty.style.padding = "24px 16px";
+    empty.style.opacity = "0.85";
+    empty.textContent = "No tagged events this month. Check back soon!";
+    monthWrap.appendChild(empty);
+    root.appendChild(monthWrap);
+    return;
+  }
+
+  /* Event List */
+  const list = document.createElement("div");
+  list.className = "tms-list";
+
+  pack.items.forEach(ev => {
+    const startISO = ev.start?.dateTime || ev.start?.date;
+    const sDate = localDateFromISO(startISO);
+    const tag = detectTag(ev.summary || "");
+    const title = cleanTitle(ev.summary || "");
+    const desc = ev.description || "";
+    const img = firstJpg(desc);
+    const ctas = extractCTAs(desc);
+    const venue = extractVenue(desc);
+
+    const timeStr = ev.start.dateTime
+      ? sDate.toLocaleString("en-US",{hour:"numeric",minute:"2-digit",hour12:true,timeZone:TZ})
+      : "All Day";
+
+    const typeLabels = {
+      TW:  "Teachers in the Wild",
+      MSH: "Music Space Hosted Event",
+      MSS: "Music Space Sponsored Event",
+      CF:  "Community Friends Event",
+      CAL: "Music Space Calendar Event"
+    };
+    const typeText = typeLabels[tag] || "";
+
+    const card = document.createElement("article");
+    card.className = "tms-card";
+    card.dataset.tag = tag;
+
+    card.innerHTML = `
+      <div class="tms-date" data-tag="${tag}">
+        <div class="day">${sDate.getDate()}</div>
+        <div class="dow">${weekdayLong(sDate)}</div>
+      </div>
+
+      <div class="tms-photo">
+        ${img ? `<img src="${img}" alt="${title || 'Event flyer'}" loading="lazy">` : ""}
+      </div>
+
+      <div class="tms-body">
+        <div class="tms-titleline">${title}</div>
+        ${venue ? `<div class="tms-venue">${venue}</div>` : ""}
+        <div class="tms-time">${timeStr}</div>
+        ${typeText ? `<div class="tms-eventtype" data-tag="${tag}">${typeText}</div>` : ""}
+      </div>
+
+      <div class="tms-cta">
+        ${ctas.map(c => `<a class="tms-btn" href="${c.url}" target="_blank" rel="noopener">${c.label}</a>`).join("")}
+      </div>
+    `;
+
+    list.appendChild(card);
+  });
+
+  monthWrap.appendChild(list);
+  root.appendChild(monthWrap);
+
+  /* Arrows */
+  document.getElementById("prevMonthBtn").addEventListener("click", () => {
+    currentMonthStart = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() - 1, 1);
+    loadMonth(currentMonthStart);
+  });
+  document.getElementById("nextMonthBtn").addEventListener("click", () => {
+    currentMonthStart = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() + 1, 1);
+    loadMonth(currentMonthStart);
+  });
+
+  /* Attach fade-in observers */
+  observeCards();
+}
+
+/* ===== FADE-IN ON SCROLL ===== */
+const observer = new IntersectionObserver(
+  entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      }
+    });
+  },
+  { threshold: 0.25 }
+);
+
+function observeCards() {
+  document.querySelectorAll(".tms-card").forEach(card => {
+    if (!card.classList.contains("is-visible")) observer.observe(card);
+  });
+}
+
+/* ===== INIT ===== */
+loadMonth(currentMonthStart);
+
+/* ===== IMAGE POPUP ===== */
+document.addEventListener("click", (e) => {
+  const img = e.target.closest(".tms-photo img");
+  if (!img) return;
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100vw";
+  overlay.style.height = "100vh";
+  overlay.style.background = "rgba(0, 0, 0, 0.85)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "9999";
+  overlay.style.cursor = "zoom-out";
+
+  const bigImg = document.createElement("img");
+  bigImg.src = img.src;
+  bigImg.style.maxWidth = "90vw";
+  bigImg.style.maxHeight = "90vh";
+  bigImg.style.borderRadius = "8px";
+  bigImg.style.boxShadow = "0 0 20px rgba(0,0,0,0.8)";
+  bigImg.style.objectFit = "contain";
+
+  overlay.appendChild(bigImg);
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", () => overlay.remove());
+  document.addEventListener(
+    "keydown",
+    function escListener(evt) {
+      if (evt.key === "Escape") {
+        overlay.remove();
+        document.removeEventListener("keydown", escListener);
+      }
+    },
+    { once: true }
+  );
+});
+</script>

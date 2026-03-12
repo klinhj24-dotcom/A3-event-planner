@@ -271,3 +271,74 @@ export function useUpdateCommTask() {
     },
   });
 }
+
+export interface EventDebrief {
+  id: number;
+  eventId: number;
+  timeIn: string | null;
+  timeOut: string | null;
+  greyInvolved: boolean | null;
+  staffPresent: string | null;
+  crowdSize: number | null;
+  boothPlacement: string | null;
+  soundSetupNotes: string | null;
+  whatWorked: string | null;
+  whatDidntWork: string | null;
+  leadQuality: string | null;
+  wouldRepeat: boolean | null;
+  improvements: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useEventDebrief(eventId: number | null) {
+  return useQuery<EventDebrief | null>({
+    queryKey: [`/api/events/${eventId}/debrief`],
+    queryFn: async () => {
+      if (!eventId) return null;
+      const res = await fetch(`${BASE}/events/${eventId}/debrief`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load debrief");
+      return res.json();
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useUpsertDebrief(eventId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<Omit<EventDebrief, "id" | "eventId" | "createdAt" | "updatedAt">>) => {
+      const res = await fetch(`${BASE}/events/${eventId}/debrief`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save debrief");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/debrief`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+}
+
+export function useUpdateEventImage(eventId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (imageUrl: string | null) => {
+      const res = await fetch(`${BASE}/events/${eventId}/image`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imageUrl }),
+      });
+      if (!res.ok) throw new Error("Failed to update event image");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+}

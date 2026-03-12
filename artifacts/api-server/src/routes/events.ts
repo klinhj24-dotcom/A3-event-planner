@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 
@@ -35,7 +35,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -52,6 +52,7 @@ router.post("/events", async (req, res) => {
         revenue: revenue?.toString() ?? null,
         notes, signupToken,
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
+        imageUrl: imageUrl ?? null,
       })
       .returning();
     res.status(201).json(event);
@@ -87,7 +88,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl } = req.body;
     const [event] = await db
       .update(eventsTable)
       .set({
@@ -99,6 +100,7 @@ router.put("/events/:id", async (req, res) => {
         revenue: revenue?.toString() ?? null,
         notes,
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
+        imageUrl: imageUrl !== undefined ? imageUrl : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))

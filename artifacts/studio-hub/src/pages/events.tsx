@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
 import { useCommTasks, useUpdateCommTask, useSendLateReport, type CommTask } from "@/hooks/use-team";
+import { DebriefSheet } from "@/components/debrief-sheet";
 
 // ─── Channel icon map ─────────────────────────────────────────────────────────
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -305,6 +306,7 @@ export default function Events() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
+  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
 
   const { mutate: createEvent, isPending } = useCreateEvent({
     mutation: {
@@ -548,8 +550,23 @@ export default function Events() {
                     filteredEvents?.map((event) => (
                       <TableRow key={event.id} className="hover:bg-muted/20 transition-colors">
                         <TableCell>
-                          <div className="font-medium text-foreground text-base">{event.title}</div>
-                          <span className="text-xs text-muted-foreground mt-0.5 block">{event.type}</span>
+                          <div className="flex items-center gap-3">
+                            {(event as any).imageUrl ? (
+                              <img
+                                src={(event as any).imageUrl}
+                                alt={event.title}
+                                className="h-10 w-10 rounded-lg object-cover shrink-0 border border-border/40"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-lg bg-muted/40 border border-border/30 shrink-0 flex items-center justify-center">
+                                <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium text-foreground text-base">{event.title}</div>
+                              <span className="text-xs text-muted-foreground mt-0.5 block">{event.type}</span>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1 text-sm">
@@ -609,6 +626,16 @@ export default function Events() {
                             >
                               <ClipboardList className="h-3.5 w-3.5" />
                             </Button>
+                            {/* Debrief */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Post-event debrief"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-secondary hover:bg-secondary/10"
+                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl })}
+                            >
+                              <ClipboardCheck className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -626,6 +653,12 @@ export default function Events() {
         event={tasksEvent}
         open={!!tasksEvent}
         onClose={() => setTasksEvent(null)}
+      />
+
+      {/* Post-event debrief panel */}
+      <DebriefSheet
+        event={debriefEvent}
+        onClose={() => setDebriefEvent(null)}
       />
     </AppLayout>
   );
