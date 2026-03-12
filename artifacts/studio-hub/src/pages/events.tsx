@@ -295,6 +295,9 @@ const eventSchema = z.object({
   isPaid: z.boolean().default(false),
   revenue: z.coerce.number().optional(),
   cost: z.coerce.number().optional(),
+  flyerUrl: z.string().optional(),
+  ticketsUrl: z.string().optional(),
+  ctaLabel: z.string().optional(),
 });
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -323,7 +326,7 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "TICKETS" }
   });
 
   const { mutate: sendLateReport, isPending: sendingReport } = useSendLateReport();
@@ -490,10 +493,49 @@ export default function Events() {
                     <FormField control={form.control} name="calendarTag" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
-                        <FormControl><Input placeholder="e.g. show-summer" className="rounded-xl" {...field} /></FormControl>
-                        <p className="text-[10px] text-muted-foreground mt-1">Tag used by website script to pull this event.</p>
+                        <FormControl><Input placeholder="e.g. TW, MSH, MSS, CF, CAL" className="rounded-xl" {...field} /></FormControl>
+                        <p className="text-[10px] text-muted-foreground mt-1">Bracket tag written into the calendar title so the website script colours this event. Must match one of: TW, MSH, MSS, CF, CAL.</p>
                       </FormItem>
                     )} />
+                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+                      <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                        <Globe className="h-4 w-4 text-secondary" /> Website Calendar Fields
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground -mt-2">These are written into the Google Calendar event description so your website displays them automatically.</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <FormField control={form.control} name="ctaLabel" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Button Label</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value ?? "TICKETS"}>
+                              <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value="TICKETS">TICKETS</SelectItem>
+                                <SelectItem value="REGISTER">REGISTER</SelectItem>
+                                <SelectItem value="SIGN UP">SIGN UP</SelectItem>
+                                <SelectItem value="RSVP">RSVP</SelectItem>
+                                <SelectItem value="INFO">INFO</SelectItem>
+                                <SelectItem value="FLYER">FLYER</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )} />
+                        <div className="col-span-2">
+                          <FormField control={form.control} name="ticketsUrl" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Tickets / Link URL</FormLabel>
+                              <FormControl><Input placeholder="https://app.tickethive.com/e/..." className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                            </FormItem>
+                          )} />
+                        </div>
+                      </div>
+                      <FormField control={form.control} name="flyerUrl" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Flyer Image URL</FormLabel>
+                          <FormControl><Input placeholder="https://ik.imagekit.io/... (public .jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          <p className="text-[10px] text-muted-foreground mt-1">Public image URL — appears as the event flyer on the website. Must end in .jpg, .jpeg, or .png.</p>
+                        </FormItem>
+                      )} />
+                    </div>
                     <DialogFooter className="pt-4">
                       <Button type="submit" disabled={isPending} className="w-full rounded-xl h-11">
                         {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

@@ -66,10 +66,27 @@ router.post("/calendar/push/:eventId", async (req, res) => {
 
     const calendar = await getCalendarClient(req.user.id);
 
+    // Build website-compatible description
+    // Website script reads: [venue] Name, [TICKETS/REGISTER/etc] url, bare image url
+    const descParts: string[] = [];
+    if (event.location) descParts.push(`[venue] ${event.location}`);
+    if (event.ticketsUrl) {
+      const label = (event.ctaLabel ?? "TICKETS").toUpperCase();
+      descParts.push(`[${label}] ${event.ticketsUrl}`);
+    }
+    if (event.flyerUrl) descParts.push(event.flyerUrl);
+    if (event.notes) descParts.push(event.notes);
+    const builtDescription = descParts.join("\n") || undefined;
+
+    // Title gets the calendar tag prefix so the website script can colour-code it
+    const summary = event.calendarTag
+      ? `[${event.calendarTag}] ${event.title}`
+      : event.title;
+
     const calendarEvent = {
-      summary: event.title,
+      summary,
       location: event.location ?? undefined,
-      description: event.description ?? undefined,
+      description: builtDescription,
       start: event.startDate
         ? { dateTime: event.startDate.toISOString() }
         : { date: new Date().toISOString().split("T")[0] },

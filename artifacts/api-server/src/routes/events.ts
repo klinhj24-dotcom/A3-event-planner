@@ -35,7 +35,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -53,6 +53,9 @@ router.post("/events", async (req, res) => {
         notes, signupToken,
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
         imageUrl: imageUrl ?? null,
+        flyerUrl: flyerUrl ?? null,
+        ticketsUrl: ticketsUrl ?? null,
+        ctaLabel: ctaLabel ?? "TICKETS",
       })
       .returning();
     res.status(201).json(event);
@@ -88,7 +91,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel } = req.body;
     const [event] = await db
       .update(eventsTable)
       .set({
@@ -101,6 +104,9 @@ router.put("/events/:id", async (req, res) => {
         notes,
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
         imageUrl: imageUrl !== undefined ? imageUrl : undefined,
+        flyerUrl: flyerUrl !== undefined ? flyerUrl : undefined,
+        ticketsUrl: ticketsUrl !== undefined ? ticketsUrl : undefined,
+        ctaLabel: ctaLabel !== undefined ? ctaLabel : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))

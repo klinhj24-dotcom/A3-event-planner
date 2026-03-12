@@ -21,6 +21,9 @@ export const eventsTable = pgTable("events", {
   signupToken: text("signup_token").unique(),
   signupDeadline: timestamp("signup_deadline", { withTimezone: true }),
   imageUrl: text("image_url"),
+  flyerUrl: text("flyer_url"),
+  ticketsUrl: text("tickets_url"),
+  ctaLabel: text("cta_label").default("TICKETS"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
