@@ -115,6 +115,66 @@ export function useCommRules() {
   });
 }
 
+export function useCreateCommRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Omit<CommRule, "id" | "isActive">) => {
+      const res = await fetch(`${BASE}/comm-schedule/rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed to create rule");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/comm-schedule/rules"] });
+    },
+  });
+}
+
+export function useUpdateCommRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: Partial<CommRule> & { id: number }) => {
+      const res = await fetch(`${BASE}/comm-schedule/rules/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed to update rule");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/comm-schedule/rules"] });
+    },
+  });
+}
+
+export function useDeleteCommRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${BASE}/comm-schedule/rules/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete rule");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/comm-schedule/rules"] });
+    },
+  });
+}
+
 export interface CommRule {
   id: number;
   eventType: string;
