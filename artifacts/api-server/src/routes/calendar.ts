@@ -79,7 +79,7 @@ router.post("/calendar/push/:eventId", async (req, res) => {
     const builtDescription = descParts.join("\n") || undefined;
 
     // Title gets the calendar tag prefix so the website script can colour-code it
-    const summary = event.calendarTag
+    const summary = (event.calendarTag && event.calendarTag !== "none")
       ? `${event.title} [${event.calendarTag}]`
       : event.title;
 

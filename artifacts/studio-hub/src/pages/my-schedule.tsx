@@ -100,7 +100,7 @@ function EventCard({ event }: { event: any }) {
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h3 className="font-semibold text-foreground">
               {event.title}
-              {event.calendarTag && (
+              {event.calendarTag && event.calendarTag !== "none" && (
                 <span className="ml-2 text-muted-foreground font-normal text-sm">[{event.calendarTag}]</span>
               )}
             </h3>

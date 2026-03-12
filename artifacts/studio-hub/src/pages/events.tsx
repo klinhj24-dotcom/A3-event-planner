@@ -286,6 +286,7 @@ function CommsPushButton({ eventId, eventTitle, onPushed }: { eventId: number; e
 
 // ─── Event schema ─────────────────────────────────────────────────────────────
 const CALENDAR_TAGS = [
+  { value: "none", label: "No Tag — Keep off public calendar" },
   { value: "TW",  label: "Teachers in the Wild" },
   { value: "MSH", label: "Music Space Hosted Event" },
   { value: "MSS", label: "Music Space Sponsored Event" },
@@ -801,7 +802,7 @@ export default function Events() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {event.calendarTag && (
+                            {event.calendarTag && event.calendarTag !== "none" && (
                               <Badge variant="secondary" className="text-[10px] bg-secondary border border-border/50 mr-1">
                                 {CALENDAR_TAGS.find(t => t.value === event.calendarTag)?.label ?? event.calendarTag}
                               </Badge>
