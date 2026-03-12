@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useCreateEvent } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -14,8 +14,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Upload, X
 } from "lucide-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -329,6 +330,16 @@ export default function Events() {
     defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "TICKETS" }
   });
 
+  const flyerInputRef = useRef<HTMLInputElement>(null);
+  const { uploadFile, isUploading: flyerUploading } = useUpload({
+    onSuccess: (response) => {
+      const url = `/api/storage${response.objectPath}`;
+      form.setValue("flyerUrl", url);
+      toast({ title: "Flyer uploaded" });
+    },
+    onError: (err) => toast({ title: `Upload failed: ${err.message}`, variant: "destructive" }),
+  });
+
   const { mutate: sendLateReport, isPending: sendingReport } = useSendLateReport();
 
   const filteredEvents = events?.filter(e =>
@@ -530,9 +541,40 @@ export default function Events() {
                       </div>
                       <FormField control={form.control} name="flyerUrl" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Flyer Image URL</FormLabel>
-                          <FormControl><Input placeholder="https://ik.imagekit.io/... (public .jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
-                          <p className="text-[10px] text-muted-foreground mt-1">Public image URL — appears as the event flyer on the website. Must end in .jpg, .jpeg, or .png.</p>
+                          <FormLabel className="text-xs">Flyer Image</FormLabel>
+                          {field.value ? (
+                            <div className="relative group rounded-xl overflow-hidden border border-border/40 bg-muted/20" style={{ aspectRatio: "3/4", maxHeight: 180 }}>
+                              <img src={field.value} alt="Flyer preview" className="w-full h-full object-contain" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <Button type="button" size="sm" variant="secondary" className="rounded-lg text-xs h-7 px-2"
+                                  onClick={() => flyerInputRef.current?.click()} disabled={flyerUploading}>
+                                  {flyerUploading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Upload className="h-3 w-3 mr-1" />} Replace
+                                </Button>
+                                <Button type="button" size="sm" variant="destructive" className="rounded-lg text-xs h-7 px-2"
+                                  onClick={() => field.onChange("")}>
+                                  <X className="h-3 w-3 mr-1" /> Remove
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button type="button"
+                              onClick={() => flyerInputRef.current?.click()}
+                              disabled={flyerUploading}
+                              className="w-full border-2 border-dashed border-border/50 hover:border-primary/50 rounded-xl h-20 flex flex-col items-center justify-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                              {flyerUploading
+                                ? <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-[10px]">Uploading…</span></>
+                                : <><Upload className="h-4 w-4" /><span className="text-[10px]">Click to upload flyer</span></>}
+                            </button>
+                          )}
+                          <input ref={flyerInputRef} type="file" accept="image/*" className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="h-px flex-1 bg-border/40" />
+                            <span className="text-[10px] text-muted-foreground">or paste a URL</span>
+                            <div className="h-px flex-1 bg-border/40" />
+                          </div>
+                          <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9 text-xs" {...field} value={field.value || ''} /></FormControl>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Written into the Google Calendar description — website reads it as the event flyer photo.</p>
                         </FormItem>
                       )} />
                     </div>
