@@ -285,6 +285,14 @@ function CommsPushButton({ eventId, eventTitle, onPushed }: { eventId: number; e
 }
 
 // ─── Event schema ─────────────────────────────────────────────────────────────
+const CALENDAR_TAGS = [
+  { value: "TW",  label: "Teachers in the Wild" },
+  { value: "MSH", label: "Music Space Hosted Event" },
+  { value: "MSS", label: "Music Space Sponsored Event" },
+  { value: "CF",  label: "Community Friends Event" },
+  { value: "CAL", label: "Music Space Calendar Event" },
+];
+
 const eventSchema = z.object({
   title: z.string().min(1, "Title is required"),
   type: z.string().min(1, "Type is required"),
@@ -546,8 +554,14 @@ export default function Events() {
                     <FormField control={form.control} name="calendarTag" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
-                        <FormControl><Input placeholder="e.g. TW, MSH, MSS, CF, CAL" className="rounded-xl" {...field} /></FormControl>
-                        <p className="text-[10px] text-muted-foreground mt-1">Bracket tag in the calendar title — must match one of: TW, MSH, MSS, CF, CAL.</p>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select tag…" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {CALENDAR_TAGS.map(t => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </FormItem>
                     )} />
                     <FormField control={form.control} name="notes" render={({ field }) => (
@@ -705,8 +719,8 @@ export default function Events() {
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {event.calendarTag && (
-                              <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50 mr-1">
-                                #{event.calendarTag}
+                              <Badge variant="secondary" className="text-[10px] bg-secondary border border-border/50 mr-1">
+                                {CALENDAR_TAGS.find(t => t.value === event.calendarTag)?.label ?? event.calendarTag}
                               </Badge>
                             )}
                             {/* Edit event */}
@@ -867,8 +881,14 @@ export default function Events() {
               <FormField control={editForm.control} name="calendarTag" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
-                  <FormControl><Input placeholder="e.g. TW, MSH, MSS, CF, CAL" className="rounded-xl" {...field} /></FormControl>
-                  <p className="text-[10px] text-muted-foreground mt-1">Bracket tag in the calendar title — must match one of: TW, MSH, MSS, CF, CAL.</p>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select tag…" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {CALENDAR_TAGS.map(t => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )} />
               <FormField control={editForm.control} name="notes" render={({ field }) => (
