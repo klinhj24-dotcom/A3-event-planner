@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2, List, CalendarDays } from "lucide-react";
+import { Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2, List, CalendarDays, Radio } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,14 +25,45 @@ function CalendarPushButton({ eventId }: { eventId: number }) {
     mutationFn: () => fetch(`/api/calendar/push/${eventId}`, { method: "POST", credentials: "include" }).then(r => r.json()),
     onSuccess: (data) => {
       if (data.error) { toast({ title: data.error, variant: "destructive" }); return; }
-      toast({ title: "Pushed to Google Calendar" });
+      toast({ title: "Pushed to Events Calendar" });
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     },
     onError: () => toast({ title: "Failed to push to calendar", variant: "destructive" }),
   });
   return (
-    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs rounded-lg text-primary hover:bg-primary/10" onClick={() => push()} disabled={isPending}>
+    <Button size="sm" variant="ghost" title="Push to Events Calendar" className="h-7 px-2 text-xs rounded-lg text-primary hover:bg-primary/10" onClick={() => push()} disabled={isPending}>
       {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarCheck className="h-3 w-3" />}
+    </Button>
+  );
+}
+
+function CommsPushButton({ eventId, eventTitle }: { eventId: number; eventTitle: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { mutate: pushComms, isPending } = useMutation({
+    mutationFn: () =>
+      fetch(`/api/calendar/push-comms/${eventId}`, { method: "POST", credentials: "include" }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.error) { toast({ title: data.error, variant: "destructive" }); return; }
+      if (data.pushed === 0 && data.message) {
+        toast({ title: `No rules matched`, description: data.message, variant: "destructive" });
+        return;
+      }
+      toast({ title: `${data.pushed} comm tasks pushed to calendar`, description: `For: ${eventTitle}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+    onError: () => toast({ title: "Failed to push comms to calendar", variant: "destructive" }),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      title="Generate & push comm schedule to Comms Calendar"
+      className="h-7 px-2 text-xs rounded-lg text-[#00b199] hover:bg-[#00b199]/10"
+      onClick={() => pushComms()}
+      disabled={isPending}
+    >
+      {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Radio className="h-3 w-3" />}
     </Button>
   );
 }
@@ -73,7 +104,7 @@ export default function Events() {
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
     defaultValues: {
-      title: "", type: "student_showcase", status: "planning", isPaid: false
+      title: "", type: "Recital", status: "planning", isPaid: false
     }
   });
 
@@ -141,12 +172,25 @@ export default function Events() {
                         <FormLabel>Type *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="student_showcase">Student Showcase</SelectItem>
-                            <SelectItem value="community_event">Community Event</SelectItem>
-                            <SelectItem value="recital">Recital</SelectItem>
-                            <SelectItem value="open_mic">Open Mic</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                          <SelectContent className="max-h-72 overflow-y-auto">
+                            <SelectItem value="Recital">Recital</SelectItem>
+                            <SelectItem value="Student Band Show">Student Band Show</SelectItem>
+                            <SelectItem value="Songwriter Showcase / Studio Show">Songwriter Showcase / Studio Show</SelectItem>
+                            <SelectItem value="Open Mic">Open Mic</SelectItem>
+                            <SelectItem value="Festival / Community Event">Festival / Community Event</SelectItem>
+                            <SelectItem value="Workshop">Workshop</SelectItem>
+                            <SelectItem value="Studio Party">Studio Party</SelectItem>
+                            <SelectItem value="Studio Jam Night">Studio Jam Night</SelectItem>
+                            <SelectItem value="Studio Open House">Studio Open House</SelectItem>
+                            <SelectItem value="Rockin' Toddlers">Rockin' Toddlers</SelectItem>
+                            <SelectItem value="Chamber Ensemble">Chamber Ensemble</SelectItem>
+                            <SelectItem value="Enrichment Club">Enrichment Club</SelectItem>
+                            <SelectItem value="Instrument Demo (Waldorf)">Instrument Demo (Waldorf)</SelectItem>
+                            <SelectItem value="Instrument Demo (library)">Instrument Demo (library)</SelectItem>
+                            <SelectItem value="Little Rockers (library)">Little Rockers (library)</SelectItem>
+                            <SelectItem value="Holiday Closure">Holiday Closure</SelectItem>
+                            <SelectItem value="Holiday">Holiday</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormItem>
@@ -256,7 +300,7 @@ export default function Events() {
                     <TableHead className="font-semibold">Date & Location</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
                     <TableHead className="font-semibold">Financials</TableHead>
-                    <TableHead className="text-right font-semibold">Web Tag</TableHead>
+                    <TableHead className="text-right font-semibold">Sync</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -314,6 +358,7 @@ export default function Events() {
                               </Badge>
                             ) : null}
                             <CalendarPushButton eventId={event.id} />
+                            <CommsPushButton eventId={event.id} eventTitle={event.title} />
                           </div>
                         </TableCell>
                       </TableRow>
