@@ -2,7 +2,7 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { db } from "@workspace/db";
 import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lt, inArray } from "drizzle-orm";
 import { addDays, subDays } from "date-fns";
 import { createAuthedClient } from "../lib/google";
 
@@ -100,7 +100,7 @@ router.delete("/comm-schedule/rules/:id", async (req, res) => {
   }
 });
 
-// GET /comm-schedule/tasks?eventId=X — get tasks for an event
+// GET /comm-schedule/tasks?eventId=X — get tasks, auto-marking overdue ones as late
 router.get("/comm-schedule/tasks", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
@@ -109,15 +109,222 @@ router.get("/comm-schedule/tasks", async (req, res) => {
       res.status(400).json({ error: "eventId is required" });
       return;
     }
+    const eid = parseInt(eventId as string);
+
+    // Auto-mark any pending tasks past their due date as "late"
+    const now = new Date();
+    const overdueIds = await db
+      .select({ id: commTasksTable.id, googleCalendarEventId: commTasksTable.googleCalendarEventId,
+                 messageName: commTasksTable.messageName, commType: commTasksTable.commType, channel: commTasksTable.channel })
+      .from(commTasksTable)
+      .where(and(
+        eq(commTasksTable.eventId, eid),
+        eq(commTasksTable.status, "pending"),
+        lt(commTasksTable.dueDate, now)
+      ));
+
+    if (overdueIds.length > 0) {
+      await db.update(commTasksTable)
+        .set({ status: "late", updatedAt: new Date() })
+        .where(inArray(commTasksTable.id, overdueIds.map(t => t.id)));
+
+      // Fire-and-forget calendar title updates for newly-late tasks
+      const userId = (req.user as any).id;
+      (async () => {
+        try {
+          const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+          if (!user?.googleAccessToken || !user?.googleRefreshToken) return;
+          const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eid));
+          const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({
+                googleAccessToken: tokens.access_token,
+                googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
+                googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+              }).where(eq(usersTable.id, userId));
+            }
+          });
+          const calendar = google.calendar({ version: "v3", auth });
+          for (const task of overdueIds) {
+            if (!task.googleCalendarEventId) continue;
+            const baseTitle = [event?.title, task.messageName || task.commType, task.channel ? `(${task.channel})` : null].filter(Boolean).join(" — ");
+            await calendar.events.patch({
+              calendarId: TMS_COMMS_CALENDAR_ID,
+              eventId: task.googleCalendarEventId,
+              requestBody: { summary: `⚠️ LATE — ${baseTitle}` },
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      })();
+    }
+
     const tasks = await db
       .select()
       .from(commTasksTable)
-      .where(eq(commTasksTable.eventId, parseInt(eventId as string)))
+      .where(eq(commTasksTable.eventId, eid))
       .orderBy(commTasksTable.dueDate);
+
     res.json(tasks);
   } catch (err) {
     console.error("listTasks error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /comm-schedule/tasks/late-report — email a report of all late tasks
+router.post("/comm-schedule/tasks/late-report", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const userId = (req.user as any).id;
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user?.googleAccessToken || !user?.googleRefreshToken) {
+      res.status(403).json({ error: "Google account not connected. Connect Gmail in Settings first." });
+      return;
+    }
+
+    // Find all late/overdue tasks across all events
+    const now = new Date();
+    const lateTasks = await db
+      .select({
+        taskId: commTasksTable.id,
+        eventId: commTasksTable.eventId,
+        commType: commTasksTable.commType,
+        messageName: commTasksTable.messageName,
+        channel: commTasksTable.channel,
+        dueDate: commTasksTable.dueDate,
+        status: commTasksTable.status,
+        eventTitle: eventsTable.title,
+        eventType: eventsTable.type,
+        eventDate: eventsTable.startDate,
+      })
+      .from(commTasksTable)
+      .innerJoin(eventsTable, eq(commTasksTable.eventId, eventsTable.id))
+      .where(
+        and(
+          // Either already marked late, or pending and overdue
+          lt(commTasksTable.dueDate, now)
+        )
+      )
+      .orderBy(commTasksTable.dueDate);
+
+    const actualLate = lateTasks.filter(t => t.status === "late" || (t.status === "pending" && t.dueDate && t.dueDate < now));
+
+    if (actualLate.length === 0) {
+      res.json({ sent: false, message: "No late tasks found — you're all caught up!" });
+      return;
+    }
+
+    // Group by event
+    const byEvent: Record<string, typeof actualLate> = {};
+    for (const task of actualLate) {
+      const key = `${task.eventId}:${task.eventTitle}`;
+      if (!byEvent[key]) byEvent[key] = [];
+      byEvent[key].push(task);
+    }
+
+    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+    const rows = Object.entries(byEvent).map(([key, tasks]) => {
+      const eventTitle = tasks[0].eventTitle;
+      const taskRows = tasks.map(t => {
+        const daysLate = t.dueDate ? Math.ceil((now.getTime() - new Date(t.dueDate).getTime()) / 86400000) : "?";
+        const dueStr = t.dueDate ? new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "No date";
+        const name = t.messageName || t.commType;
+        const channel = t.channel ? ` · ${t.channel}` : "";
+        return `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${name}${channel}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${dueStr}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#ef4444;font-weight:600;">${daysLate}d late</td>
+        </tr>`;
+      }).join("");
+      return `
+        <div style="margin-bottom:24px;">
+          <h3 style="font-size:15px;font-weight:600;color:#111827;margin:0 0 8px;">${eventTitle}</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <thead>
+              <tr style="background:#f9fafb;">
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;">Task</th>
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;">Due Date</th>
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;">Status</th>
+              </tr>
+            </thead>
+            <tbody>${taskRows}</tbody>
+          </table>
+        </div>`;
+    }).join("");
+
+    const htmlBody = `
+      <div style="font-family:'Inter',sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111827;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+          <span style="font-size:24px;">⚠️</span>
+          <div>
+            <h2 style="margin:0;font-size:18px;font-weight:700;">TMS Comms — Late Tasks Report</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${today}</p>
+          </div>
+        </div>
+        <p style="font-size:14px;color:#374151;margin-bottom:20px;">
+          The following <strong>${actualLate.length} comm task${actualLate.length !== 1 ? "s" : ""}</strong> across <strong>${Object.keys(byEvent).length} event${Object.keys(byEvent).length !== 1 ? "s" : ""}</strong> are past their due date and not yet completed.
+        </p>
+        ${rows}
+        <p style="font-size:12px;color:#9ca3af;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px;">
+          Sent from TMS Events & Contacts portal.
+        </p>
+      </div>`;
+
+    // Build raw MIME email
+    const to = req.body.to || user.email || user.googleEmail;
+    if (!to) {
+      res.status(400).json({ error: "No recipient email found. Pass 'to' in the request body." });
+      return;
+    }
+    const subject = `⚠️ TMS Comms — ${actualLate.length} Late Task${actualLate.length !== 1 ? "s" : ""} (${today})`;
+
+    const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, userId));
+      }
+    });
+    const gmail = google.gmail({ version: "v1", auth });
+
+    const from = user.googleEmail ?? user.email ?? "";
+    const boundary = "tms_report_boundary";
+    const rawEmail = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      "",
+      `TMS Comms Late Task Report — ${today}\n\n${actualLate.length} tasks past due across ${Object.keys(byEvent).length} events.\n\nOpen the TMS portal to review and complete them.`,
+      "",
+      `--${boundary}`,
+      `Content-Type: text/html; charset=UTF-8`,
+      "",
+      htmlBody,
+      "",
+      `--${boundary}--`,
+    ].join("\r\n");
+
+    const encoded = Buffer.from(rawEmail).toString("base64url");
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw: encoded } });
+
+    res.json({ sent: true, to, count: actualLate.length });
+  } catch (err: any) {
+    if (err.message === "Google account not connected") {
+      res.status(403).json({ error: "Google account not connected" });
+    } else {
+      console.error("Late report error:", err);
+      res.status(500).json({ error: "Failed to send late report" });
+    }
   }
 });
 

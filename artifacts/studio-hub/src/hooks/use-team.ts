@@ -235,6 +235,24 @@ export function useGenerateCommTasks() {
   });
 }
 
+export function useSendLateReport() {
+  return useMutation({
+    mutationFn: async (to?: string) => {
+      const res = await fetch(`${BASE}/comm-schedule/tasks/late-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ to }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed to send late report");
+      }
+      return res.json();
+    },
+  });
+}
+
 export function useUpdateCommTask() {
   const queryClient = useQueryClient();
   return useMutation({

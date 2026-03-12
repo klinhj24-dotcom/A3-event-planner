@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -23,7 +23,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
-import { useCommTasks, useUpdateCommTask, type CommTask } from "@/hooks/use-team";
+import { useCommTasks, useUpdateCommTask, useSendLateReport, type CommTask } from "@/hooks/use-team";
 
 // ─── Channel icon map ─────────────────────────────────────────────────────────
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -74,11 +74,13 @@ function CommTasksSheet({
   });
 
   const doneCount = tasks.filter(t => t.status === "done").length;
+  const lateCount = tasks.filter(t => t.status === "late").length;
   const total = tasks.length;
   const progressPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
 
   function toggle(task: CommTask) {
     const newStatus = task.status === "done" ? "pending" : "done";
+    // note: "late" → checking = "done", unchecking a "done" late = "pending" (auto-re-marks late on reload)
     updateTask(
       { id: task.id, eventId: event!.id, status: newStatus },
       {
@@ -124,9 +126,14 @@ function CommTasksSheet({
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-foreground">
-                  {doneCount} of {total} tasks complete
+                  {doneCount} of {total} complete
+                  {lateCount > 0 && (
+                    <span className="ml-2 text-xs font-semibold text-amber-400">
+                      · {lateCount} late
+                    </span>
+                  )}
                 </span>
-                <span className={`font-semibold text-sm ${progressPct === 100 ? "text-emerald-400" : "text-primary"}`}>
+                <span className={`font-semibold text-sm ${progressPct === 100 ? "text-emerald-400" : lateCount > 0 ? "text-amber-400" : "text-primary"}`}>
                   {progressPct}%
                 </span>
               </div>
@@ -166,6 +173,7 @@ function CommTasksSheet({
           ) : (
             sorted.map(task => {
               const isDone = task.status === "done";
+              const isLate = task.status === "late";
               const dateInfo = dueDateLabel(task.dueDate);
               return (
                 <div
@@ -174,6 +182,8 @@ function CommTasksSheet({
                   className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none
                     ${isDone
                       ? "bg-muted/20 border-border/30 opacity-60"
+                      : isLate
+                      ? "bg-amber-500/5 border-amber-500/40 hover:border-amber-400/60"
                       : "bg-card border-border/50 hover:border-primary/30 hover:bg-primary/5"
                     }`}
                 >
@@ -188,6 +198,11 @@ function CommTasksSheet({
                       {task.messageName || task.commType}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
+                      {isLate && (
+                        <Badge className="text-[10px] rounded-md px-1.5 bg-amber-500/20 text-amber-400 border-amber-500/30">
+                          ⚠️ LATE
+                        </Badge>
+                      )}
                       {task.commType && (
                         <Badge variant="outline" className={`text-[10px] rounded-md px-1.5 ${COMM_TYPE_COLORS[task.commType] || "bg-muted/40 text-muted-foreground"}`}>
                           {task.commType}
@@ -201,10 +216,15 @@ function CommTasksSheet({
                       )}
                     </div>
                   </div>
-                  {dateInfo && (
+                  {dateInfo && !isLate && (
                     <div className={`shrink-0 text-[11px] font-medium flex items-center gap-1 ${dateInfo.cls}`}>
                       {dateInfo.cls === "text-destructive" && <AlertCircle className="h-3 w-3" />}
                       {dateInfo.text}
+                    </div>
+                  )}
+                  {isLate && task.dueDate && (
+                    <div className="shrink-0 text-[11px] font-medium text-amber-400">
+                      Due {format(new Date(task.dueDate), "MMM d")}
                     </div>
                   )}
                 </div>
@@ -304,6 +324,8 @@ export default function Events() {
     defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false }
   });
 
+  const { mutate: sendLateReport, isPending: sendingReport } = useSendLateReport();
+
   const filteredEvents = events?.filter(e =>
     e.title.toLowerCase().includes(search.toLowerCase()) ||
     e.location?.toLowerCase().includes(search.toLowerCase())
@@ -336,6 +358,28 @@ export default function Events() {
                 <CalendarDays className="h-3.5 w-3.5" /> Calendar
               </button>
             </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+              disabled={sendingReport}
+              onClick={() => sendLateReport(undefined, {
+                onSuccess: (data) => {
+                  if (data.sent) {
+                    toast({ title: `Late report sent — ${data.count} task${data.count !== 1 ? "s" : ""} listed`, description: `Sent to ${data.to}` });
+                  } else {
+                    toast({ title: data.message || "No late tasks found" });
+                  }
+                },
+                onError: (err: any) => toast({ title: err.message || "Failed to send report", variant: "destructive" })
+              })}
+            >
+              {sendingReport
+                ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                : <MailWarning className="h-3.5 w-3.5 mr-2" />}
+              Late Report
+            </Button>
 
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
