@@ -43,7 +43,8 @@ artifacts-monorepo/
 - **Contact Assignments**: Admins can manually assign contacts to employees. Contacts auto-assign when an employee logs outreach or sends email.
 - **Events**: Track events (student showcases, community events, recitals, open mics). Financial tracking (cost/revenue, paid/unpaid). Push events to Google Calendar. Calendar view (List/Calendar toggle, month grid with color-coded event pills).
 - **Comm Schedule**: 76 communication rules loaded from CSV, organized by event type. Shows timing (days before/after), channel (Email, Instagram, Print, Website), message purpose, and notes. Per-event task generation (calculates due dates from event date + rule timing).
-- **Employees**: Staff management, active/inactive status
+- **Employees**: Staff management, active/inactive status, optional hourly rate (set on create or via Payroll page)
+- **Payroll**: Track employee hours per event per pay period (Saturday–Friday). Log hours entries (employee, event, date, hours, notes). Per-employee summary with total hours, hourly rate, and total pay. Summary cards (active staff, total hours, total payroll cost). Edit hourly rate inline. Expandable rows show individual entries with delete.
 - **Sign-up system**: Each event gets a unique public link (/signup/:token)
 - **Gmail Integration**: Per-user OAuth2 Gmail connect/disconnect. Send emails to contacts, track threads, import existing Gmail threads, reply to threads in-app.
 - **Email Templates**: Create/manage reusable email templates with merge fields (`{name}`, `{organization}`, `{first_name}`). Applied automatically when composing emails.

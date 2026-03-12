@@ -6,7 +6,8 @@ import {
   LogOut,
   Settings,
   Radio,
-  Shield
+  Shield,
+  DollarSign
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Events", url: "/events", icon: Calendar },
   { title: "Comm Schedule", url: "/comm-schedule", icon: Radio },
   { title: "Employees", url: "/employees", icon: UserSquare2 },
+  { title: "Payroll", url: "/payroll", icon: DollarSign },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

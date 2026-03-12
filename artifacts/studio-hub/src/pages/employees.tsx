@@ -21,6 +21,7 @@ const employeeSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
   role: z.string().min(1, "Role is required"),
+  hourlyRate: z.string().optional(),
 });
 
 export default function Employees() {
@@ -45,7 +46,7 @@ export default function Employees() {
 
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: { name: "", role: "intern", email: "", phone: "" }
+    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "" }
   });
 
   const filteredEmployees = employees?.filter(e => 
@@ -102,6 +103,12 @@ export default function Employees() {
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
                       <FormControl><Input placeholder="(555) 123-4567" className="rounded-xl" {...field} /></FormControl>
+                    </FormItem>
+                  )}/>
+                  <FormField control={form.control} name="hourlyRate" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hourly Rate ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                      <FormControl><Input placeholder="e.g. 18.00" type="number" step="0.01" min="0" className="rounded-xl" {...field} /></FormControl>
                     </FormItem>
                   )}/>
                   <DialogFooter className="pt-4">

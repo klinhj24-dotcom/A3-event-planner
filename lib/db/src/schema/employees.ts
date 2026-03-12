@@ -1,4 +1,4 @@
-import { boolean, decimal, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, date, decimal, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { eventsTable } from "./events";
@@ -10,6 +10,7 @@ export const employeesTable = pgTable("employees", {
   phone: text("phone"),
   role: text("role").notNull().default("staff"),
   isActive: boolean("is_active").notNull().default(true),
+  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
@@ -36,6 +37,20 @@ export const eventSignupsTable = pgTable("event_signups", {
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const employeeHoursTable = pgTable("employee_hours", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employeesTable.id, { onDelete: "cascade" }).notNull(),
+  eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "set null" }),
+  workDate: date("work_date").notNull(),
+  hours: decimal("hours", { precision: 5, scale: 2 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertEmployeeHoursSchema = createInsertSchema(employeeHoursTable).omit({ id: true, createdAt: true });
+export type InsertEmployeeHours = z.infer<typeof insertEmployeeHoursSchema>;
+export type EmployeeHours = typeof employeeHoursTable.$inferSelect;
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
