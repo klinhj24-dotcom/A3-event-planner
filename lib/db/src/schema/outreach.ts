@@ -3,11 +3,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { contactsTable } from "./contacts";
 import { eventsTable } from "./events";
+import { usersTable } from "./auth";
 
 export const outreachTable = pgTable("outreach", {
   id: serial("id").primaryKey(),
   contactId: integer("contact_id").references(() => contactsTable.id, { onDelete: "cascade" }).notNull(),
   eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "set null" }),
+  userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   method: text("method").notNull(), // 'email', 'phone', 'in-person', etc.
   direction: text("direction").default("outbound"), // 'outbound' | 'inbound'
   subject: text("subject"),

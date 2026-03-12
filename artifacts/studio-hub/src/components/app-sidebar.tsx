@@ -4,7 +4,9 @@ import {
   Calendar, 
   UserSquare2, 
   LogOut,
-  Settings
+  Settings,
+  Radio,
+  Shield
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -28,6 +30,7 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Events", url: "/events", icon: Calendar },
+  { title: "Comm Schedule", url: "/comm-schedule", icon: Radio },
   { title: "Employees", url: "/employees", icon: UserSquare2 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
@@ -99,11 +102,16 @@ export function AppSidebar() {
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col flex-1 overflow-hidden">
-            <span className="text-sm font-medium text-sidebar-foreground truncate">
-              {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-sidebar-foreground truncate">
+                {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
+              </span>
+              {(user as any)?.role === "admin" && (
+                <Shield className="h-3 w-3 text-primary shrink-0" />
+              )}
+            </div>
             <span className="text-xs text-[#cfcccc] truncate">
-              {user?.username}
+              {(user as any)?.role === "admin" ? "Admin" : "Employee"}
             </span>
           </div>
         </div>

@@ -9,6 +9,8 @@ import signupRouter from "./signup";
 import googleAuthRouter from "./google-auth";
 import gmailRouter from "./gmail";
 import calendarRouter from "./calendar";
+import usersRouter from "./users";
+import commScheduleRouter from "./comm-schedule";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use(signupRouter);
 router.use(googleAuthRouter);
 router.use(gmailRouter);
 router.use(calendarRouter);
+router.use(usersRouter);
+router.use(commScheduleRouter);
 
 export default router;

@@ -3,7 +3,7 @@ import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
-import tmsSymbol from "@assets/TMS_Symbol_Gradient@4x_1773281994585.png";
+import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
 
 export default function Login() {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -32,26 +32,12 @@ export default function Login() {
           <div className="absolute -top-10 -left-10 w-32 h-32 bg-[#7250ef] rounded-full blur-[64px] opacity-20" />
           <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-[#00b199] rounded-full blur-[64px] opacity-20" />
 
-          {/* Gradient Logo */}
-          <motion.div
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.5, ease: "easeOut" }}
-            className="mb-6"
-          >
-            <img
-              src={tmsSymbol}
-              alt="The Music Space"
-              className="h-20 w-auto object-contain drop-shadow-2xl"
-            />
-          </motion.div>
-
           {/* Equalizer bars */}
           <motion.div 
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", bounce: 0.5 }}
-            className="flex items-end justify-center gap-1.5 h-16 mb-8"
+            transition={{ delay: 0.15, type: "spring", bounce: 0.5 }}
+            className="flex items-end justify-center gap-1.5 h-16 mb-6"
           >
             <div className="w-2.5 h-8 bg-[#7250ef] rounded-t-sm animate-[pulse_1.5s_ease-in-out_infinite]" />
             <div className="w-2.5 h-12 bg-[#00b199] rounded-t-sm animate-[pulse_1.8s_ease-in-out_infinite]" />
@@ -59,10 +45,21 @@ export default function Login() {
             <div className="w-2.5 h-10 bg-[#f7b617] rounded-t-sm animate-[pulse_1.6s_ease-in-out_infinite]" />
             <div className="w-2.5 h-14 bg-[#f14329] rounded-t-sm animate-[pulse_1.4s_ease-in-out_infinite]" />
           </motion.div>
+
+          {/* White logo below EQ */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.5, ease: "easeOut" }}
+            className="mb-8"
+          >
+            <img
+              src={tmsLogoWhite}
+              alt="The Music Space"
+              className="h-14 w-auto object-contain"
+            />
+          </motion.div>
           
-          <h1 className="font-display text-4xl font-bold text-white mb-3 tracking-tight">
-            TMS Events & Contacts
-          </h1>
           <p className="text-[#cfcccc] mb-10 leading-relaxed max-w-xs">
             Internal portal for managing events, contacts, staff, and studio operations.
           </p>

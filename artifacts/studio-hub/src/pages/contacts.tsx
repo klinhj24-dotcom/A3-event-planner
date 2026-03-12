@@ -22,7 +22,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon, MessageSquare, Loader2, Send } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon,
+  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck
+} from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,6 +34,13 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { GmailComposeModal } from "@/components/gmail-compose";
 import { GmailThreadView } from "@/components/gmail-thread-view";
+import { useAuth } from "@workspace/replit-auth-web";
+import {
+  useContactAssignments,
+  useAssignContact,
+  useUnassignContact,
+  useTeamMembers,
+} from "@/hooks/use-team";
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -45,11 +56,128 @@ const outreachSchema = z.object({
   notes: z.string().optional(),
 });
 
+const CONTACT_TYPES = [
+  { value: "band_director", label: "Band Director" },
+  { value: "event_coordinator", label: "Event Coordinator" },
+  { value: "venue", label: "Venue" },
+  { value: "teacher", label: "Teacher" },
+  { value: "band", label: "Band" },
+  { value: "other", label: "Other" },
+];
+
+function typeLabel(type: string) {
+  return CONTACT_TYPES.find(t => t.value === type)?.label ?? type.replace(/_/g, " ");
+}
+
+function userDisplayName(u: { firstName?: string | null; lastName?: string | null; username?: string | null; email?: string | null }) {
+  if (u.firstName) return `${u.firstName}${u.lastName ? ` ${u.lastName}` : ""}`.trim();
+  return u.username || u.email || "Unknown";
+}
+
+function AssignmentsPanel({
+  contactId,
+  isAdmin,
+}: {
+  contactId: number;
+  isAdmin: boolean;
+}) {
+  const { data: assignments = [], isLoading } = useContactAssignments(contactId);
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { mutate: assign, isPending: isAssigning } = useAssignContact();
+  const { mutate: unassign } = useUnassignContact();
+  const { toast } = useToast();
+  const [selectedUserId, setSelectedUserId] = useState("");
+
+  const assignedUserIds = assignments.map(a => a.userId);
+  const unassignedMembers = teamMembers.filter(m => !assignedUserIds.includes(m.id));
+
+  return (
+    <div className="space-y-4">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary" /> Assigned Employees
+      </h3>
+
+      {isLoading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : assignments.length === 0 ? (
+        <div className="text-center py-8 bg-muted/20 rounded-xl border border-border/50 border-dashed">
+          <p className="text-sm text-muted-foreground">No employees assigned yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {assignments.map((a) => (
+            <div key={a.userId} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-card">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-8 w-8 border border-border/20">
+                  <AvatarImage src={a.profileImageUrl || undefined} />
+                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
+                    {(a.firstName || a.username || "?").charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-medium">{userDisplayName(a)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {a.autoAssigned === "true" ? "Auto-assigned via outreach" : "Manually assigned"} · {format(new Date(a.assignedAt), "MMM d, yyyy")}
+                  </p>
+                </div>
+              </div>
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => unassign({ contactId, userId: a.userId }, {
+                    onSuccess: () => toast({ title: "Employee unassigned" }),
+                    onError: () => toast({ title: "Failed to unassign", variant: "destructive" }),
+                  })}
+                >
+                  <UserMinus className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isAdmin && unassignedMembers.length > 0 && (
+        <div className="flex items-center gap-2 pt-2">
+          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+            <SelectTrigger className="rounded-xl flex-1 h-9 text-sm">
+              <SelectValue placeholder="Add employee..." />
+            </SelectTrigger>
+            <SelectContent>
+              {unassignedMembers.map(m => (
+                <SelectItem key={m.id} value={m.id}>{userDisplayName(m)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            className="rounded-xl h-9"
+            disabled={!selectedUserId || isAssigning}
+            onClick={() => {
+              if (!selectedUserId) return;
+              assign({ contactId, userId: selectedUserId }, {
+                onSuccess: () => { toast({ title: "Employee assigned" }); setSelectedUserId(""); },
+                onError: () => toast({ title: "Failed to assign", variant: "destructive" }),
+              });
+            }}
+          >
+            {isAssigning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Contacts() {
   const [search, setSearch] = useState("");
   const { data: contacts, isLoading } = useListContacts();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = (user as any)?.role === "admin";
   
   const [createOpen, setCreateOpen] = useState(false);
   const [outreachOpen, setOutreachOpen] = useState(false);
@@ -79,7 +207,7 @@ export default function Contacts() {
         }
         setOutreachOpen(false);
         outreachForm.reset();
-        toast({ title: "Outreach logged successfully" });
+        toast({ title: "Outreach logged — contact auto-assigned to you" });
       }
     }
   });
@@ -101,10 +229,14 @@ export default function Contacts() {
 
   const filteredContacts = contacts?.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.organization?.toLowerCase().includes(search.toLowerCase())
+    (c.organization?.toLowerCase().includes(search.toLowerCase()) ?? false)
   );
 
   const activeContact = contacts?.find(c => c.id === selectedContactId);
+
+  const sheetTabs = isAdmin
+    ? ["emails", "history", "assigned"]
+    : ["emails", "history"];
 
   return (
     <AppLayout>
@@ -112,7 +244,9 @@ export default function Contacts() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="font-display text-3xl font-bold tracking-tight">Contacts</h1>
-            <p className="text-muted-foreground mt-1">Manage network and track outreach.</p>
+            <p className="text-muted-foreground mt-1">
+              {isAdmin ? "All contacts in the studio database." : "Your assigned contacts."}
+            </p>
           </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
@@ -143,10 +277,9 @@ export default function Contacts() {
                             <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select type" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="band_director">Band Director</SelectItem>
-                            <SelectItem value="event_coordinator">Event Coordinator</SelectItem>
-                            <SelectItem value="venue">Venue</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            {CONTACT_TYPES.map(t => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -204,6 +337,11 @@ export default function Contacts() {
                 className="pl-9 rounded-xl border-border/60 bg-background focus-visible:ring-primary/20"
               />
             </div>
+            {!isAdmin && (
+              <Badge variant="outline" className="rounded-lg text-xs text-primary border-primary/30 bg-primary/5">
+                My Contacts
+              </Badge>
+            )}
           </div>
           
           <div className="overflow-x-auto">
@@ -228,7 +366,7 @@ export default function Contacts() {
                       <TableCell>
                         <div className="font-medium text-foreground">{contact.name}</div>
                         <Badge variant="outline" className="mt-1 capitalize text-xs bg-background">
-                          {contact.type.replace('_', ' ')}
+                          {typeLabel(contact.type)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -295,7 +433,10 @@ export default function Contacts() {
           <DialogContent className="sm:max-w-[400px] rounded-2xl">
             <DialogHeader>
               <DialogTitle className="font-display">Log Outreach</DialogTitle>
-              <DialogDescription>Record communication with {contacts?.find(c => c.id === selectedContactId)?.name}.</DialogDescription>
+              <DialogDescription>
+                Record communication with {contacts?.find(c => c.id === selectedContactId)?.name}.
+                {!isAdmin && " This contact will be auto-assigned to you."}
+              </DialogDescription>
             </DialogHeader>
             <Form {...outreachForm}>
               <form onSubmit={outreachForm.handleSubmit((data) => {
@@ -341,23 +482,31 @@ export default function Contacts() {
           />
         )}
 
-        {/* Contact History Sheet */}
+        {/* Contact Detail Sheet */}
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetContent className="sm:max-w-md w-full overflow-y-auto border-l-border/50">
             <SheetHeader className="pb-4 border-b border-border/50">
               <SheetTitle className="font-display text-2xl">{activeContact?.name}</SheetTitle>
               <SheetDescription className="flex flex-col gap-2 pt-2">
-                <span className="flex items-center text-foreground"><Building2 className="h-4 w-4 mr-2" /> {activeContact?.organization || "No organization"}</span>
+                <span className="flex items-center text-foreground">
+                  <Building2 className="h-4 w-4 mr-2" /> {activeContact?.organization || "No organization"}
+                </span>
                 {activeContact?.email && <span className="flex items-center"><Mail className="h-4 w-4 mr-2" /> {activeContact.email}</span>}
                 {activeContact?.phone && <span className="flex items-center"><Phone className="h-4 w-4 mr-2" /> {activeContact.phone}</span>}
+                {activeContact?.type && (
+                  <Badge variant="outline" className="w-fit capitalize text-xs">
+                    {typeLabel(activeContact.type)}
+                  </Badge>
+                )}
               </SheetDescription>
             </SheetHeader>
 
             <div className="py-4">
               <Tabs defaultValue="emails">
-                <TabsList className="w-full rounded-xl bg-muted/40 mb-4">
-                  <TabsTrigger value="emails" className="flex-1 rounded-lg">Emails</TabsTrigger>
-                  <TabsTrigger value="history" className="flex-1 rounded-lg">All Activity</TabsTrigger>
+                <TabsList className={`w-full rounded-xl bg-muted/40 mb-4 grid ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
+                  <TabsTrigger value="emails" className="rounded-lg">Emails</TabsTrigger>
+                  <TabsTrigger value="history" className="rounded-lg">Activity</TabsTrigger>
+                  {isAdmin && <TabsTrigger value="assigned" className="rounded-lg">Assigned</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="emails" className="mt-0">
@@ -382,12 +531,17 @@ export default function Contacts() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {outreachHistory?.map((outreach) => (
+                      {(outreachHistory as any[])?.map((outreach) => (
                         <div key={outreach.id} className="p-3 rounded-xl border border-border/50 bg-card">
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="font-semibold text-sm capitalize text-foreground">{outreach.method}</span>
                             <time className="text-xs font-medium text-muted-foreground">{format(new Date(outreach.outreachAt), "MMM d, yyyy")}</time>
                           </div>
+                          {(outreach.userFirstName || outreach.userUsername) && (
+                            <p className="text-xs text-primary/80 mb-1.5">
+                              Logged by {outreach.userFirstName ? `${outreach.userFirstName}${outreach.userLastName ? ` ${outreach.userLastName}` : ""}` : outreach.userUsername}
+                            </p>
+                          )}
                           <div className="text-sm text-muted-foreground leading-relaxed">
                             {outreach.notes || <span className="italic opacity-50">No notes</span>}
                           </div>
@@ -396,6 +550,14 @@ export default function Contacts() {
                     </div>
                   )}
                 </TabsContent>
+
+                {isAdmin && (
+                  <TabsContent value="assigned" className="mt-0">
+                    {selectedContactId && (
+                      <AssignmentsPanel contactId={selectedContactId} isAdmin={isAdmin} />
+                    )}
+                  </TabsContent>
+                )}
               </Tabs>
             </div>
           </SheetContent>

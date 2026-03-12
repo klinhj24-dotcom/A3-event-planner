@@ -28,9 +28,11 @@ export const GetCurrentAuthUserResponse = zod.object({
       zod.object({
         id: zod.string(),
         email: zod.string().nullish(),
+        username: zod.string().nullish(),
         firstName: zod.string().nullish(),
         lastName: zod.string().nullish(),
         profileImageUrl: zod.string().nullish(),
+        role: zod.string().nullish(),
       }),
       zod.null(),
     ])

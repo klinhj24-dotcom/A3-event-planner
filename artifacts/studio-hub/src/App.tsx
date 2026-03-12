@@ -12,6 +12,7 @@ import Events from "@/pages/events";
 import Employees from "@/pages/employees";
 import Signup from "@/pages/signup";
 import Settings from "@/pages/settings";
+import CommSchedule from "@/pages/comm-schedule";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/events" component={Events} />
       <Route path="/employees" component={Employees} />
       <Route path="/settings" component={Settings} />
+      <Route path="/comm-schedule" component={CommSchedule} />
       <Route component={NotFound} />
     </Switch>
   );

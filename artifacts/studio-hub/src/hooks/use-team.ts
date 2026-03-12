@@ -1,0 +1,195 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+const BASE = "/api";
+
+export interface TeamMember {
+  id: string;
+  email: string | null;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  role: string;
+  googleEmail: string | null;
+  createdAt: string;
+}
+
+export interface ContactAssignment {
+  id: number;
+  userId: string;
+  assignedAt: string;
+  assignedBy: string | null;
+  autoAssigned: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  username: string | null;
+  profileImageUrl: string | null;
+}
+
+export function useTeamMembers() {
+  return useQuery<TeamMember[]>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/users`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch team members");
+      return res.json();
+    },
+  });
+}
+
+export function useUpdateUserRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, role }: { id: string; role: string }) => {
+      const res = await fetch(`${BASE}/users/${id}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) throw new Error("Failed to update role");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+  });
+}
+
+export function useContactAssignments(contactId: number | null) {
+  return useQuery<ContactAssignment[]>({
+    queryKey: [`/api/contacts/${contactId}/assignments`],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/contacts/${contactId}/assignments`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch assignments");
+      return res.json();
+    },
+    enabled: !!contactId,
+  });
+}
+
+export function useAssignContact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, userId }: { contactId: number; userId: string }) => {
+      const res = await fetch(`${BASE}/contacts/${contactId}/assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error("Failed to assign contact");
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/contacts/${vars.contactId}/assignments`] });
+    },
+  });
+}
+
+export function useUnassignContact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, userId }: { contactId: number; userId: string }) => {
+      const res = await fetch(`${BASE}/contacts/${contactId}/assignments/${userId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to unassign contact");
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/contacts/${vars.contactId}/assignments`] });
+    },
+  });
+}
+
+export function useCommRules() {
+  return useQuery({
+    queryKey: ["/api/comm-schedule/rules"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/comm-schedule/rules`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch comm rules");
+      return res.json() as Promise<CommRule[]>;
+    },
+  });
+}
+
+export interface CommRule {
+  id: number;
+  eventType: string;
+  eventTagGroup: string | null;
+  eventTag: string | null;
+  commType: string;
+  messageName: string | null;
+  timingDays: number;
+  channel: string | null;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface CommTask {
+  id: number;
+  eventId: number;
+  ruleId: number | null;
+  commType: string;
+  messageName: string | null;
+  channel: string | null;
+  dueDate: string | null;
+  googleCalendarEventId: string | null;
+  status: string;
+  notes: string | null;
+}
+
+export function useCommTasks(eventId: number | null) {
+  return useQuery<CommTask[]>({
+    queryKey: [`/api/comm-schedule/tasks`, eventId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/comm-schedule/tasks?eventId=${eventId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch comm tasks");
+      return res.json();
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useGenerateCommTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: number) => {
+      const res = await fetch(`${BASE}/comm-schedule/tasks/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ eventId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed to generate tasks");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, eventId) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, eventId] });
+    },
+  });
+}
+
+export function useUpdateCommTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, eventId, status, notes }: { id: number; eventId: number; status?: string; notes?: string }) => {
+      const res = await fetch(`${BASE}/comm-schedule/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status, notes }),
+      });
+      if (!res.ok) throw new Error("Failed to update task");
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, vars.eventId] });
+    },
+  });
+}

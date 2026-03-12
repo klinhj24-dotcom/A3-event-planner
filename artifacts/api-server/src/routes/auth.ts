@@ -61,6 +61,7 @@ async function upsertUser(claims: Record<string, unknown>) {
   const userData = {
     id: claims.sub as string,
     email: (claims.email as string) || null,
+    username: (claims.username as string) || null,
     firstName: (claims.first_name as string) || null,
     lastName: (claims.last_name as string) || null,
     profileImageUrl: (claims.profile_image_url || claims.picture) as
@@ -74,7 +75,12 @@ async function upsertUser(claims: Record<string, unknown>) {
     .onConflictDoUpdate({
       target: usersTable.id,
       set: {
-        ...userData,
+        // Note: do NOT override 'role' — it is set by admins and must persist
+        email: userData.email,
+        username: userData.username,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        profileImageUrl: userData.profileImageUrl,
         updatedAt: new Date(),
       },
     })
@@ -174,9 +180,11 @@ router.get("/callback", async (req: Request, res: Response) => {
     user: {
       id: dbUser.id,
       email: dbUser.email,
+      username: dbUser.username,
       firstName: dbUser.firstName,
       lastName: dbUser.lastName,
       profileImageUrl: dbUser.profileImageUrl,
+      role: dbUser.role,
     },
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
@@ -244,9 +252,11 @@ router.post(
         user: {
           id: dbUser.id,
           email: dbUser.email,
+          username: dbUser.username,
           firstName: dbUser.firstName,
           lastName: dbUser.lastName,
           profileImageUrl: dbUser.profileImageUrl,
+          role: dbUser.role,
         },
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
