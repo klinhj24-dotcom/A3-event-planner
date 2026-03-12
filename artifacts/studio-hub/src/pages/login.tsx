@@ -61,7 +61,7 @@ export default function Login() {
           </motion.div>
           
           <h1 className="font-display text-4xl font-bold text-white mb-3 tracking-tight">
-            Studio Hub
+            TMS Events & Contacts
           </h1>
           <p className="text-[#cfcccc] mb-10 leading-relaxed max-w-xs">
             Internal portal for managing events, contacts, staff, and studio operations.

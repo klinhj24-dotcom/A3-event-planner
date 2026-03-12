@@ -43,7 +43,7 @@ export function AppSidebar() {
             className="h-9 w-9 object-contain"
           />
           <span className="font-display text-lg font-bold tracking-tight text-sidebar-foreground">
-            Studio Hub
+            TMS Events
           </span>
         </div>
       </SidebarHeader>

@@ -83,7 +83,7 @@ export default function Signup() {
           className="text-white space-y-6 pt-12 md:pt-0"
         >
           <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-medium text-primary backdrop-blur-sm">
-            <Music className="mr-2 h-4 w-4" /> Studio Hub Sign-up
+            <Music className="mr-2 h-4 w-4" /> TMS Sign-up
           </div>
           
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-tight">
