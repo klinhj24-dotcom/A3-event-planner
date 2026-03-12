@@ -30,11 +30,12 @@ export default function Dashboard() {
     );
   }
 
+  // Use brand colors for stat cards
   const statCards = [
-    { title: "Total Contacts", value: stats?.totalContacts || 0, icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
-    { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-primary", bg: "bg-primary/10" },
-    { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-orange-500", bg: "bg-orange-500/10" },
-    { title: "Pending Signups", value: stats?.pendingSignups || 0, icon: ClipboardList, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { title: "Total Contacts", value: stats?.totalContacts || 0, icon: Users, color: "text-[#7250ef]", bg: "bg-[#7250ef]/10" },
+    { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10" },
+    { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10" },
+    { title: "Pending Signups", value: stats?.pendingSignups || 0, icon: ClipboardList, color: "text-[#f7b617]", bg: "bg-[#f7b617]/10" },
   ];
 
   return (
@@ -47,7 +48,7 @@ export default function Dashboard() {
 
         <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {statCards.map((stat, i) => (
-            <Card key={i} className="border-none shadow-md shadow-black/5 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group">
+            <Card key={i} className="border-border/10 bg-card shadow-md shadow-black/10 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group">
               <CardContent className="p-6 relative">
                 <div className="flex justify-between items-start">
                   <div className="space-y-2 z-10">
@@ -66,8 +67,8 @@ export default function Dashboard() {
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Upcoming Events */}
-          <Card className="rounded-2xl shadow-md border-border/50 overflow-hidden flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between bg-muted/30 border-b border-border/50 pb-4">
+          <Card className="rounded-2xl shadow-md border-border/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-black/20 border-b border-border/20 pb-4">
               <div>
                 <CardTitle className="font-display text-xl">Upcoming Events</CardTitle>
               </div>
@@ -77,9 +78,9 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="p-0 flex-1">
               {stats?.upcomingEventsList && stats.upcomingEventsList.length > 0 ? (
-                <div className="divide-y divide-border/50">
+                <div className="divide-y divide-border/20">
                   {stats.upcomingEventsList.slice(0, 5).map(event => (
-                    <div key={event.id} className="p-5 hover:bg-muted/20 transition-colors flex items-center justify-between group">
+                    <div key={event.id} className="p-5 hover:bg-black/20 transition-colors flex items-center justify-between group">
                       <div className="space-y-1">
                         <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{event.title}</p>
                         <div className="flex items-center text-sm text-muted-foreground gap-3">
@@ -87,7 +88,7 @@ export default function Dashboard() {
                           <span className="capitalize">{event.type.replace('_', ' ')}</span>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="capitalize bg-secondary/50">{event.status}</Badge>
+                      <Badge variant="secondary" className="capitalize bg-secondary/20 text-secondary">{event.status}</Badge>
                     </div>
                   ))}
                 </div>
@@ -101,8 +102,8 @@ export default function Dashboard() {
           </Card>
 
           {/* Recent Outreach */}
-          <Card className="rounded-2xl shadow-md border-border/50 overflow-hidden flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between bg-muted/30 border-b border-border/50 pb-4">
+          <Card className="rounded-2xl shadow-md border-border/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-black/20 border-b border-border/20 pb-4">
               <div>
                 <CardTitle className="font-display text-xl">Recent Outreach</CardTitle>
               </div>
@@ -112,9 +113,9 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="p-0 flex-1">
               {stats?.recentOutreach && stats.recentOutreach.length > 0 ? (
-                <div className="divide-y divide-border/50">
+                <div className="divide-y divide-border/20">
                   {stats.recentOutreach.slice(0, 5).map(outreach => (
-                    <div key={outreach.id} className="p-5 hover:bg-muted/20 transition-colors flex gap-4 items-start">
+                    <div key={outreach.id} className="p-5 hover:bg-black/20 transition-colors flex gap-4 items-start">
                       <div className="p-2 rounded-full bg-primary/10 text-primary mt-0.5">
                         <Activity className="h-4 w-4" />
                       </div>
