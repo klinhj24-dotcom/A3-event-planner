@@ -25,9 +25,17 @@ const queryClient = new QueryClient({
   },
 });
 
+function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Redirect to="/login" />;
+  return <Component />;
+}
+
 function AdminRoute({ component: Component }: { component: () => JSX.Element }) {
   const { user, isLoading } = useAuth();
-  if (isLoading || !user) return null;
+  if (isLoading) return null;
+  if (!user) return <Redirect to="/login" />;
   if ((user as any)?.role !== "admin") return <Redirect to="/my-schedule" />;
   return <Component />;
 }
@@ -37,8 +45,8 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/signup/:token" component={Signup} />
-      <Route path="/my-schedule" component={MySchedule} />
-      <Route path="/settings" component={Settings} />
+      <Route path="/my-schedule">{() => <ProtectedRoute component={MySchedule} />}</Route>
+      <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
       <Route path="/">{() => <AdminRoute component={Dashboard} />}</Route>
       <Route path="/contacts">{() => <AdminRoute component={Contacts} />}</Route>
       <Route path="/events">{() => <AdminRoute component={Events} />}</Route>
