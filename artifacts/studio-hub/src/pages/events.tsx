@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useCreateEvent } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -14,9 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Upload, X
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil
 } from "lucide-react";
-import { useUpload } from "@workspace/object-storage-web";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -292,10 +291,12 @@ const eventSchema = z.object({
   status: z.string().min(1, "Status is required"),
   location: z.string().optional(),
   startDate: z.string().optional(),
+  endDate: z.string().optional(),
   calendarTag: z.string().optional(),
   isPaid: z.boolean().default(false),
   revenue: z.coerce.number().optional(),
   cost: z.coerce.number().optional(),
+  notes: z.string().optional(),
   flyerUrl: z.string().optional(),
   ticketsUrl: z.string().optional(),
   ctaLabel: z.string().optional(),
@@ -309,6 +310,7 @@ export default function Events() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
 
@@ -325,20 +327,54 @@ export default function Events() {
     }
   });
 
+  const { mutate: updateEvent, isPending: isUpdating } = useMutation({
+    mutationFn: async (data: z.infer<typeof eventSchema> & { id: number }) => {
+      const res = await fetch(`/api/events/${data.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update event");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setEditEvent(null);
+      toast({ title: "Event updated" });
+    },
+    onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
+  });
+
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
     defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "TICKETS" }
   });
 
-  const flyerInputRef = useRef<HTMLInputElement>(null);
-  const { uploadFile, isUploading: flyerUploading } = useUpload({
-    onSuccess: (response) => {
-      const url = `/api/storage${response.objectPath}`;
-      form.setValue("flyerUrl", url);
-      toast({ title: "Flyer uploaded" });
-    },
-    onError: (err) => toast({ title: `Upload failed: ${err.message}`, variant: "destructive" }),
+  const editForm = useForm<z.infer<typeof eventSchema>>({
+    resolver: zodResolver(eventSchema),
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "TICKETS" }
   });
+
+  function openEdit(ev: any) {
+    setEditEvent(ev);
+    editForm.reset({
+      title: ev.title ?? "",
+      type: ev.type ?? "Recital",
+      status: ev.status ?? "planning",
+      location: ev.location ?? "",
+      startDate: ev.startDate ? new Date(ev.startDate).toISOString().slice(0, 16) : "",
+      endDate: ev.endDate ? new Date(ev.endDate).toISOString().slice(0, 16) : "",
+      calendarTag: ev.calendarTag ?? "",
+      isPaid: ev.isPaid ?? false,
+      revenue: ev.revenue ? Number(ev.revenue) : undefined,
+      cost: ev.cost ? Number(ev.cost) : undefined,
+      notes: ev.notes ?? "",
+      flyerUrl: ev.flyerUrl ?? "",
+      ticketsUrl: ev.ticketsUrl ?? "",
+      ctaLabel: ev.ctaLabel ?? "TICKETS",
+    });
+  }
 
   const { mutate: sendLateReport, isPending: sendingReport } = useSendLateReport();
 
@@ -464,17 +500,23 @@ export default function Events() {
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={form.control} name="startDate" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Date & Time</FormLabel>
+                          <FormLabel>Start Date & Time</FormLabel>
                           <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
                         </FormItem>
                       )} />
-                      <FormField control={form.control} name="location" render={({ field }) => (
+                      <FormField control={form.control} name="endDate" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Location</FormLabel>
-                          <FormControl><Input placeholder="Main Stage" className="rounded-xl" {...field} /></FormControl>
+                          <FormLabel>End Date & Time</FormLabel>
+                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
                         </FormItem>
                       )} />
                     </div>
+                    <FormField control={form.control} name="location" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Location / Venue</FormLabel>
+                        <FormControl><Input placeholder="Zen West, Main Stage, etc." className="rounded-xl" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                       <h4 className="font-semibold text-sm flex items-center"><DollarSign className="h-4 w-4 mr-1 text-primary" /> Financials</h4>
                       <FormField control={form.control} name="isPaid" render={({ field }) => (
@@ -505,19 +547,25 @@ export default function Events() {
                       <FormItem>
                         <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
                         <FormControl><Input placeholder="e.g. TW, MSH, MSS, CF, CAL" className="rounded-xl" {...field} /></FormControl>
-                        <p className="text-[10px] text-muted-foreground mt-1">Bracket tag written into the calendar title so the website script colours this event. Must match one of: TW, MSH, MSS, CF, CAL.</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">Bracket tag in the calendar title — must match one of: TW, MSH, MSS, CF, CAL.</p>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="notes" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm">Internal Notes</FormLabel>
+                        <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                       </FormItem>
                     )} />
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                       <h4 className="font-semibold text-sm flex items-center gap-1.5">
                         <Globe className="h-4 w-4 text-secondary" /> Website Calendar Fields
                       </h4>
-                      <p className="text-[10px] text-muted-foreground -mt-2">These are written into the Google Calendar event description so your website displays them automatically.</p>
+                      <p className="text-[10px] text-muted-foreground -mt-2">Written into the Google Calendar description — your website script reads these automatically.</p>
                       <div className="grid grid-cols-3 gap-3">
                         <FormField control={form.control} name="ctaLabel" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs">Button Label</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value ?? "TICKETS"}>
+                            <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
                               <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
                               <SelectContent>
                                 <SelectItem value="TICKETS">TICKETS</SelectItem>
@@ -541,40 +589,9 @@ export default function Events() {
                       </div>
                       <FormField control={form.control} name="flyerUrl" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Flyer Image</FormLabel>
-                          {field.value ? (
-                            <div className="relative group rounded-xl overflow-hidden border border-border/40 bg-muted/20" style={{ aspectRatio: "3/4", maxHeight: 180 }}>
-                              <img src={field.value} alt="Flyer preview" className="w-full h-full object-contain" />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                <Button type="button" size="sm" variant="secondary" className="rounded-lg text-xs h-7 px-2"
-                                  onClick={() => flyerInputRef.current?.click()} disabled={flyerUploading}>
-                                  {flyerUploading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Upload className="h-3 w-3 mr-1" />} Replace
-                                </Button>
-                                <Button type="button" size="sm" variant="destructive" className="rounded-lg text-xs h-7 px-2"
-                                  onClick={() => field.onChange("")}>
-                                  <X className="h-3 w-3 mr-1" /> Remove
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button type="button"
-                              onClick={() => flyerInputRef.current?.click()}
-                              disabled={flyerUploading}
-                              className="w-full border-2 border-dashed border-border/50 hover:border-primary/50 rounded-xl h-20 flex flex-col items-center justify-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
-                              {flyerUploading
-                                ? <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-[10px]">Uploading…</span></>
-                                : <><Upload className="h-4 w-4" /><span className="text-[10px]">Click to upload flyer</span></>}
-                            </button>
-                          )}
-                          <input ref={flyerInputRef} type="file" accept="image/*" className="hidden"
-                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="h-px flex-1 bg-border/40" />
-                            <span className="text-[10px] text-muted-foreground">or paste a URL</span>
-                            <div className="h-px flex-1 bg-border/40" />
-                          </div>
-                          <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9 text-xs" {...field} value={field.value || ''} /></FormControl>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Written into the Google Calendar description — website reads it as the event flyer photo.</p>
+                          <FormLabel className="text-xs">Flyer Image URL (ImageKit)</FormLabel>
+                          <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Paste your ImageKit URL — website script reads it as the event flyer photo.</p>
                         </FormItem>
                       )} />
                     </div>
@@ -692,6 +709,16 @@ export default function Events() {
                                 #{event.calendarTag}
                               </Badge>
                             )}
+                            {/* Edit event */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Edit event"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              onClick={() => openEdit(event)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
                             {/* Push to Events Calendar */}
                             <CalendarPushButton eventId={event.id} />
                             {/* Generate & push comm tasks */}
@@ -731,6 +758,173 @@ export default function Events() {
           </div>
         )}
       </div>
+
+      {/* Edit Event Dialog */}
+      <Dialog open={!!editEvent} onOpenChange={(open) => !open && setEditEvent(null)}>
+        <DialogContent className="sm:max-w-[620px] rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Edit Event</DialogTitle>
+            <DialogDescription>Update event details. Hit Save when done.</DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit((data) => updateEvent({ ...data, id: editEvent.id }))} className="space-y-5 py-4">
+              <FormField control={editForm.control} name="title" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Event Title *</FormLabel>
+                  <FormControl><Input className="rounded-xl" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={editForm.control} name="type" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent className="max-h-72 overflow-y-auto">
+                        <SelectItem value="Recital">Recital</SelectItem>
+                        <SelectItem value="Student Band Show">Student Band Show</SelectItem>
+                        <SelectItem value="Songwriter Showcase / Studio Show">Songwriter Showcase / Studio Show</SelectItem>
+                        <SelectItem value="Open Mic">Open Mic</SelectItem>
+                        <SelectItem value="Festival / Community Event">Festival / Community Event</SelectItem>
+                        <SelectItem value="Workshop">Workshop</SelectItem>
+                        <SelectItem value="Studio Party">Studio Party</SelectItem>
+                        <SelectItem value="Studio Jam Night">Studio Jam Night</SelectItem>
+                        <SelectItem value="Studio Open House">Studio Open House</SelectItem>
+                        <SelectItem value="Rockin' Toddlers">Rockin' Toddlers</SelectItem>
+                        <SelectItem value="Chamber Ensemble">Chamber Ensemble</SelectItem>
+                        <SelectItem value="Enrichment Club">Enrichment Club</SelectItem>
+                        <SelectItem value="Instrument Demo (Waldorf)">Instrument Demo (Waldorf)</SelectItem>
+                        <SelectItem value="Instrument Demo (library)">Instrument Demo (library)</SelectItem>
+                        <SelectItem value="Little Rockers (library)">Little Rockers (library)</SelectItem>
+                        <SelectItem value="Holiday Closure">Holiday Closure</SelectItem>
+                        <SelectItem value="Holiday">Holiday</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )} />
+                <FormField control={editForm.control} name="status" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="planning">Planning</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={editForm.control} name="startDate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date & Time</FormLabel>
+                    <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                  </FormItem>
+                )} />
+                <FormField control={editForm.control} name="endDate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Date & Time</FormLabel>
+                    <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={editForm.control} name="location" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Location / Venue</FormLabel>
+                  <FormControl><Input placeholder="Zen West, Main Stage, etc." className="rounded-xl" {...field} /></FormControl>
+                </FormItem>
+              )} />
+              <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+                <h4 className="font-semibold text-sm flex items-center"><DollarSign className="h-4 w-4 mr-1 text-primary" /> Financials</h4>
+                <FormField control={editForm.control} name="isPaid" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium">Paid Event?</FormLabel>
+                    </div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                  </FormItem>
+                )} />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={editForm.control} name="revenue" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Revenue ($)</FormLabel>
+                      <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="cost" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Cost ($)</FormLabel>
+                      <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                    </FormItem>
+                  )} />
+                </div>
+              </div>
+              <FormField control={editForm.control} name="calendarTag" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
+                  <FormControl><Input placeholder="e.g. TW, MSH, MSS, CF, CAL" className="rounded-xl" {...field} /></FormControl>
+                  <p className="text-[10px] text-muted-foreground mt-1">Bracket tag in the calendar title — must match one of: TW, MSH, MSS, CF, CAL.</p>
+                </FormItem>
+              )} />
+              <FormField control={editForm.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm">Internal Notes</FormLabel>
+                  <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
+                </FormItem>
+              )} />
+              <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+                <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                  <Globe className="h-4 w-4 text-secondary" /> Website Calendar Fields
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <FormField control={editForm.control} name="ctaLabel" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Button Label</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
+                        <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="TICKETS">TICKETS</SelectItem>
+                          <SelectItem value="REGISTER">REGISTER</SelectItem>
+                          <SelectItem value="SIGN UP">SIGN UP</SelectItem>
+                          <SelectItem value="RSVP">RSVP</SelectItem>
+                          <SelectItem value="INFO">INFO</SelectItem>
+                          <SelectItem value="FLYER">FLYER</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )} />
+                  <div className="col-span-2">
+                    <FormField control={editForm.control} name="ticketsUrl" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Tickets / Link URL</FormLabel>
+                        <FormControl><Input placeholder="https://app.tickethive.com/e/..." className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                      </FormItem>
+                    )} />
+                  </div>
+                </div>
+                <FormField control={editForm.control} name="flyerUrl" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Flyer Image URL (ImageKit)</FormLabel>
+                    <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                  </FormItem>
+                )} />
+              </div>
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setEditEvent(null)}>Cancel</Button>
+                <Button type="submit" disabled={isUpdating} className="rounded-xl h-11 px-8">
+                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Comm tasks slide-out panel */}
       <CommTasksSheet
