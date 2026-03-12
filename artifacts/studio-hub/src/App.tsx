@@ -11,6 +11,7 @@ import Contacts from "@/pages/contacts";
 import Events from "@/pages/events";
 import Employees from "@/pages/employees";
 import Signup from "@/pages/signup";
+import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/contacts" component={Contacts} />
       <Route path="/events" component={Events} />
       <Route path="/employees" component={Employees} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

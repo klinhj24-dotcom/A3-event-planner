@@ -1,0 +1,77 @@
+Event Type,Event Tag Group,Event Tag,Communication Type,Message Name / Purpose,Timing (Relative to Event),Channel,Notes / Content Summary
+Festival / Community Event,[MSS],[COMMUNITY],Email,Save the Date,-60,Email,—
+Festival / Community Event,[MSS],[COMMUNITY],Email,Reminder,-7,Email,—
+Festival / Community Event,[MSS],[COMMUNITY],In-Studio,Poster Display,-30,Print,Posters in studio
+Festival / Community Event,[MSS],[COMMUNITY],Social Media,Instagram Post,-30,Instagram Post,Repost event posters
+Festival / Community Event,[MSS],[COMMUNITY],Social Media,Instagram Post,-7,Instagram Story,
+Festival / Community Event,[MSS],[COMMUNITY],Social Media,Instagram Post,-3,Instagram Story,
+Festival / Community Event,[MSS],[COMMUNITY],Social Media,Recap Post,1,Instagram Post,—
+Instrument Demo (Waldorf),[MSS],[INST DEMO],Social Media,Story Post,-1,Instagram Story,
+Instrument Demo (Waldorf),[MSS],[INST DEMO],Social Media,Recap Post,1,Instagram Post,
+Instrument Demo (library),[MSH],[INST DEMO],Social Media,Story Post,-1,Instagram Story,
+Instrument Demo (library),[MSH],[INST DEMO],Social Media,Recap Post,1,Instagram Post,
+Little Rockers (library),[MSH],[INST DEMO],Social Media,Story Post,-1,Instagram Story,
+Little Rockers (library),[MSH],[INST DEMO],Social Media,Recap Post,1,Instagram Post,
+Open Mic,[MSH],[OPEN MIC],Email,Save the Date + Sign-Up,-21,Email,Include sign-up link
+Open Mic,[MSH],[OPEN MIC],Email,Reminder,-14,Email,—
+Open Mic,[MSH],[OPEN MIC],Email,The List + Confirmation,-3,Email,Include attendance confirmation
+Open Mic,[MSH],[OPEN MIC],Social Media,Poster Post,-14,Instagram Post,Sign-up in bio!'
+Open Mic,[MSH],[OPEN MIC],Social Media,Story Post,0,Instagram Story,Happening tonight!'
+Open Mic,[MSH],[OPEN MIC],Social Media,Recap Post,1,Instagram Post,Tag participants
+Recital,[MSH],[RECITAL],Email,Save the Date,-60,Email,Send to all families; encourage attendance even if not performing
+Recital,[MSH],[RECITAL],Email,Reminder with Sign-Up Link,-30,Email,Include registration link for performers
+Recital,[MSH],[RECITAL],Email,Performance Schedule,-20,Email,Include 'Last chance to register!'
+Recital,[MSH],[RECITAL],Email,Final Reminder,-7,Email,Include full performance schedule
+Recital,[MSH],[RECITAL],Social Media,Story Post,-3,Instagram Story,Previous recital pic + 'TMS students only' note
+Recital,[MSH],[RECITAL],Social Media,Story Post,-1,Instagram Story,Previous recital pic + 'TMS students only' note
+Recital,[MSH],[RECITAL],Social Media,Recap Post,1,Instagram Post,"Collage/slideshow, tag parents/students"
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Email,Save the Date,-14,Email,Via monthly newsletter
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Email,Reminder with Ticket Link,-7,Email,Include ticket link
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Print,Put up Flyer,-21,Instagram Post,Include ticket link
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Social Media,Story Post,-7,Instagram Post,Include ticket link
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Social Media,Story Post,-3,Instagram Post,Include ticket link
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Social Media,Story Post - Show is Tonight!,0,Instagram Post,Include ticket link
+Songwriter Showcase / Studio Show,[MSH],[SHOW],Social Media,Recap Reel,1,Instagram Post,Tag performers/hosts
+Student Band Show,[MSH],[STUDENT BAND],Email,Save the Date,-60,Email,Send to all families; encourage attendance even if not performing
+Student Band Show,[MSH],[STUDENT BAND],Email,Reminder with Sign-Up Link,-30,Email,Include registration link for performers
+Student Band Show,[MSH],[STUDENT BAND],Email,Performance Schedule,-20,Email,Include 'Last chance to register!'
+Student Band Show,[MSH],[STUDENT BAND],Email,Final Reminder,-7,Email,Include full performance schedule
+Student Band Show,[MSH],[STUDENT BAND],Social Media,Initial Poster Post,-30,Instagram Post,Save the date' style post + repost to story as event nears
+Student Band Show,[MSH],[STUDENT BAND],Social Media,Recap Post,1,Instagram Post,"Photos of all bands, tag band leaders & families"
+Studio Jam Night,[MSH],[JAM NIGHT],Email,,-14,,
+Studio Open House,[MSH],[OPEN HOUSE],Email,,-14,,
+Studio Party,[MSH],[PARTY],Email,Save the Date,-60,Email,Get an idea of how many people can make it/are interested
+Studio Party,[MSH],[PARTY],Email,Reminder and RSVP,-32,Email,Get actual list of people attending with confirmation
+Studio Party,[MSH],[PARTY],Email,2nd Reminder and RSVP,-14,Email,Get actual list of people attending with confirmation
+Studio Party,[MSH],[PARTY],Email,3rd Reminder and RSVP,-7,Email,Get actual list of people attending with confirmation
+Studio Party,[MSH],[PARTY],Social Media,Recap Post,1,Instagram Post,
+Holiday Closure,[CAL],,Email,Closure Reminder,-7,Email,Closure Reminder
+Holiday,[CAL],,Social Media,Holiday Post,-2,Instagram Post,"Post written, Image and copy sent in an email to Justin"
+Rockin' Toddlers,[MSH],[RT],Social Media,Class announcement,-60,Instagram Post,
+Rockin' Toddlers,[MSH],[RT],Email,Class announcement,-60,Email to Past Clients,
+Rockin' Toddlers,[MSH],[RT],Email,Sign Up Reminder,-30,Email to Past Clients,
+Rockin' Toddlers,[MSH],[RT],Social Media,Sign Up Reminder,-30,Instagram Story,
+Rockin' Toddlers,[MSH],[RT],Social Media,Class Start Note to Parents,-5,Email to Enrolled Students,
+Rockin' Toddlers,[MSH],[RT],Social Media,Midway Through Class Email,21,Email to Enrolled Students,
+Rockin' Toddlers,[MSH],[RT],Website,Update Website with New Times,21,Website,
+Rockin' Toddlers,[MSH],[RT],Social Media,Class End thank you,42,Email to Enrolled Students,
+Chamber Ensemble,[MSH],[CE],Social Media,Ensemble Announcement,-60,Instagram Post,
+Chamber Ensemble,[MSH],[CE],Email,Class announcement,-60,Email to Past Clients,
+Chamber Ensemble,[MSH],[CE],Email,Sign Up Reminder,-30,Email to Past Clients,
+Chamber Ensemble,[MSH],[CE],Social Media,Sign Up Reminder,-30,Instagram Story,
+Chamber Ensemble,[MSH],[CE],Social Media,Class Start Note to Parents,-5,Email to Enrolled Students,
+Chamber Ensemble,[MSH],[CE],Social Media,Midway Through Class Email,21,Email to Enrolled Students,
+Chamber Ensemble,[MSH],[CE],Website,Update Website with New Times,21,Website,
+Chamber Ensemble,[MSH],[CE],Social Media,Class End thank you,42,Email to Enrolled Students,
+Enrichment Club,[MSH],[EC],Social Media,Class announcement,-30,Instagram Post,
+Enrichment Club,[MSH],[EC],Social Media,Class announcement,-21,Instagram Story,
+Enrichment Club,[MSH],[EC],Email,Welcome email,-7,Email to Enrolled Clients,
+Enrichment Club,[MSH],[EC],Email,Midway Through Class Email,21,Email to Enrolled Students,
+Enrichment Club,[MSH],[EC],Email,Class End thank you,43,Email to Enrolled Students,
+Workshop,[MSH],[WORKSHOP],Email,Workshop Announcement,-21,Email,Include ticket link
+Workshop,[MSH],[WORKSHOP],Print,Put up Flyer,-21,Print,Include ticket link
+Workshop,[MSH],[WORKSHOP],Social Media,Post,-21,Instagram Post,Include ticket link
+Workshop,[MSH],[WORKSHOP],Social Media,Story Post,-21,Instagram Story,Include ticket link
+Workshop,[MSH],[WORKSHOP],Social Media,Story Post,-3,Instagram Story,Include ticket link
+Workshop,[MSH],[WORKSHOP],Social Media,Story Post - Show is Tonight!,0,Instagram Post,Include ticket link
+Workshop,[MSH],[WORKSHOP],Social Media,Recap Reel,1,Instagram Post,Tag performers/hosts

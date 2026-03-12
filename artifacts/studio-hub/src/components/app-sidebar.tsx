@@ -3,7 +3,8 @@ import {
   Users, 
   Calendar, 
   UserSquare2, 
-  LogOut
+  LogOut,
+  Settings
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -20,6 +21,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { GoogleConnectBanner } from "@/components/google-connect-banner";
 import tmsSymbol from "@assets/TMS_Symbol_Gradient@4x_1773281994585.png";
 
 const navItems = [
@@ -27,6 +29,7 @@ const navItems = [
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Events", url: "/events", icon: Calendar },
   { title: "Employees", url: "/employees", icon: UserSquare2 },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -86,8 +89,9 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 pb-6">
-        <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent/50 p-3 mb-2 border border-border/10">
+      <SidebarFooter className="p-4 pb-6 space-y-3">
+        <GoogleConnectBanner />
+        <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent/50 p-3 border border-border/10">
           <Avatar className="h-9 w-9 border border-border/20">
             <AvatarImage src={user?.profileImageUrl} alt={user?.username} />
             <AvatarFallback className="bg-primary/20 text-primary font-medium">

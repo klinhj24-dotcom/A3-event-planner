@@ -11,6 +11,7 @@ export const contactsTable = pgTable("contacts", {
   type: text("type").notNull(),
   notes: text("notes"),
   lastOutreachAt: timestamp("last_outreach_at", { withTimezone: true }),
+  followUpAt: timestamp("follow_up_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

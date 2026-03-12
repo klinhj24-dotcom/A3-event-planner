@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useCreateEvent } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,25 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
+
+function CalendarPushButton({ eventId }: { eventId: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { mutate: push, isPending } = useMutation({
+    mutationFn: () => fetch(`/api/calendar/push/${eventId}`, { method: "POST", credentials: "include" }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.error) { toast({ title: data.error, variant: "destructive" }); return; }
+      toast({ title: "Pushed to Google Calendar" });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+    onError: () => toast({ title: "Failed to push to calendar", variant: "destructive" }),
+  });
+  return (
+    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs rounded-lg text-primary hover:bg-primary/10" onClick={() => push()} disabled={isPending}>
+      {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarCheck className="h-3 w-3" />}
+    </Button>
+  );
+}
 
 const eventSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -288,13 +307,14 @@ export default function Events() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {event.calendarTag ? (
-                            <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50">
-                              #{event.calendarTag}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground/50">—</span>
-                          )}
+                          <div className="flex items-center justify-end gap-1.5">
+                            {event.calendarTag ? (
+                              <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50">
+                                #{event.calendarTag}
+                              </Badge>
+                            ) : null}
+                            <CalendarPushButton eventId={event.id} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

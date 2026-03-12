@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon, MessageSquare, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon, MessageSquare, Loader2, Send } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { GmailComposeModal } from "@/components/gmail-compose";
+import { GmailThreadView } from "@/components/gmail-thread-view";
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -50,6 +53,7 @@ export default function Contacts() {
   
   const [createOpen, setCreateOpen] = useState(false);
   const [outreachOpen, setOutreachOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -259,12 +263,22 @@ export default function Contacts() {
                           >
                             History
                           </Button>
+                          {contact.email && (
+                            <Button 
+                              variant="outline"
+                              size="sm" 
+                              className="rounded-lg h-8 border-primary/30 text-primary hover:bg-primary/10"
+                              onClick={() => { setSelectedContactId(contact.id); setComposeOpen(true); }}
+                            >
+                              <Send className="h-3 w-3 mr-1.5" /> Email
+                            </Button>
+                          )}
                           <Button 
                             size="sm" 
                             className="rounded-lg h-8"
                             onClick={() => { setSelectedContactId(contact.id); setOutreachOpen(true); }}
                           >
-                            Log Contact
+                            Log
                           </Button>
                         </div>
                       </TableCell>
@@ -318,10 +332,19 @@ export default function Contacts() {
           </DialogContent>
         </Dialog>
 
+        {/* Gmail Compose Modal */}
+        {activeContact && (
+          <GmailComposeModal
+            open={composeOpen}
+            onOpenChange={setComposeOpen}
+            contact={activeContact}
+          />
+        )}
+
         {/* Contact History Sheet */}
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetContent className="sm:max-w-md w-full overflow-y-auto border-l-border/50">
-            <SheetHeader className="pb-6 border-b border-border/50">
+            <SheetHeader className="pb-4 border-b border-border/50">
               <SheetTitle className="font-display text-2xl">{activeContact?.name}</SheetTitle>
               <SheetDescription className="flex flex-col gap-2 pt-2">
                 <span className="flex items-center text-foreground"><Building2 className="h-4 w-4 mr-2" /> {activeContact?.organization || "No organization"}</span>
@@ -329,42 +352,51 @@ export default function Contacts() {
                 {activeContact?.phone && <span className="flex items-center"><Phone className="h-4 w-4 mr-2" /> {activeContact.phone}</span>}
               </SheetDescription>
             </SheetHeader>
-            <div className="py-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-lg flex items-center">
-                  <MessageSquare className="h-5 w-5 mr-2 text-primary" /> Outreach History
-                </h3>
-                <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => { setSheetOpen(false); setOutreachOpen(true); }}>
-                  <Plus className="h-3 w-3 mr-1" /> Log
-                </Button>
-              </div>
-              
-              {isLoadingHistory ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-              ) : outreachHistory?.length === 0 ? (
-                <div className="text-center py-10 bg-muted/20 rounded-xl border border-border/50 border-dashed">
-                  <p className="text-muted-foreground text-sm">No outreach history yet.</p>
-                </div>
-              ) : (
-                <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                  {outreachHistory?.map((outreach, i) => (
-                    <div key={outreach.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                      <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-background bg-primary/20 text-primary shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                        <MessageSquare className="h-4 w-4" />
-                      </div>
-                      <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-border/50 bg-card shadow-sm">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm capitalize text-foreground">{outreach.method}</span>
-                          <time className="text-xs font-medium text-muted-foreground">{format(new Date(outreach.outreachAt), "MMM d, yyyy")}</time>
-                        </div>
-                        <div className="text-sm text-muted-foreground leading-relaxed">
-                          {outreach.notes || <span className="italic opacity-50">No notes</span>}
-                        </div>
-                      </div>
+
+            <div className="py-4">
+              <Tabs defaultValue="emails">
+                <TabsList className="w-full rounded-xl bg-muted/40 mb-4">
+                  <TabsTrigger value="emails" className="flex-1 rounded-lg">Emails</TabsTrigger>
+                  <TabsTrigger value="history" className="flex-1 rounded-lg">All Activity</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="emails" className="mt-0">
+                  {activeContact && <GmailThreadView contact={activeContact} />}
+                </TabsContent>
+
+                <TabsContent value="history" className="mt-0 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-primary" /> Outreach History
+                    </h3>
+                    <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={() => { setSheetOpen(false); setOutreachOpen(true); }}>
+                      <Plus className="h-3 w-3 mr-1" /> Log
+                    </Button>
+                  </div>
+                  
+                  {isLoadingHistory ? (
+                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                  ) : outreachHistory?.length === 0 ? (
+                    <div className="text-center py-10 bg-muted/20 rounded-xl border border-border/50 border-dashed">
+                      <p className="text-muted-foreground text-sm">No outreach history yet.</p>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ) : (
+                    <div className="space-y-3">
+                      {outreachHistory?.map((outreach) => (
+                        <div key={outreach.id} className="p-3 rounded-xl border border-border/50 bg-card">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-semibold text-sm capitalize text-foreground">{outreach.method}</span>
+                            <time className="text-xs font-medium text-muted-foreground">{format(new Date(outreach.outreachAt), "MMM d, yyyy")}</time>
+                          </div>
+                          <div className="text-sm text-muted-foreground leading-relaxed">
+                            {outreach.notes || <span className="italic opacity-50">No notes</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
           </SheetContent>
         </Sheet>
