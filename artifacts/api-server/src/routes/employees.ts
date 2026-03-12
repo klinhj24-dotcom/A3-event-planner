@@ -66,10 +66,10 @@ router.put("/employees/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { name, email, phone, role, isActive, notes, hourlyRate } = req.body;
+    const { name, email, phone, role, isActive, notes, hourlyRate, userId } = req.body;
     const [employee] = await db
       .update(employeesTable)
-      .set({ name, email, phone, role, isActive, notes, hourlyRate: hourlyRate !== undefined ? (hourlyRate ? String(hourlyRate) : null) : undefined, updatedAt: new Date() })
+      .set({ name, email, phone, role, isActive, notes, hourlyRate: hourlyRate !== undefined ? (hourlyRate ? String(hourlyRate) : null) : undefined, userId: userId !== undefined ? (userId || null) : undefined, updatedAt: new Date() })
       .where(eq(employeesTable.id, id))
       .returning();
     if (!employee) {

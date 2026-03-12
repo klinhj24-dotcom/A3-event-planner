@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout";
-import { useListEvents, useCreateEvent } from "@workspace/api-client-react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useListEvents, useListEmployees } from "@workspace/api-client-react";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -321,18 +321,53 @@ export default function Events() {
   const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
+  const [createStaff, setCreateStaff] = useState<number[]>([]);
 
-  const { mutate: createEvent, isPending } = useCreateEvent({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-        setCreateOpen(false);
-        form.reset();
-        toast({ title: "Event created successfully" });
-      },
-      onError: () => toast({ title: "Failed to create event", variant: "destructive" })
-    }
+  const { data: allEmployees } = useListEmployees();
+
+  const { data: editEventStaff } = useQuery<any[]>({
+    queryKey: [`/api/events/${editEvent?.id}/employees`],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${editEvent!.id}/employees`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!editEvent,
+  });
+
+  const { mutate: addEditStaff } = useMutation({
+    mutationFn: async (employeeId: number) => {
+      const res = await fetch(`/api/events/${editEvent!.id}/employees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId }),
+      });
+      if (!res.ok) throw new Error("Failed to add staff");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${editEvent?.id}/employees`] }),
+    onError: () => toast({ title: "Failed to add staff member", variant: "destructive" }),
+  });
+
+  const { mutate: removeEditStaff } = useMutation({
+    mutationFn: async (assignmentId: number) => {
+      const res = await fetch(`/api/events/${editEvent!.id}/employees/${assignmentId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove staff");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${editEvent?.id}/employees`] }),
+    onError: () => toast({ title: "Failed to remove staff member", variant: "destructive" }),
+  });
+
+  const { mutateAsync: createEventAsync, isPending } = useMutation({
+    mutationFn: async (data: z.infer<typeof eventSchema>) => {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create event");
+      return res.json();
+    },
   });
 
   const { mutate: updateEvent, isPending: isUpdating } = useMutation({
@@ -453,7 +488,28 @@ export default function Events() {
                   <DialogDescription>Schedule a new event and configure sync tags.</DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((data) => createEvent({ data }))} className="space-y-5 py-4">
+                  <form onSubmit={form.handleSubmit(async (data) => {
+                    try {
+                      const event = await createEventAsync(data);
+                      if (createStaff.length > 0 && event?.id) {
+                        await Promise.all(createStaff.map(empId =>
+                          fetch(`/api/events/${event.id}/employees`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ employeeId: empId }),
+                          })
+                        ));
+                      }
+                      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+                      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+                      setCreateOpen(false);
+                      form.reset();
+                      setCreateStaff([]);
+                      toast({ title: "Event created successfully" });
+                    } catch {
+                      toast({ title: "Failed to create event", variant: "destructive" });
+                    }
+                  })} className="space-y-5 py-4">
                     <FormField control={form.control} name="title" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Event Title *</FormLabel>
@@ -609,6 +665,33 @@ export default function Events() {
                         </FormItem>
                       )} />
                     </div>
+
+                    {/* Staff assignment */}
+                    {allEmployees && allEmployees.length > 0 && (
+                      <div className="pt-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users2 className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Assign Staff <span className="text-muted-foreground font-normal text-xs">optional</span></span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {allEmployees.map((emp: any) => {
+                            const selected = createStaff.includes(emp.id);
+                            return (
+                              <button
+                                type="button"
+                                key={emp.id}
+                                onClick={() => setCreateStaff(s => selected ? s.filter(x => x !== emp.id) : [...s, emp.id])}
+                                className={`px-3 py-1.5 rounded-xl text-xs border transition-all ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground'}`}
+                              >
+                                {selected && <span className="mr-1">✓</span>}
+                                {emp.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <DialogFooter className="pt-4">
                       <Button type="submit" disabled={isPending} className="w-full rounded-xl h-11">
                         {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -934,6 +1017,42 @@ export default function Events() {
                   </FormItem>
                 )} />
               </div>
+
+              {/* Assigned Staff */}
+              <div className="pt-2 border-t border-border/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Assigned Staff</span>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3 min-h-[28px]">
+                  {(!editEventStaff || editEventStaff.length === 0) && (
+                    <span className="text-xs text-muted-foreground">No staff assigned yet.</span>
+                  )}
+                  {editEventStaff?.map((s: any) => (
+                    <span key={s.id} className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs px-2.5 py-1.5 rounded-lg">
+                      {s.employeeName}
+                      <button type="button" onClick={() => removeEditStaff(s.id)} className="hover:text-destructive transition-colors ml-0.5">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                {allEmployees && allEmployees.filter((e: any) => !editEventStaff?.some((s: any) => s.employeeId === e.id)).length > 0 && (
+                  <Select onValueChange={(val) => addEditStaff(parseInt(val))}>
+                    <SelectTrigger className="rounded-xl h-9 text-xs w-52">
+                      <SelectValue placeholder="+ Add staff member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allEmployees
+                        .filter((e: any) => !editEventStaff?.some((s: any) => s.employeeId === e.id))
+                        .map((emp: any) => (
+                          <SelectItem key={emp.id} value={String(emp.id)}>{emp.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
               <DialogFooter className="pt-4">
                 <Button type="button" variant="outline" className="rounded-xl" onClick={() => setEditEvent(null)}>Cancel</Button>
                 <Button type="submit" disabled={isUpdating} className="rounded-xl h-11 px-8">

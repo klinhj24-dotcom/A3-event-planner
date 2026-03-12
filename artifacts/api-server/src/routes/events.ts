@@ -228,6 +228,18 @@ router.post("/events/:id/employees", async (req, res) => {
   }
 });
 
+router.delete("/events/:id/employees/:assignmentId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    await db.delete(eventEmployeesTable).where(eq(eventEmployeesTable.id, assignmentId));
+    res.status(204).send();
+  } catch (err) {
+    console.error("removeEventEmployee error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/events/:id/signups", async (req, res) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Unauthorized" });

@@ -7,7 +7,8 @@ import {
   Settings,
   Radio,
   Shield,
-  DollarSign
+  DollarSign,
+  CalendarDays,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -27,7 +28,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { GoogleConnectBanner } from "@/components/google-connect-banner";
 import tmsSymbol from "@assets/TMS_Symbol_Gradient@4x_1773281994585.png";
 
-const navItems = [
+const adminNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Events", url: "/events", icon: Calendar },
@@ -37,9 +38,16 @@ const navItems = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
+const employeeNavItems = [
+  { title: "My Schedule", url: "/my-schedule", icon: CalendarDays },
+  { title: "Settings", url: "/settings", icon: Settings },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const isAdmin = (user as any)?.role === "admin";
+  const navItems = isAdmin ? adminNavItems : employeeNavItems;
 
   return (
     <Sidebar className="border-r border-border/20">
@@ -95,7 +103,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4 pb-6 space-y-3">
-        <GoogleConnectBanner />
+        {isAdmin && <GoogleConnectBanner />}
         <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent/50 p-3 border border-border/10">
           <Avatar className="h-9 w-9 border border-border/20">
             <AvatarImage src={user?.profileImageUrl} alt={user?.username} />
@@ -108,12 +116,12 @@ export function AppSidebar() {
               <span className="text-sm font-medium text-sidebar-foreground truncate">
                 {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username}
               </span>
-              {(user as any)?.role === "admin" && (
+              {isAdmin && (
                 <Shield className="h-3 w-3 text-primary shrink-0" />
               )}
             </div>
             <span className="text-xs text-[#cfcccc] truncate">
-              {(user as any)?.role === "admin" ? "Admin" : "Employee"}
+              {isAdmin ? "Admin" : "Employee"}
             </span>
           </div>
         </div>

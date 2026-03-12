@@ -14,6 +14,7 @@ import commScheduleRouter from "./comm-schedule";
 import debriefRouter from "./debrief";
 import storageRouter from "./storage";
 import payrollRouter from "./payroll";
+import myEventsRouter from "./my-events";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(usersRouter);
 router.use(commScheduleRouter);
 router.use(debriefRouter);
 router.use(payrollRouter);
+router.use(myEventsRouter);
 
 export default router;

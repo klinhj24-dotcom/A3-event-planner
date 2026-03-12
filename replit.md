@@ -43,18 +43,20 @@ artifacts-monorepo/
 - **Contact Assignments**: Admins can manually assign contacts to employees. Contacts auto-assign when an employee logs outreach or sends email.
 - **Events**: Track events (student showcases, community events, recitals, open mics). Financial tracking (cost/revenue, paid/unpaid). Push events to Google Calendar. Calendar view (List/Calendar toggle, month grid with color-coded event pills).
 - **Comm Schedule**: 76 communication rules loaded from CSV, organized by event type. Shows timing (days before/after), channel (Email, Instagram, Print, Website), message purpose, and notes. Per-event task generation (calculates due dates from event date + rule timing).
-- **Employees**: Staff management, active/inactive status, optional hourly rate (set on create or via Payroll page)
+- **Employees**: Staff management, active/inactive status, optional hourly rate. Admins can link employee records to portal user accounts ("Link Account" button on each card). Linked employees can log in and view their assigned events.
 - **Payroll**: Track employee hours per event per pay period (Saturday–Friday). Log hours entries (employee, event, date, hours, notes). Per-employee summary with total hours, hourly rate, and total pay. Summary cards (active staff, total hours, total payroll cost). Edit hourly rate inline. Expandable rows show individual entries with delete.
 - **Sign-up system**: Each event gets a unique public link (/signup/:token)
 - **Gmail Integration**: Per-user OAuth2 Gmail connect/disconnect. Send emails to contacts, track threads, import existing Gmail threads, reply to threads in-app.
 - **Email Templates**: Create/manage reusable email templates with merge fields (`{name}`, `{organization}`, `{first_name}`). Applied automatically when composing emails.
 - **Google Calendar Push**: Push events directly to TMS Google Calendar from the events page.
 - **Settings page**: Tabbed: Gmail connection, email templates, Team management (admin only — set user roles).
+- **Staff Assignment**: Assign staff members to events in the Create Event form (checkbox-style multi-select) and in the Edit Event dialog (add/remove staff as tags). Staff assigned to events appear in the employee portal.
+- **Employee Portal (My Schedule)**: Employees see a focused nav (My Schedule, Settings) after login. `/my-schedule` shows all events they're assigned to, split into Upcoming and Past, with event type, status, date, location, and their assigned role.
 
 ## Roles
 
-- `admin` — sees all contacts, manages assignments, manages team roles, generates comm tasks
-- `employee` — sees only their assigned contacts, auto-assigned when they log outreach
+- `admin` — sees all contacts, manages assignments, manages team roles, generates comm tasks; full nav
+- `employee` — sees only their assigned contacts, auto-assigned when they log outreach; nav shows only My Schedule + Settings
 
 Role is stored in `users.role`. It is set by admins via Settings > Team. Role persists across logins (the upsert does NOT override `role`). Role is included in the auth session and returned by `/api/auth/user`.
 
@@ -66,7 +68,7 @@ Role is stored in `users.role`. It is set by admins via Settings > Team. Role pe
 - `contact_assignments` — employee → contact assignments (userId, contactId, assignedBy, autoAssigned)
 - `events` — studio events with financial, calendar, and signup fields
 - `event_contacts` — many-to-many: events ↔ contacts
-- `employees` — staff
+- `employees` — staff, includes `userId` (nullable FK → `users.id`) to link to a portal account
 - `event_employees` — many-to-many: events ↔ employees with pay tracking
 - `event_signups` — public signup submissions per event
 - `outreach` — outreach history log per contact. Includes `userId` for attribution. Gmail fields: `gmailThreadId`, `gmailMessageId`, `subject`, `body`, `direction`, `fromEmail`, `toEmail`
@@ -115,6 +117,14 @@ Role is stored in `users.role`. It is set by admins via Settings > Team. Role pe
 ### Users & Roles (admin only)
 - `GET /api/users` — list all users
 - `PATCH /api/users/:id/role` — set role ('admin' | 'employee')
+
+### Event Staff
+- `GET /api/events/:id/employees` — list staff assigned to event
+- `POST /api/events/:id/employees` — assign staff to event (`{ employeeId, role?, pay?, notes? }`)
+- `DELETE /api/events/:id/employees/:assignmentId` — remove staff assignment
+
+### Employee Portal
+- `GET /api/my-events` — returns `{ events, employee }` for the logged-in user's linked employee record
 
 ### Contact Assignments
 - `GET /api/contacts/:id/assignments` — list assigned users

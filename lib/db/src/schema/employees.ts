@@ -2,6 +2,7 @@ import { boolean, date, decimal, integer, pgTable, serial, text, timestamp } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { eventsTable } from "./events";
+import { usersTable } from "./auth";
 
 export const employeesTable = pgTable("employees", {
   id: serial("id").primaryKey(),
@@ -11,6 +12,7 @@ export const employeesTable = pgTable("employees", {
   role: text("role").notNull().default("staff"),
   isActive: boolean("is_active").notNull().default(true),
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
+  userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

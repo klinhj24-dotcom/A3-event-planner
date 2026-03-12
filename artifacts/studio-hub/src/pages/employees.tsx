@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useListEmployees, useCreateEmployee } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, UserPlus, Mail, Phone, Loader2 } from "lucide-react";
+import { Search, Plus, UserPlus, Mail, Phone, Loader2, Link2, LinkIcon, Unlink } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@workspace/replit-auth-web";
 
 const employeeSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -30,6 +31,39 @@ export default function Employees() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const [linkTarget, setLinkTarget] = useState<any | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const { user } = useAuth();
+  const isAdmin = (user as any)?.role === "admin";
+
+  const { data: portalUsers } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isAdmin,
+  });
+
+  const { mutate: linkUser, isPending: isLinking } = useMutation({
+    mutationFn: async ({ employeeId, userId }: { employeeId: number; userId: string | null }) => {
+      const res = await fetch(`/api/employees/${employeeId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error("Failed to link account");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setLinkTarget(null);
+      setSelectedUserId("");
+      toast({ title: "Account linked successfully" });
+    },
+    onError: () => toast({ title: "Failed to link account", variant: "destructive" }),
+  });
 
   const { mutate: createEmployee, isPending } = useCreateEmployee({
     mutation: {
@@ -53,6 +87,13 @@ export default function Employees() {
     e.name.toLowerCase().includes(search.toLowerCase()) || 
     e.role.toLowerCase().includes(search.toLowerCase())
   );
+
+  function getUserName(userId: string | null | undefined) {
+    if (!userId || !portalUsers) return null;
+    const u = portalUsers.find((p: any) => p.id === userId);
+    if (!u) return "Unknown user";
+    return u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username || u.email || "User";
+  }
 
   return (
     <AppLayout>
@@ -123,6 +164,12 @@ export default function Employees() {
           </Dialog>
         </div>
 
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search team..." className="pl-9 rounded-xl" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {isLoading ? (
             Array(3).fill(0).map((_, i) => <div key={i} className="h-40 bg-muted/50 animate-pulse rounded-2xl border border-border/50" />)
@@ -166,12 +213,83 @@ export default function Employees() {
                       <a href={`tel:${employee.phone}`} className="hover:underline">{employee.phone}</a>
                     </div>
                   )}
+
+                  {isAdmin && (
+                    <div className="pt-2 flex items-center gap-2 flex-wrap">
+                      {(employee as any).userId ? (
+                        <>
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-lg flex-1 min-w-0">
+                            <Link2 className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{getUserName((employee as any).userId) || "Linked"}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive rounded-lg"
+                            onClick={() => linkUser({ employeeId: employee.id, userId: null })}
+                          >
+                            <Unlink className="h-3 w-3" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs rounded-lg border-dashed gap-1.5 w-full"
+                          onClick={() => { setLinkTarget(employee); setSelectedUserId(""); }}
+                        >
+                          <LinkIcon className="h-3 w-3" /> Link Portal Account
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Link Account Dialog */}
+      <Dialog open={!!linkTarget} onOpenChange={(open) => !open && setLinkTarget(null)}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Link Portal Account</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select the portal account to link to <span className="font-medium text-foreground">{linkTarget?.name}</span>. They'll be able to log in and see their assigned events.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Account</label>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Select a user..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {portalUsers?.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username || u.email}
+                      <span className="ml-2 text-muted-foreground text-xs capitalize">({u.role})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl" onClick={() => setLinkTarget(null)}>Cancel</Button>
+            <Button
+              className="rounded-xl"
+              disabled={!selectedUserId || isLinking}
+              onClick={() => linkUser({ employeeId: linkTarget.id, userId: selectedUserId })}
+            >
+              {isLinking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Link Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
