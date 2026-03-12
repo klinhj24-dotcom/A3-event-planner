@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +12,7 @@ export const contactsTable = pgTable("contacts", {
   notes: text("notes"),
   lastOutreachAt: timestamp("last_outreach_at", { withTimezone: true }),
   followUpAt: timestamp("follow_up_at", { withTimezone: true }),
+  outreachWindowMonths: integer("outreach_window_months"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/layout";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity } from "lucide-react";
+import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -54,6 +54,14 @@ export default function Dashboard() {
                   <div className="space-y-2 z-10">
                     <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
                     <p className="font-display text-4xl font-bold text-foreground tracking-tight">{stat.value}</p>
+                    {i === 0 && (stats?.overdueContacts ?? 0) > 0 && (
+                      <Link href="/contacts">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-full px-2 py-0.5 cursor-pointer hover:bg-destructive/20 transition-colors">
+                          <AlertTriangle className="h-3 w-3" />
+                          {stats!.overdueContacts} overdue
+                        </span>
+                      </Link>
+                    )}
                   </div>
                   <div className={`p-3 rounded-xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300`}>
                     <stat.icon className="h-6 w-6" />

@@ -49,7 +49,29 @@ const contactSchema = z.object({
   organization: z.string().optional(),
   type: z.string().min(1, "Type is required"),
   notes: z.string().optional(),
+  outreachWindowMonths: z.string().optional(),
 });
+
+const OUTREACH_WINDOWS = [
+  { value: "", label: "No window" },
+  { value: "1", label: "Every month" },
+  { value: "2", label: "Every 2 months" },
+  { value: "3", label: "Every 3 months" },
+  { value: "6", label: "Every 6 months" },
+  { value: "12", label: "Yearly" },
+];
+
+function getOutreachStatus(contact: { outreachWindowMonths?: number | null; lastOutreachAt?: Date | string | null }) {
+  if (!contact.outreachWindowMonths) return null;
+  const now = Date.now();
+  const windowMs = contact.outreachWindowMonths * 30.44 * 24 * 60 * 60 * 1000;
+  if (!contact.lastOutreachAt) return "overdue";
+  const lastMs = new Date(contact.lastOutreachAt).getTime();
+  const dueAt = lastMs + windowMs;
+  if (dueAt < now) return "overdue";
+  if (dueAt - now < 14 * 24 * 60 * 60 * 1000) return "due-soon";
+  return "ok";
+}
 
 const outreachSchema = z.object({
   method: z.string().min(1, "Method is required"),
@@ -219,7 +241,7 @@ export default function Contacts() {
 
   const form = useForm<z.infer<typeof contactSchema>>({
     resolver: zodResolver(contactSchema),
-    defaultValues: { name: "", type: "event_coordinator", email: "", phone: "", organization: "", notes: "" }
+    defaultValues: { name: "", type: "event_coordinator", email: "", phone: "", organization: "", notes: "", outreachWindowMonths: "" }
   });
 
   const outreachForm = useForm<z.infer<typeof outreachSchema>>({
@@ -260,7 +282,11 @@ export default function Contacts() {
                 <DialogDescription>Add a new contact to the studio database.</DialogDescription>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => createContact({ data }))} className="space-y-4">
+                <form onSubmit={form.handleSubmit((data) => {
+                  const { outreachWindowMonths, ...rest } = data;
+                  const window = outreachWindowMonths && outreachWindowMonths !== "__none__" ? parseInt(outreachWindowMonths) : null;
+                  createContact({ data: { ...rest, outreachWindowMonths: window } as any });
+                })} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={form.control} name="name" render={({ field }) => (
                       <FormItem className="col-span-2">
@@ -311,6 +337,22 @@ export default function Contacts() {
                         <FormLabel>Notes</FormLabel>
                         <FormControl><Textarea placeholder="Met at summer showcase..." className="rounded-xl resize-none h-20" {...field} /></FormControl>
                         <FormMessage />
+                      </FormItem>
+                    )}/>
+                    <FormField control={form.control} name="outreachWindowMonths" render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Outreach Window</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="rounded-xl"><SelectValue placeholder="No window" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {OUTREACH_WINDOWS.map(w => (
+                              <SelectItem key={w.value} value={w.value === "" ? "__none__" : w.value}>{w.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Alert when this contact hasn't been reached out to within the window.</p>
                       </FormItem>
                     )}/>
                   </div>
@@ -382,14 +424,31 @@ export default function Contacts() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {contact.lastOutreachAt ? (
-                          <div className="flex items-center text-sm">
-                            <CalendarIcon className="h-3.5 w-3.5 mr-2 text-primary/70" />
-                            {format(new Date(contact.lastOutreachAt), "MMM d, yyyy")}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/60 italic">Never contacted</span>
-                        )}
+                        <div className="space-y-1">
+                          {getOutreachStatus(contact) === "overdue" && (
+                            <Badge className="bg-destructive/10 text-destructive border border-destructive/30 text-[10px] px-1.5 py-0.5 h-auto font-medium">
+                              Overdue
+                            </Badge>
+                          )}
+                          {getOutreachStatus(contact) === "due-soon" && (
+                            <Badge className="bg-yellow-500/10 text-yellow-600 border border-yellow-500/30 text-[10px] px-1.5 py-0.5 h-auto font-medium">
+                              Due Soon
+                            </Badge>
+                          )}
+                          {contact.lastOutreachAt ? (
+                            <div className="flex items-center text-sm">
+                              <CalendarIcon className="h-3.5 w-3.5 mr-2 text-primary/70" />
+                              {format(new Date(contact.lastOutreachAt), "MMM d, yyyy")}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/60 italic">Never contacted</span>
+                          )}
+                          {contact.outreachWindowMonths && (
+                            <p className="text-[10px] text-muted-foreground/50">
+                              Window: {contact.outreachWindowMonths === 12 ? "Yearly" : contact.outreachWindowMonths === 1 ? "Monthly" : `Every ${contact.outreachWindowMonths}mo`}
+                            </p>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

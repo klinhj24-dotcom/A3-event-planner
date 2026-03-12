@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable } from "@workspace/db";
-import { count, gte, eq, desc } from "drizzle-orm";
+import { count, gte, eq, desc, isNotNull, and, lt, or, isNull, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -12,12 +12,21 @@ router.get("/dashboard/stats", async (req, res) => {
   try {
     const now = new Date();
 
-    const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], recentOutreach, upcomingEventsList] =
+    const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList] =
       await Promise.all([
         db.select({ count: count() }).from(contactsTable),
         db.select({ count: count() }).from(eventsTable).where(gte(eventsTable.startDate, now)),
         db.select({ count: count() }).from(employeesTable).where(eq(employeesTable.isActive, true)),
         db.select({ count: count() }).from(eventSignupsTable).where(eq(eventSignupsTable.status, "pending")),
+        db.select({ count: count() }).from(contactsTable).where(
+          and(
+            isNotNull(contactsTable.outreachWindowMonths),
+            or(
+              isNull(contactsTable.lastOutreachAt),
+              sql`${contactsTable.lastOutreachAt} < NOW() - INTERVAL '1 month' * ${contactsTable.outreachWindowMonths}`
+            )
+          )
+        ),
         db.select().from(outreachTable).orderBy(desc(outreachTable.outreachAt)).limit(5),
         db.select().from(eventsTable).where(gte(eventsTable.startDate, now)).orderBy(eventsTable.startDate).limit(5),
       ]);
@@ -27,6 +36,7 @@ router.get("/dashboard/stats", async (req, res) => {
       upcomingEvents: upcomingEventsRow?.count ?? 0,
       totalEmployees: totalEmployeesRow?.count ?? 0,
       pendingSignups: pendingSignupsRow?.count ?? 0,
+      overdueContacts: overdueContactsRow?.count ?? 0,
       recentOutreach,
       upcomingEventsList,
     });

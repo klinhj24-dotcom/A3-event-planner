@@ -98,6 +98,7 @@ export const ListContactsResponseItem = zod.object({
     .describe("e.g. band_director, event_coordinator, venue, other"),
   notes: zod.string().optional(),
   lastOutreachAt: zod.date().optional(),
+  outreachWindowMonths: zod.number().nullable().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -113,6 +114,7 @@ export const CreateContactBody = zod.object({
   organization: zod.string().optional(),
   type: zod.string(),
   notes: zod.string().optional(),
+  outreachWindowMonths: zod.number().nullable().optional(),
 });
 
 /**
@@ -133,6 +135,7 @@ export const GetContactResponse = zod.object({
     .describe("e.g. band_director, event_coordinator, venue, other"),
   notes: zod.string().optional(),
   lastOutreachAt: zod.date().optional(),
+  outreachWindowMonths: zod.number().nullable().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -151,6 +154,7 @@ export const UpdateContactBody = zod.object({
   organization: zod.string().optional(),
   type: zod.string(),
   notes: zod.string().optional(),
+  outreachWindowMonths: zod.number().nullable().optional(),
 });
 
 export const UpdateContactResponse = zod.object({
@@ -164,6 +168,7 @@ export const UpdateContactResponse = zod.object({
     .describe("e.g. band_director, event_coordinator, venue, other"),
   notes: zod.string().optional(),
   lastOutreachAt: zod.date().optional(),
+  outreachWindowMonths: zod.number().nullable().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -598,6 +603,7 @@ export const GetDashboardStatsResponse = zod.object({
   upcomingEvents: zod.number(),
   totalEmployees: zod.number(),
   pendingSignups: zod.number(),
+  overdueContacts: zod.number().optional(),
   recentOutreach: zod.array(
     zod.object({
       id: zod.number(),

@@ -100,14 +100,14 @@ router.get("/contacts", async (req, res) => {
 router.post("/contacts", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
-    const { name, email, phone, organization, type, notes, followUpAt } = req.body;
+    const { name, email, phone, organization, type, notes, followUpAt, outreachWindowMonths } = req.body;
     if (!name || !type) {
       res.status(400).json({ error: "name and type are required" });
       return;
     }
     const [contact] = await db
       .insert(contactsTable)
-      .values({ name, email, phone, organization, type, notes, followUpAt: followUpAt ? new Date(followUpAt) : undefined })
+      .values({ name, email, phone, organization, type, notes, followUpAt: followUpAt ? new Date(followUpAt) : undefined, outreachWindowMonths: outreachWindowMonths ? parseInt(outreachWindowMonths) : null })
       .returning();
     res.status(201).json(contact);
   } catch (err) {
@@ -172,10 +172,10 @@ router.put("/contacts/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { name, email, phone, organization, type, notes, followUpAt } = req.body;
+    const { name, email, phone, organization, type, notes, followUpAt, outreachWindowMonths } = req.body;
     const [contact] = await db
       .update(contactsTable)
-      .set({ name, email, phone, organization, type, notes, followUpAt: followUpAt ? new Date(followUpAt) : null, updatedAt: new Date() })
+      .set({ name, email, phone, organization, type, notes, followUpAt: followUpAt ? new Date(followUpAt) : null, outreachWindowMonths: outreachWindowMonths !== undefined ? (outreachWindowMonths ? parseInt(outreachWindowMonths) : null) : undefined, updatedAt: new Date() })
       .where(eq(contactsTable.id, id))
       .returning();
     if (!contact) {
