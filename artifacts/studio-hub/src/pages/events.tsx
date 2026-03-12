@@ -545,7 +545,7 @@ export default function Events() {
                         )} />
                         <FormField control={form.control} name="cost" render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Cost ($)</FormLabel>
+                            <FormLabel className="text-xs">Cost — booth / sponsorship ($)</FormLabel>
                             <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
                           </FormItem>
                         )} />
@@ -872,7 +872,7 @@ export default function Events() {
                   )} />
                   <FormField control={editForm.control} name="cost" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Cost ($)</FormLabel>
+                      <FormLabel className="text-xs">Cost — booth / sponsorship ($)</FormLabel>
                       <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
                     </FormItem>
                   )} />
