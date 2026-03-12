@@ -9,13 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Calendar, MapPin, DollarSign, CalendarCheck, Tag, Loader2 } from "lucide-react";
+import { Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2, List, CalendarDays } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import { EventsCalendar } from "@/components/events-calendar";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -31,6 +32,7 @@ const eventSchema = z.object({
 
 export default function Events() {
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"list" | "calendar">("list");
   const { data: events, isLoading } = useListEvents();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -78,7 +80,23 @@ export default function Events() {
             <h1 className="font-display text-3xl font-bold tracking-tight">Events</h1>
             <p className="text-muted-foreground mt-1">Manage studio events, shows, and gigs.</p>
           </div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center rounded-xl border border-border/60 bg-muted/30 p-1 gap-1">
+              <button
+                onClick={() => setView("list")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <List className="h-3.5 w-3.5" /> List
+              </button>
+              <button
+                onClick={() => setView("calendar")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === "calendar" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <CalendarDays className="h-3.5 w-3.5" /> Calendar
+              </button>
+            </div>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
                 <Plus className="h-4 w-4 mr-2" /> Create Event
@@ -186,95 +204,106 @@ export default function Events() {
               </Form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
-        <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-border/50 bg-muted/10">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search events by title or location..." 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 rounded-xl border-border/60 bg-background focus-visible:ring-primary/20"
-              />
+        {view === "calendar" ? (
+          isLoading ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading events...
+            </div>
+          ) : (
+            <EventsCalendar events={events ?? []} />
+          )
+        ) : (
+          <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-border/50 bg-muted/10">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search events by title or location..." 
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 rounded-xl border-border/60 bg-background focus-visible:ring-primary/20"
+                />
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="font-semibold">Event</TableHead>
+                    <TableHead className="font-semibold">Date & Location</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="font-semibold">Financials</TableHead>
+                    <TableHead className="text-right font-semibold">Web Tag</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Loading events...</TableCell></TableRow>
+                  ) : filteredEvents?.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No events found.</TableCell></TableRow>
+                  ) : (
+                    filteredEvents?.map((event) => (
+                      <TableRow key={event.id} className="hover:bg-muted/20 transition-colors">
+                        <TableCell>
+                          <div className="font-medium text-foreground text-base">{event.title}</div>
+                          <span className="text-xs text-muted-foreground capitalize mt-0.5 block">
+                            {event.type.replace('_', ' ')}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center text-foreground">
+                              <CalendarCheck className="h-3.5 w-3.5 mr-2 text-primary/70" />
+                              {event.startDate ? format(new Date(event.startDate), "MMM d, yyyy h:mm a") : "TBD"}
+                            </div>
+                            {event.location && (
+                              <div className="flex items-center text-muted-foreground">
+                                <MapPin className="h-3.5 w-3.5 mr-2 opacity-70" />
+                                {event.location}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`capitalize ${getStatusColor(event.status)}`}>
+                            {event.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            {event.isPaid ? (
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold tracking-wide">PAID</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
+                            )}
+                            {(event.revenue || event.cost) && (
+                              <span className="ml-3 text-xs text-muted-foreground font-mono">
+                                {event.revenue ? `+$${event.revenue}` : ''} {event.cost ? `-$${event.cost}` : ''}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {event.calendarTag ? (
+                            <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50">
+                              #{event.calendarTag}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
-          
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="font-semibold">Event</TableHead>
-                  <TableHead className="font-semibold">Date & Location</TableHead>
-                  <TableHead className="font-semibold">Status</TableHead>
-                  <TableHead className="font-semibold">Financials</TableHead>
-                  <TableHead className="text-right font-semibold">Web Tag</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Loading events...</TableCell></TableRow>
-                ) : filteredEvents?.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No events found.</TableCell></TableRow>
-                ) : (
-                  filteredEvents?.map((event) => (
-                    <TableRow key={event.id} className="hover:bg-muted/20 transition-colors">
-                      <TableCell>
-                        <div className="font-medium text-foreground text-base">{event.title}</div>
-                        <span className="text-xs text-muted-foreground capitalize mt-0.5 block">
-                          {event.type.replace('_', ' ')}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center text-foreground">
-                            <CalendarCheck className="h-3.5 w-3.5 mr-2 text-primary/70" />
-                            {event.startDate ? format(new Date(event.startDate), "MMM d, yyyy h:mm a") : "TBD"}
-                          </div>
-                          {event.location && (
-                            <div className="flex items-center text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5 mr-2 opacity-70" />
-                              {event.location}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`capitalize ${getStatusColor(event.status)}`}>
-                          {event.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          {event.isPaid ? (
-                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold tracking-wide">PAID</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
-                          )}
-                          {(event.revenue || event.cost) && (
-                            <span className="ml-3 text-xs text-muted-foreground font-mono">
-                              {event.revenue ? `+$${event.revenue}` : ''} {event.cost ? `-$${event.cost}` : ''}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {event.calendarTag ? (
-                          <Badge variant="secondary" className="font-mono text-[10px] bg-secondary border border-border/50">
-                            #{event.calendarTag}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/50">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        )}
       </div>
     </AppLayout>
   );
