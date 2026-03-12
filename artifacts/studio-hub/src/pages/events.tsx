@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -26,6 +26,7 @@ import { EventsCalendar } from "@/components/events-calendar";
 import { useCommTasks, useUpdateCommTask, useSendLateReport, type CommTask } from "@/hooks/use-team";
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
+import { PackingSheet } from "@/components/packing-sheet";
 
 // ─── Channel icon map ─────────────────────────────────────────────────────────
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -325,6 +326,7 @@ export default function Events() {
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string } | null>(null);
+  const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
 
   const { data: allEmployees } = useListEmployees();
@@ -858,6 +860,16 @@ export default function Events() {
                             >
                               <Music className="h-3.5 w-3.5" />
                             </Button>
+                            {/* Packing list */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Packing list"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                              onClick={() => setPackingEvent({ id: event.id, title: event.title, type: event.type })}
+                            >
+                              <Package className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1097,6 +1109,13 @@ export default function Events() {
         event={lineupEvent}
         open={!!lineupEvent}
         onClose={() => setLineupEvent(null)}
+      />
+
+      {/* Packing list */}
+      <PackingSheet
+        event={packingEvent}
+        open={!!packingEvent}
+        onClose={() => setPackingEvent(null)}
       />
     </AppLayout>
   );

@@ -16,6 +16,7 @@ import storageRouter from "./storage";
 import payrollRouter from "./payroll";
 import myEventsRouter from "./my-events";
 import bandsRouter from "./bands";
+import packingRouter from "./packing";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(debriefRouter);
 router.use(payrollRouter);
 router.use(myEventsRouter);
 router.use(bandsRouter);
+router.use(packingRouter);
 
 export default router;

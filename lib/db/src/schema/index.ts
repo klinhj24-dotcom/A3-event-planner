@@ -6,3 +6,4 @@ export * from "./outreach";
 export * from "./assignments";
 export * from "./comm_schedule";
 export * from "./bands";
+export * from "./packing";
