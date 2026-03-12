@@ -20,7 +20,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import tmsLogoWhite from "@assets/TMS_Logo_Horizontal_Small_White@4x_1773281994585.png";
+import tmsSymbol from "@assets/TMS_Symbol_Gradient@4x_1773281994585.png";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -36,12 +36,15 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r border-border/20">
       <SidebarHeader className="p-4 pt-6 pb-2">
-        <div className="flex items-center px-2 py-1">
+        <div className="flex items-center gap-3 px-2 py-1">
           <img
-            src={tmsLogoWhite}
+            src={tmsSymbol}
             alt="The Music Space"
-            className="h-8 w-auto object-contain"
+            className="h-9 w-9 object-contain"
           />
+          <span className="font-display text-lg font-bold tracking-tight text-sidebar-foreground">
+            Studio Hub
+          </span>
         </div>
       </SidebarHeader>
       
