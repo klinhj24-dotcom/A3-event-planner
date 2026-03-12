@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,29 +25,32 @@ const queryClient = new QueryClient({
   },
 });
 
+function AdminRoute({ component: Component }: { component: () => JSX.Element }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading || !user) return null;
+  if ((user as any)?.role !== "admin") return <Redirect to="/my-schedule" />;
+  return <Component />;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/signup/:token" component={Signup} />
-      <Route path="/" component={Dashboard} />
-      <Route path="/contacts" component={Contacts} />
-      <Route path="/events" component={Events} />
-      <Route path="/employees" component={Employees} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/comm-schedule" component={CommSchedule} />
-      <Route path="/payroll" component={Payroll} />
       <Route path="/my-schedule" component={MySchedule} />
+      <Route path="/settings" component={Settings} />
+      <Route path="/">{() => <AdminRoute component={Dashboard} />}</Route>
+      <Route path="/contacts">{() => <AdminRoute component={Contacts} />}</Route>
+      <Route path="/events">{() => <AdminRoute component={Events} />}</Route>
+      <Route path="/employees">{() => <AdminRoute component={Employees} />}</Route>
+      <Route path="/comm-schedule">{() => <AdminRoute component={CommSchedule} />}</Route>
+      <Route path="/payroll">{() => <AdminRoute component={Payroll} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
-  // We initialize the auth inside the components that need it using useAuth()
-  // Since we are using @workspace/replit-auth-web, it likely provides its own context, 
-  // but it's handled by the monorepo setup. The hook manages global state automatically.
-  
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
