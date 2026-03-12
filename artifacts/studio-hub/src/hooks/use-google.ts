@@ -91,6 +91,25 @@ export function useImportThread() {
   });
 }
 
+export function useSyncContactEmails() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contactId, months }: { contactId: number; months: number }) =>
+      apiFetch<{ imported: number; skipped: number; total: number }>(
+        `/api/gmail/sync-contact/${contactId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ months }),
+        }
+      ),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/gmail/contact/${vars.contactId}/threads`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+    },
+  });
+}
+
 // ── Email Templates ───────────────────────────────────────────────────────────
 
 export type EmailTemplate = { id: number; name: string; subject: string; body: string };

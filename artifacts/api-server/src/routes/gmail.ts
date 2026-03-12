@@ -202,6 +202,101 @@ router.post("/gmail/import-thread", async (req, res) => {
   }
 });
 
+// Sync recent Gmail threads for a contact by searching their email address
+router.post("/gmail/sync-contact/:contactId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const contactId = parseInt(req.params.contactId);
+    const months = Math.max(1, Math.min(60, parseInt(req.body.months ?? "3") || 3));
+
+    // Fetch the contact's email
+    const [contact] = await db.select().from(contactsTable).where(eq(contactsTable.id, contactId));
+    if (!contact?.email) {
+      res.status(400).json({ error: "Contact has no email address" });
+      return;
+    }
+
+    const { gmail, user } = await getGmailClient(req.user.id);
+    const fromEmail = user.googleEmail ?? "";
+
+    // Build date cutoff in YYYY/MM/DD format that Gmail's search understands
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    const dateStr = `${cutoff.getFullYear()}/${String(cutoff.getMonth() + 1).padStart(2, "0")}/${String(cutoff.getDate()).padStart(2, "0")}`;
+
+    // Search Gmail for all threads involving this email address
+    const query = `(from:${contact.email} OR to:${contact.email}) after:${dateStr}`;
+    const listRes = await gmail.users.threads.list({
+      userId: "me",
+      q: query,
+      maxResults: 100,
+    });
+
+    const threadList = listRes.data.threads ?? [];
+    let imported = 0;
+    let skipped = 0;
+
+    for (const t of threadList) {
+      if (!t.id) continue;
+
+      // Skip if already linked to this contact
+      const existing = await db.select({ id: outreachTable.id }).from(outreachTable)
+        .where(and(eq(outreachTable.contactId, contactId), eq(outreachTable.gmailThreadId, t.id)));
+      if (existing.length > 0) { skipped++; continue; }
+
+      // Fetch first message for metadata
+      const thread = await gmail.users.threads.get({ userId: "me", id: t.id, format: "full" });
+      const messages = thread.data.messages ?? [];
+      if (messages.length === 0) { skipped++; continue; }
+
+      const firstMsg = messages[0];
+      const headers = firstMsg.payload?.headers ?? [];
+      const subject = getHeader(headers, "Subject");
+      const from = getHeader(headers, "From");
+      const to = getHeader(headers, "To");
+      const direction = from.toLowerCase().includes(fromEmail.toLowerCase()) ? "outbound" : "inbound";
+
+      await db.insert(outreachTable).values({
+        contactId,
+        method: "email",
+        direction,
+        subject,
+        body: extractEmailBody(firstMsg.payload),
+        fromEmail: from,
+        toEmail: to,
+        gmailThreadId: t.id,
+        gmailMessageId: firstMsg.id ?? null,
+        outreachAt: new Date(parseInt(firstMsg.internalDate ?? "0")),
+      });
+
+      imported++;
+    }
+
+    // Update lastOutreachAt if we brought in any new threads
+    if (imported > 0) {
+      const latestOutreach = await db.select({ outreachAt: outreachTable.outreachAt })
+        .from(outreachTable)
+        .where(and(eq(outreachTable.contactId, contactId), isNotNull(outreachTable.gmailThreadId)))
+        .orderBy(desc(outreachTable.outreachAt))
+        .limit(1);
+      if (latestOutreach[0]) {
+        await db.update(contactsTable)
+          .set({ lastOutreachAt: latestOutreach[0].outreachAt, updatedAt: new Date() })
+          .where(eq(contactsTable.id, contactId));
+      }
+    }
+
+    res.json({ imported, skipped, total: threadList.length });
+  } catch (err: any) {
+    if (err.message === "Google account not connected") {
+      res.status(403).json({ error: "Google account not connected" });
+    } else {
+      console.error("Sync contact emails error:", err);
+      res.status(500).json({ error: "Failed to sync emails" });
+    }
+  }
+});
+
 // --- Email Templates ---
 
 router.get("/email-templates", async (req, res) => {

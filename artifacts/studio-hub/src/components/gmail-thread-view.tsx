@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useContactThreads, useGmailThread, useImportThread } from "@/hooks/use-google";
+import { useContactThreads, useGmailThread, useImportThread, useSyncContactEmails } from "@/hooks/use-google";
 import { useGoogleStatus } from "@/hooks/use-google";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,12 +143,103 @@ function ImportThreadDialog({ open, onOpenChange, contactId }: ImportDialogProps
   );
 }
 
+type SyncDialogProps = { open: boolean; onOpenChange: (v: boolean) => void; contactId: number };
+
+function SyncEmailsDialog({ open, onOpenChange, contactId }: SyncDialogProps) {
+  const [months, setMonths] = useState("3");
+  const { mutate: syncEmails, isPending } = useSyncContactEmails();
+  const { toast } = useToast();
+
+  const PRESETS = [
+    { label: "1 month", value: "1" },
+    { label: "3 months", value: "3" },
+    { label: "6 months", value: "6" },
+    { label: "1 year", value: "12" },
+    { label: "2 years", value: "24" },
+  ];
+
+  const handleSync = () => {
+    const m = Math.max(1, parseInt(months) || 3);
+    syncEmails(
+      { contactId, months: m },
+      {
+        onSuccess: (data) => {
+          if (data.imported > 0) {
+            toast({
+              title: `Synced ${data.imported} new thread${data.imported !== 1 ? "s" : ""}`,
+              description: data.skipped > 0 ? `${data.skipped} already linked, skipped.` : undefined,
+            });
+          } else {
+            toast({ title: "Already up to date", description: "No new threads found for this period." });
+          }
+          onOpenChange(false);
+        },
+        onError: (err: any) => {
+          toast({ title: err.message ?? "Sync failed", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[400px] rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">Sync Recent Emails</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-muted-foreground">
+            Search your Gmail inbox for threads with this contact and import any that aren't already linked.
+          </p>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-foreground">How far back?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  onClick={() => setMonths(p.value)}
+                  className={`px-3 py-1 rounded-lg text-xs border transition-colors ${
+                    months === p.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Input
+                type="number"
+                min={1}
+                max={60}
+                value={months}
+                onChange={(e) => setMonths(e.target.value)}
+                className="rounded-xl w-24 text-sm"
+              />
+              <span className="text-sm text-muted-foreground">months back</span>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl" disabled={isPending}>Cancel</Button>
+          <Button onClick={handleSync} disabled={isPending || !months} className="rounded-xl">
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            {isPending ? "Syncing..." : "Sync"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function GmailThreadView({ contact }: { contact: Contact }) {
   const { data: googleStatus } = useGoogleStatus();
   const { data: threads = [], isLoading } = useContactThreads(contact.id);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   if (!googleStatus?.connected) {
     return (
@@ -179,6 +270,9 @@ export function GmailThreadView({ contact }: { contact: Contact }) {
           <Mail className="h-4 w-4 text-primary" /> Email Threads
         </h3>
         <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs rounded-lg" onClick={() => setSyncOpen(true)}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Sync
+          </Button>
           <Button size="sm" variant="ghost" className="h-7 px-2 text-xs rounded-lg" onClick={() => setImportOpen(true)}>
             <Download className="h-3 w-3 mr-1" /> Import
           </Button>
@@ -231,6 +325,12 @@ export function GmailThreadView({ contact }: { contact: Contact }) {
       <ImportThreadDialog
         open={importOpen}
         onOpenChange={setImportOpen}
+        contactId={contact.id}
+      />
+
+      <SyncEmailsDialog
+        open={syncOpen}
+        onOpenChange={setSyncOpen}
         contactId={contact.id}
       />
     </div>
