@@ -27,6 +27,7 @@ import { useCommTasks, useUpdateCommTask, useSendLateReport, type CommTask } fro
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
 import { PackingSheet } from "@/components/packing-sheet";
+import { useActiveEventTypes } from "@/hooks/use-event-types";
 
 // ─── Channel icon map ─────────────────────────────────────────────────────────
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -319,6 +320,7 @@ export default function Events() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"list" | "calendar">("list");
   const { data: events, isLoading } = useListEvents();
+  const { data: eventTypeList = [] } = useActiveEventTypes();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
@@ -530,24 +532,9 @@ export default function Events() {
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
                             <SelectContent className="max-h-72 overflow-y-auto">
-                              <SelectItem value="Recital">Recital</SelectItem>
-                              <SelectItem value="Student Band Show">Student Band Show</SelectItem>
-                              <SelectItem value="Songwriter Showcase / Studio Show">Songwriter Showcase / Studio Show</SelectItem>
-                              <SelectItem value="Open Mic">Open Mic</SelectItem>
-                              <SelectItem value="Festival / Community Event">Festival / Community Event</SelectItem>
-                              <SelectItem value="Workshop">Workshop</SelectItem>
-                              <SelectItem value="Studio Party">Studio Party</SelectItem>
-                              <SelectItem value="Studio Jam Night">Studio Jam Night</SelectItem>
-                              <SelectItem value="Studio Open House">Studio Open House</SelectItem>
-                              <SelectItem value="Rockin' Toddlers">Rockin' Toddlers</SelectItem>
-                              <SelectItem value="Chamber Ensemble">Chamber Ensemble</SelectItem>
-                              <SelectItem value="Enrichment Club">Enrichment Club</SelectItem>
-                              <SelectItem value="Instrument Demo (Waldorf)">Instrument Demo (Waldorf)</SelectItem>
-                              <SelectItem value="Instrument Demo (library)">Instrument Demo (library)</SelectItem>
-                              <SelectItem value="Little Rockers (library)">Little Rockers (library)</SelectItem>
-                              <SelectItem value="Holiday Closure">Holiday Closure</SelectItem>
-                              <SelectItem value="Holiday">Holiday</SelectItem>
-                              <SelectItem value="Other">Other</SelectItem>
+                              {eventTypeList.map(t => (
+                                <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </FormItem>
@@ -905,24 +892,9 @@ export default function Events() {
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent className="max-h-72 overflow-y-auto">
-                        <SelectItem value="Recital">Recital</SelectItem>
-                        <SelectItem value="Student Band Show">Student Band Show</SelectItem>
-                        <SelectItem value="Songwriter Showcase / Studio Show">Songwriter Showcase / Studio Show</SelectItem>
-                        <SelectItem value="Open Mic">Open Mic</SelectItem>
-                        <SelectItem value="Festival / Community Event">Festival / Community Event</SelectItem>
-                        <SelectItem value="Workshop">Workshop</SelectItem>
-                        <SelectItem value="Studio Party">Studio Party</SelectItem>
-                        <SelectItem value="Studio Jam Night">Studio Jam Night</SelectItem>
-                        <SelectItem value="Studio Open House">Studio Open House</SelectItem>
-                        <SelectItem value="Rockin' Toddlers">Rockin' Toddlers</SelectItem>
-                        <SelectItem value="Chamber Ensemble">Chamber Ensemble</SelectItem>
-                        <SelectItem value="Enrichment Club">Enrichment Club</SelectItem>
-                        <SelectItem value="Instrument Demo (Waldorf)">Instrument Demo (Waldorf)</SelectItem>
-                        <SelectItem value="Instrument Demo (library)">Instrument Demo (library)</SelectItem>
-                        <SelectItem value="Little Rockers (library)">Little Rockers (library)</SelectItem>
-                        <SelectItem value="Holiday Closure">Holiday Closure</SelectItem>
-                        <SelectItem value="Holiday">Holiday</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        {eventTypeList.map(t => (
+                          <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>

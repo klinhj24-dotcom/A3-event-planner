@@ -17,6 +17,7 @@ import payrollRouter from "./payroll";
 import myEventsRouter from "./my-events";
 import bandsRouter from "./bands";
 import packingRouter from "./packing";
+import eventTypesRouter from "./event-types";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(payrollRouter);
 router.use(myEventsRouter);
 router.use(bandsRouter);
 router.use(packingRouter);
+router.use(eventTypesRouter);
 
 export default router;

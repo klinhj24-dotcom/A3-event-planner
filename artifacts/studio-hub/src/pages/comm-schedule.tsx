@@ -27,6 +27,7 @@ import {
   useCommRules, useCreateCommRule, useUpdateCommRule, useDeleteCommRule,
   type CommRule
 } from "@/hooks/use-team";
+import { useActiveEventTypes } from "@/hooks/use-event-types";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,25 +51,6 @@ const COMM_TYPE_COLORS: Record<string, string> = {
   "Website": "bg-purple-500/10 text-purple-400 border-purple-500/20",
 };
 
-const EVENT_TYPE_OPTIONS = [
-  "Recital",
-  "Student Band Show",
-  "Songwriter Showcase / Studio Show",
-  "Open Mic",
-  "Festival / Community Event",
-  "Workshop",
-  "Studio Party",
-  "Studio Jam Night",
-  "Studio Open House",
-  "Rockin' Toddlers",
-  "Chamber Ensemble",
-  "Enrichment Club",
-  "Instrument Demo (Waldorf)",
-  "Instrument Demo (library)",
-  "Little Rockers (library)",
-  "Holiday Closure",
-  "Holiday",
-];
 
 const COMM_TYPE_OPTIONS = ["Email", "Social Media", "In-Studio", "Print", "Website"];
 
@@ -152,6 +134,7 @@ function RuleDialog({
   editRule?: CommRule;
 }) {
   const { toast } = useToast();
+  const { data: eventTypes = [] } = useActiveEventTypes();
   const isEdit = !!editRule;
   const { mutate: create, isPending: creating } = useCreateCommRule();
   const { mutate: update, isPending: updating } = useUpdateCommRule();
@@ -216,8 +199,8 @@ function RuleDialog({
               <Select value={form.eventType} onValueChange={v => set("eventType", v)}>
                 <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent className="max-h-64 overflow-y-auto">
-                  {EVENT_TYPE_OPTIONS.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  {eventTypes.map(t => (
+                    <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

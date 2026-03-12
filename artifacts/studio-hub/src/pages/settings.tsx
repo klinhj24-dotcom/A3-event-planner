@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Mail, Plus, Trash2, Loader2, CheckCircle2, ExternalLink, Settings as SettingsIcon, FileText, X, Users, Shield
+  Mail, Plus, Trash2, Loader2, CheckCircle2, ExternalLink, Settings as SettingsIcon, FileText, X, Users, Shield, Tag, Pencil, Check
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,6 +32,56 @@ import {
   type EmailTemplate,
 } from "@/hooks/use-google";
 import { useTeamMembers, useUpdateUserRole, type TeamMember } from "@/hooks/use-team";
+import { useEventTypes, useCreateEventType, useUpdateEventType, useDeleteEventType, type EventType } from "@/hooks/use-event-types";
+
+function EventTypeRow({ et }: { et: EventType }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(et.name);
+  const { mutate: update, isPending: saving } = useUpdateEventType();
+  const { mutate: del, isPending: deleting } = useDeleteEventType();
+  const { toast } = useToast();
+
+  const save = () => {
+    if (!draft.trim() || draft.trim() === et.name) { setEditing(false); setDraft(et.name); return; }
+    update({ id: et.id, name: draft.trim() }, {
+      onSuccess: () => { toast({ title: "Renamed — all existing events and rules updated" }); setEditing(false); },
+      onError: (e: any) => toast({ title: e.message ?? "Rename failed", variant: "destructive" }),
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 last:border-0 group">
+      <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      {editing ? (
+        <>
+          <input
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setDraft(et.name); } }}
+            className="flex-1 bg-transparent text-sm border-b border-primary outline-none py-0.5"
+          />
+          <button onClick={save} disabled={saving} className="text-primary hover:text-primary/80">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          </button>
+          <button onClick={() => { setEditing(false); setDraft(et.name); }} className="text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="flex-1 text-sm text-foreground">{et.name}</span>
+          <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => del(et.id, { onError: (e: any) => toast({ title: e.message ?? "Delete failed", variant: "destructive" }) })} disabled={deleting} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 const templateSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -154,6 +204,17 @@ export default function Settings() {
   const isAdmin = (user as any)?.role === "admin";
 
   const { data: teamMembers = [], isLoading: isLoadingTeam } = useTeamMembers();
+  const { data: eventTypes = [], isLoading: isLoadingTypes } = useEventTypes();
+  const { mutate: createEventType, isPending: isCreatingType } = useCreateEventType();
+  const [newTypeName, setNewTypeName] = useState("");
+
+  const handleAddEventType = () => {
+    if (!newTypeName.trim()) return;
+    createEventType(newTypeName.trim(), {
+      onSuccess: () => { toast({ title: "Event type added" }); setNewTypeName(""); },
+      onError: (e: any) => toast({ title: e.message ?? "Failed to add", variant: "destructive" }),
+    });
+  };
 
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -194,6 +255,11 @@ export default function Settings() {
             {isAdmin && (
               <TabsTrigger value="team" className="rounded-lg">
                 <Users className="h-4 w-4 mr-2" /> Team
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger value="event-types" className="rounded-lg">
+                <Tag className="h-4 w-4 mr-2" /> Event Types
               </TabsTrigger>
             )}
           </TabsList>
@@ -292,6 +358,42 @@ export default function Settings() {
           </TabsContent>
 
           {/* Team Tab — Admin only */}
+          {isAdmin && (
+            <TabsContent value="event-types" className="space-y-4 mt-0">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="h-5 w-5 text-primary" />
+                <h2 className="font-display text-xl font-semibold">Event Types</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Manage the event types used across Events, Comm Schedule, and Packing Lists. Renaming a type automatically updates all existing events and comm rules.
+              </p>
+              <div className="border border-border/50 rounded-xl bg-card overflow-hidden">
+                {isLoadingTypes ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : eventTypes.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground text-sm">No event types yet.</div>
+                ) : (
+                  <div>
+                    {eventTypes.map(et => <EventTypeRow key={et.id} et={et} />)}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 p-3 border-t border-border/40 bg-muted/20">
+                  <input
+                    value={newTypeName}
+                    onChange={e => setNewTypeName(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleAddEventType()}
+                    placeholder="New event type name..."
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+                  />
+                  <Button size="sm" variant="ghost" className="h-7 px-3 rounded-lg text-xs" onClick={handleAddEventType} disabled={isCreatingType || !newTypeName.trim()}>
+                    {isCreatingType ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          )}
+
           {isAdmin && (
             <TabsContent value="team" className="space-y-4 mt-0">
               <div className="flex items-center gap-2">
