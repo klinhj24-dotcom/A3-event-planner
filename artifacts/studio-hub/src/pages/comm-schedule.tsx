@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Loader2, Search, CalendarDays, Radio, Mail, Instagram, Printer, Globe,
-  Plus, Pencil, Trash2, EyeOff, Eye
+  Plus, Pencil, Trash2, EyeOff, Eye, Receipt
 } from "lucide-react";
 import {
   useCommRules, useCreateCommRule, useUpdateCommRule, useDeleteCommRule,
@@ -39,6 +39,7 @@ const CHANNEL_ICONS: Record<string, React.ReactNode> = {
   "Instagram Story": <Instagram className="h-3.5 w-3.5" />,
   "Print": <Printer className="h-3.5 w-3.5" />,
   "Website": <Globe className="h-3.5 w-3.5" />,
+  "Invoice": <Receipt className="h-3.5 w-3.5" />,
 };
 
 const COMM_TYPE_COLORS: Record<string, string> = {
@@ -80,6 +81,7 @@ const CHANNEL_OPTIONS = [
   "Instagram Story",
   "Print",
   "Website",
+  "Invoice",
 ];
 
 function timingLabel(days: number) {
