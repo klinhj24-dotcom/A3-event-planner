@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -68,6 +68,23 @@ function CommTasksSheet({
     mutationFn: () =>
       fetch(`/api/calendar/push-comms/${event!.id}`, { method: "POST", credentials: "include" }).then(r => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, event?.id] }),
+  });
+  const { mutate: bulkAssign, isPending: bulkAssigning } = useMutation({
+    mutationFn: async (assignedToEmployeeId: number | null) => {
+      const res = await fetch("/api/comm-schedule/tasks/bulk-assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ eventId: event!.id, assignedToEmployeeId }),
+      });
+      if (!res.ok) throw new Error("Failed to bulk assign");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, event?.id] });
+      toast({ title: `${data.updated} tasks assigned${data.assignedToEmployeeId ? " — notification email sent" : " — assignments cleared"}` });
+    },
+    onError: () => toast({ title: "Failed to assign tasks", variant: "destructive" }),
   });
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -164,6 +181,27 @@ function CommTasksSheet({
               : <Radio className="h-3.5 w-3.5 mr-2" />}
             {total > 0 ? "Regenerate & push to Comms Calendar" : "Generate & push to Comms Calendar"}
           </Button>
+
+          {employees.length > 0 && (
+            <div className="mt-3 flex items-center gap-2">
+              <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs text-muted-foreground shrink-0">Assign all to:</span>
+              <Select
+                onValueChange={(val) => bulkAssign(val === "clear" ? null : parseInt(val))}
+                disabled={bulkAssigning}
+              >
+                <SelectTrigger className="rounded-xl h-8 text-xs flex-1">
+                  <SelectValue placeholder={bulkAssigning ? "Assigning…" : "Pick a staff member…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clear" className="text-xs text-muted-foreground">— Clear all assignments —</SelectItem>
+                  {employees.map((emp: any) => (
+                    <SelectItem key={emp.id} value={String(emp.id)} className="text-xs">{emp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* Task list */}
@@ -262,6 +300,129 @@ function CommTasksSheet({
   );
 }
 
+// ─── CallSheet ────────────────────────────────────────────────────────────────
+function CallSheet({
+  event,
+  open,
+  onClose,
+}: {
+  event: { id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { data: staff = [], isLoading } = useQuery<any[]>({
+    queryKey: [`/api/events/${event?.id}/employees`],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${event!.id}/employees`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!event,
+  });
+
+  if (!event) return null;
+
+  function getArrivalTime(startDate: string | null | undefined, minutesBefore: number | null) {
+    if (!startDate) return "—";
+    const d = new Date(startDate);
+    if (minutesBefore) d.setMinutes(d.getMinutes() - minutesBefore);
+    return format(d, "h:mm a");
+  }
+
+  function getDepartureTime(endDate: string | null | undefined, minutesAfter: number | null) {
+    if (!endDate) return "—";
+    const d = new Date(endDate);
+    if (minutesAfter) d.setMinutes(d.getMinutes() + minutesAfter);
+    return format(d, "h:mm a");
+  }
+
+  const eventDateStr = event.startDate ? format(new Date(event.startDate), "EEEE, MMMM d, yyyy") : "";
+  const startTimeStr = event.startDate ? format(new Date(event.startDate), "h:mm a") : "";
+  const endTimeStr = event.endDate ? format(new Date(event.endDate), "h:mm a") : "";
+
+  return (
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto flex flex-col gap-0 p-0 print:shadow-none print:border-0">
+        {/* Header */}
+        <div className="p-6 border-b border-border/50 bg-muted/10 print:bg-white print:border-gray-200">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <SheetHeader className="space-y-1 text-left">
+                <SheetTitle className="font-display text-xl leading-tight">{event.title}</SheetTitle>
+              </SheetHeader>
+              <div className="mt-2 space-y-0.5 text-sm text-muted-foreground">
+                {eventDateStr && <p>{eventDateStr}{startTimeStr && ` · ${startTimeStr}${endTimeStr && endTimeStr !== startTimeStr ? ` – ${endTimeStr}` : ""}`}</p>}
+                {event.location && <p>{event.location}</p>}
+                <p className="capitalize text-xs">{event.type}</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl shrink-0 print:hidden"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-3.5 w-3.5 mr-2" />
+              Print
+            </Button>
+          </div>
+        </div>
+
+        {/* Staff table */}
+        <div className="flex-1 p-6">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Staff Call Times</h3>
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : staff.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Users2 className="h-10 w-10 mx-auto opacity-20 mb-3" />
+              <p className="text-sm">No staff assigned to this event yet.</p>
+              <p className="text-xs mt-1">Use the edit event dialog to assign staff.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
+                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
+                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Arrive By</th>
+                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Depart By</th>
+                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staff.map((s: any) => {
+                    const arriveTime = getArrivalTime(event.startDate, s.minutesBefore);
+                    const departTime = getDepartureTime(event.endDate, s.minutesAfter);
+                    return (
+                      <tr key={s.id} className="border-b border-border/30 hover:bg-muted/20">
+                        <td className="py-3.5 pr-4 font-semibold text-foreground">{s.employeeName}</td>
+                        <td className="py-3.5 pr-4 text-muted-foreground capitalize text-xs">{s.role || s.employeeRole || "—"}</td>
+                        <td className="py-3.5 pr-4">
+                          <span className="text-foreground font-medium">{arriveTime}</span>
+                          {s.minutesBefore ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesBefore} min early</span> : null}
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <span className="text-foreground font-medium">{departTime}</span>
+                          {s.minutesAfter ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesAfter} min after</span> : null}
+                        </td>
+                        <td className="py-3.5 text-xs text-muted-foreground">{s.notes || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ─── Sync buttons ─────────────────────────────────────────────────────────────
 function CalendarPushButton({ eventId }: { eventId: number }) {
   const { toast } = useToast();
@@ -349,6 +510,7 @@ export default function Events() {
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
+  const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
 
   const { data: allEmployees } = useListEmployees();
@@ -869,6 +1031,16 @@ export default function Events() {
                             >
                               <Music className="h-3.5 w-3.5" />
                             </Button>
+                            {/* Call sheet */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Call sheet"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-sky-500 hover:bg-sky-500/10"
+                              onClick={() => setCallSheetEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate, endDate: event.endDate, location: event.location })}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
                             {/* Packing list */}
                             <Button
                               size="sm"
@@ -1145,6 +1317,11 @@ export default function Events() {
       />
 
       {/* Packing list */}
+      <CallSheet
+        event={callSheetEvent}
+        open={!!callSheetEvent}
+        onClose={() => setCallSheetEvent(null)}
+      />
       <PackingSheet
         event={packingEvent}
         open={!!packingEvent}

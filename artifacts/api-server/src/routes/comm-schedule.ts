@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable, employeesTable } from "@workspace/db";
 import { eq, desc, and, lt, inArray } from "drizzle-orm";
 import { addDays, subDays } from "date-fns";
-import { createAuthedClient } from "../lib/google";
+import { createAuthedClient, makeRawEmail } from "../lib/google";
 
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
@@ -481,9 +481,95 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
       }
     }
 
+    // If assignee changed to a non-null value, fire-and-forget notification email
+    if (assignedToEmployeeId != null && task.assignedToEmployeeId != null) {
+      const userId = (req.user as any).id;
+      (async () => {
+        try {
+          const [senderUser] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+          if (!senderUser?.googleAccessToken || !senderUser?.googleRefreshToken) return;
+          const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, task.assignedToEmployeeId!));
+          const recipientEmail = employee?.email;
+          if (!recipientEmail) return;
+          const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, task.eventId));
+          const taskName = task.messageName || task.commType;
+          const dueDateStr = task.dueDate ? new Date(task.dueDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "no due date";
+          const eventDate = event?.startDate ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+          const from = senderUser.googleEmail ?? senderUser.email ?? "";
+          const subject = `[TMS] Comm task assigned to you: ${taskName}`;
+          const body = `Hi ${employee.name},\n\nYou've been assigned a communications task in the TMS portal:\n\n  Task: ${taskName}${task.channel ? ` (${task.channel})` : ""}\n  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n  Due: ${dueDateStr}\n\nPlease log in to the TMS portal to view your full task list.\n\nThanks,\nThe Music Space`;
+          const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({ googleAccessToken: tokens.access_token, googleRefreshToken: tokens.refresh_token ?? senderUser.googleRefreshToken, googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null }).where(eq(usersTable.id, userId));
+            }
+          });
+          const gmail = google.gmail({ version: "v1", auth });
+          const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        } catch (notifErr) {
+          console.error("Task assignment notification failed:", notifErr);
+        }
+      })();
+    }
+
     res.json(task);
   } catch (err) {
     console.error("updateTask error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /comm-schedule/tasks/bulk-assign — assign all tasks for an event to an employee
+router.post("/comm-schedule/tasks/bulk-assign", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const { eventId, assignedToEmployeeId } = req.body;
+    if (!eventId) {
+      res.status(400).json({ error: "eventId is required" });
+      return;
+    }
+    const resolvedAssignee = assignedToEmployeeId === null ? null : (assignedToEmployeeId ? parseInt(assignedToEmployeeId) : null);
+
+    const updated = await db
+      .update(commTasksTable)
+      .set({ assignedToEmployeeId: resolvedAssignee, updatedAt: new Date() })
+      .where(eq(commTasksTable.eventId, parseInt(eventId)))
+      .returning({ id: commTasksTable.id });
+
+    // Fire-and-forget notification email if assigning (not clearing)
+    if (resolvedAssignee != null) {
+      const userId = (req.user as any).id;
+      (async () => {
+        try {
+          const [senderUser] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+          if (!senderUser?.googleAccessToken || !senderUser?.googleRefreshToken) return;
+          const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, resolvedAssignee));
+          const recipientEmail = employee?.email;
+          if (!recipientEmail) return;
+          const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, parseInt(eventId)));
+          const eventDate = event?.startDate ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+          const from = senderUser.googleEmail ?? senderUser.email ?? "";
+          const subject = `[TMS] ${updated.length} comm tasks assigned to you`;
+          const body = `Hi ${employee.name},\n\nYou've been assigned ${updated.length} communications task${updated.length !== 1 ? "s" : ""} in the TMS portal:\n\n  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n  Tasks: ${updated.length}\n\nPlease log in to the TMS portal to view and complete them.\n\nThanks,\nThe Music Space`;
+          const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({ googleAccessToken: tokens.access_token, googleRefreshToken: tokens.refresh_token ?? senderUser.googleRefreshToken, googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null }).where(eq(usersTable.id, userId));
+            }
+          });
+          const gmail = google.gmail({ version: "v1", auth });
+          const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        } catch (notifErr) {
+          console.error("Bulk assign notification failed:", notifErr);
+        }
+      })();
+    }
+
+    res.json({ updated: updated.length, assignedToEmployeeId: resolvedAssignee });
+  } catch (err) {
+    console.error("bulkAssign error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

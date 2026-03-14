@@ -1,6 +1,9 @@
 import { AppLayout } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { format, isPast } from "date-fns";
 import { Calendar, MapPin, CalendarDays, Info, ClipboardList, AlertCircle } from "lucide-react";
 
@@ -26,6 +29,9 @@ const TASK_STATUS_STYLES: Record<string, string> = {
 };
 
 export default function MySchedule() {
+  const [taskStatusFilter, setTaskStatusFilter] = useState<"all" | "late" | "pending">("all");
+  const [taskEventFilter, setTaskEventFilter] = useState<string>("all");
+
   const { data, isLoading } = useQuery<{ events: any[]; employee: any | null }>({
     queryKey: ["/api/my-events"],
     queryFn: async () => {
@@ -48,8 +54,22 @@ export default function MySchedule() {
   const upcoming = data?.events?.filter(e => !e.startDate || !isPast(new Date(e.startDate))) ?? [];
   const past = data?.events?.filter(e => e.startDate && isPast(new Date(e.startDate))) ?? [];
 
-  const pendingTasks = taskData?.tasks?.filter(t => t.status !== "done") ?? [];
+  const allNonDoneTasks = taskData?.tasks?.filter(t => t.status !== "done") ?? [];
   const doneTasks = taskData?.tasks?.filter(t => t.status === "done") ?? [];
+  const lateCount = allNonDoneTasks.filter(t => t.status === "late").length;
+
+  const taskEventOptions = Array.from(
+    new Map(allNonDoneTasks.filter(t => t.eventId).map(t => [t.eventId, t.eventTitle ?? `Event #${t.eventId}`])).entries()
+  );
+
+  const filteredTasks = allNonDoneTasks.filter(t => {
+    const statusOk =
+      taskStatusFilter === "all" ? true :
+      taskStatusFilter === "late" ? t.status === "late" :
+      taskStatusFilter === "pending" ? t.status === "pending" : true;
+    const eventOk = taskEventFilter === "all" ? true : String(t.eventId) === taskEventFilter;
+    return statusOk && eventOk;
+  });
 
   return (
     <AppLayout>
@@ -83,25 +103,65 @@ export default function MySchedule() {
         ) : (
           <div className="space-y-8">
             {/* Assigned comm tasks */}
-            {((pendingTasks.length > 0) || (doneTasks.length > 0)) && (
+            {((allNonDoneTasks.length > 0) || (doneTasks.length > 0)) && (
               <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  My Comm Tasks
-                  {pendingTasks.filter(t => t.status === "late").length > 0 && (
-                    <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-500 bg-amber-500/10 ml-1">
-                      {pendingTasks.filter(t => t.status === "late").length} late
-                    </Badge>
-                  )}
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 shrink-0">
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    My Comm Tasks
+                    {lateCount > 0 && (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-500 bg-amber-500/10">
+                        {lateCount} late
+                      </Badge>
+                    )}
+                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Status filter chips */}
+                    <div className="flex items-center gap-1">
+                      {(["all", "late", "pending"] as const).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setTaskStatusFilter(f)}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
+                            taskStatusFilter === f
+                              ? f === "late"
+                                ? "bg-amber-500/20 text-amber-500 border-amber-500/40"
+                                : "bg-primary/20 text-primary border-primary/40"
+                              : "bg-transparent text-muted-foreground border-border/50 hover:border-border"
+                          }`}
+                        >
+                          {f === "all" ? "All" : f === "late" ? "Late" : "Pending"}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Event filter dropdown */}
+                    {taskEventOptions.length > 1 && (
+                      <Select value={taskEventFilter} onValueChange={setTaskEventFilter}>
+                        <SelectTrigger className="rounded-full h-7 text-[11px] px-3 w-auto min-w-[130px] border-border/50">
+                          <SelectValue placeholder="All events" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-xs">All events</SelectItem>
+                          {taskEventOptions.map(([evId, evTitle]) => (
+                            <SelectItem key={evId} value={String(evId)} className="text-xs">{evTitle}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  {pendingTasks.map(task => (
-                    <CommTaskCard key={task.id} task={task} />
-                  ))}
-                  {doneTasks.length > 0 && pendingTasks.length > 0 && (
+                  {filteredTasks.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2">No tasks match the current filter.</p>
+                  ) : (
+                    filteredTasks.map(task => (
+                      <CommTaskCard key={task.id} task={task} />
+                    ))
+                  )}
+                  {doneTasks.length > 0 && allNonDoneTasks.length > 0 && (
                     <p className="text-xs text-muted-foreground pt-1">{doneTasks.length} completed task{doneTasks.length !== 1 ? "s" : ""} not shown</p>
                   )}
-                  {doneTasks.length > 0 && pendingTasks.length === 0 && (
+                  {doneTasks.length > 0 && allNonDoneTasks.length === 0 && (
                     <p className="text-xs text-muted-foreground">All {doneTasks.length} assigned tasks completed.</p>
                   )}
                 </div>
