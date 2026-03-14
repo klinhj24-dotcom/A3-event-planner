@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { google } from "googleapis";
 import { db } from "@workspace/db";
-import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable } from "@workspace/db";
+import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable, employeesTable } from "@workspace/db";
 import { eq, desc, and, lt, inArray } from "drizzle-orm";
 import { addDays, subDays } from "date-fns";
 import { createAuthedClient } from "../lib/google";
@@ -160,8 +160,24 @@ router.get("/comm-schedule/tasks", async (req, res) => {
     }
 
     const tasks = await db
-      .select()
+      .select({
+        id: commTasksTable.id,
+        eventId: commTasksTable.eventId,
+        ruleId: commTasksTable.ruleId,
+        commType: commTasksTable.commType,
+        messageName: commTasksTable.messageName,
+        channel: commTasksTable.channel,
+        dueDate: commTasksTable.dueDate,
+        googleCalendarEventId: commTasksTable.googleCalendarEventId,
+        status: commTasksTable.status,
+        notes: commTasksTable.notes,
+        assignedToEmployeeId: commTasksTable.assignedToEmployeeId,
+        assignedToEmployeeName: employeesTable.name,
+        createdAt: commTasksTable.createdAt,
+        updatedAt: commTasksTable.updatedAt,
+      })
       .from(commTasksTable)
+      .leftJoin(employeesTable, eq(commTasksTable.assignedToEmployeeId, employeesTable.id))
       .where(eq(commTasksTable.eventId, eid))
       .orderBy(commTasksTable.dueDate);
 
@@ -400,11 +416,17 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { status, notes, googleCalendarEventId } = req.body;
+    const { status, notes, googleCalendarEventId, assignedToEmployeeId } = req.body;
 
     const [task] = await db
       .update(commTasksTable)
-      .set({ status, notes, googleCalendarEventId, updatedAt: new Date() })
+      .set({
+        ...(status !== undefined ? { status } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+        ...(googleCalendarEventId !== undefined ? { googleCalendarEventId } : {}),
+        ...(assignedToEmployeeId !== undefined ? { assignedToEmployeeId: assignedToEmployeeId === null ? null : parseInt(assignedToEmployeeId) } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(commTasksTable.id, id))
       .returning();
 
@@ -462,6 +484,43 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
     res.json(task);
   } catch (err) {
     console.error("updateTask error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /comm-schedule/my-tasks — tasks assigned to the logged-in employee
+router.get("/comm-schedule/my-tasks", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const userId = (req.user as any).id;
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.userId, userId));
+    if (!employee) {
+      res.json({ tasks: [], employee: null });
+      return;
+    }
+    const tasks = await db
+      .select({
+        id: commTasksTable.id,
+        eventId: commTasksTable.eventId,
+        commType: commTasksTable.commType,
+        messageName: commTasksTable.messageName,
+        channel: commTasksTable.channel,
+        dueDate: commTasksTable.dueDate,
+        status: commTasksTable.status,
+        notes: commTasksTable.notes,
+        assignedToEmployeeId: commTasksTable.assignedToEmployeeId,
+        eventTitle: eventsTable.title,
+        eventType: eventsTable.type,
+        eventStartDate: eventsTable.startDate,
+      })
+      .from(commTasksTable)
+      .innerJoin(eventsTable, eq(commTasksTable.eventId, eventsTable.id))
+      .where(eq(commTasksTable.assignedToEmployeeId, employee.id))
+      .orderBy(commTasksTable.dueDate);
+
+    res.json({ tasks, employee: { id: employee.id, name: employee.name } });
+  } catch (err) {
+    console.error("my-tasks error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

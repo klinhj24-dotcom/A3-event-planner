@@ -23,7 +23,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
-import { useCommTasks, useUpdateCommTask, useSendLateReport, type CommTask } from "@/hooks/use-team";
+import { useCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmployee, type CommTask } from "@/hooks/use-team";
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
 import { PackingSheet } from "@/components/packing-sheet";
@@ -55,10 +55,12 @@ function CommTasksSheet({
   event,
   open,
   onClose,
+  employees = [],
 }: {
   event: { id: number; title: string; type: string; startDate?: string | null } | null;
   open: boolean;
   onClose: () => void;
+  employees?: any[];
 }) {
   const { data: tasks = [], isLoading } = useCommTasks(event?.id ?? null);
   const { mutate: updateTask } = useUpdateCommTask();
@@ -220,6 +222,24 @@ function CommTasksSheet({
                         </span>
                       )}
                     </div>
+                    {employees.length > 0 && (
+                      <div onClick={e => e.stopPropagation()} className="pt-1">
+                        <Select
+                          value={task.assignedToEmployeeId ? String(task.assignedToEmployeeId) : "unassigned"}
+                          onValueChange={(val) => updateTask({ id: task.id, eventId: event!.id, assignedToEmployeeId: val === "unassigned" ? null : parseInt(val) })}
+                        >
+                          <SelectTrigger className="h-6 rounded-lg text-[11px] w-auto min-w-[120px] border-dashed border-border/60 bg-transparent px-2 gap-1">
+                            <SelectValue placeholder="Assign to…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned" className="text-xs text-muted-foreground">Unassigned</SelectItem>
+                            {employees.map((emp: any) => (
+                              <SelectItem key={emp.id} value={String(emp.id)} className="text-xs">{emp.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                   {dateInfo && !isLate && (
                     <div className={`shrink-0 text-[11px] font-medium flex items-center gap-1 ${dateInfo.cls}`}>
@@ -365,6 +385,8 @@ export default function Events() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${editEvent?.id}/employees`] }),
     onError: () => toast({ title: "Failed to remove staff member", variant: "destructive" }),
   });
+
+  const { mutate: updateStaffTiming } = useUpdateEventEmployee(editEvent?.id);
 
   const { mutateAsync: createEventAsync, isPending } = useMutation({
     mutationFn: async (data: z.infer<typeof eventSchema>) => {
@@ -1022,17 +1044,55 @@ export default function Events() {
                   <Users2 className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">Assigned Staff</span>
                 </div>
-                <div className="flex flex-wrap gap-2 mb-3 min-h-[28px]">
+                <div className="flex flex-wrap gap-3 mb-3 min-h-[28px]">
                   {(!editEventStaff || editEventStaff.length === 0) && (
                     <span className="text-xs text-muted-foreground">No staff assigned yet.</span>
                   )}
                   {editEventStaff?.map((s: any) => (
-                    <span key={s.id} className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs px-2.5 py-1.5 rounded-lg">
-                      {s.employeeName}
-                      <button type="button" onClick={() => removeEditStaff(s.id)} className="hover:text-destructive transition-colors ml-0.5">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
+                    <div key={s.id} className="bg-primary/5 border border-primary/20 rounded-xl p-2.5 flex flex-col gap-1.5 w-44">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-xs text-foreground">{s.employeeName}</span>
+                        <button type="button" onClick={() => removeEditStaff(s.id)} className="hover:text-destructive transition-colors ml-1 shrink-0">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="text-[10px] text-muted-foreground block mb-0.5">Arrive before</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground"
+                              defaultValue={s.minutesBefore ?? ""}
+                              placeholder="—"
+                              onBlur={(e) => {
+                                const val = e.target.value === "" ? null : parseInt(e.target.value);
+                                updateStaffTiming({ assignmentId: s.id, minutesBefore: val });
+                              }}
+                            />
+                            <span className="text-[10px] text-muted-foreground shrink-0">min</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground block mb-0.5">Stay after</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-full rounded-lg border border-border bg-background px-1.5 py-1 text-[11px] text-foreground"
+                              defaultValue={s.minutesAfter ?? ""}
+                              placeholder="—"
+                              onBlur={(e) => {
+                                const val = e.target.value === "" ? null : parseInt(e.target.value);
+                                updateStaffTiming({ assignmentId: s.id, minutesAfter: val });
+                              }}
+                            />
+                            <span className="text-[10px] text-muted-foreground shrink-0">min</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
                 {allEmployees && allEmployees.filter((e: any) => !editEventStaff?.some((s: any) => s.employeeId === e.id)).length > 0 && (
@@ -1068,6 +1128,7 @@ export default function Events() {
         event={tasksEvent}
         open={!!tasksEvent}
         onClose={() => setTasksEvent(null)}
+        employees={allEmployees ?? []}
       />
 
       {/* Post-event debrief panel */}

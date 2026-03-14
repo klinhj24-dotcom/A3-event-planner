@@ -1,5 +1,6 @@
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { eventsTable } from "./events";
+import { employeesTable } from "./employees";
 
 export const commScheduleRulesTable = pgTable("comm_schedule_rules", {
   id: serial("id").primaryKey(),
@@ -26,6 +27,7 @@ export const commTasksTable = pgTable("comm_tasks", {
   googleCalendarEventId: text("google_calendar_event_id"),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
+  assignedToEmployeeId: integer("assigned_to_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

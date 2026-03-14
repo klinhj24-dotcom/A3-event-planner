@@ -122,9 +122,14 @@ Role is stored in `users.role`. It is set by admins via Settings > Team. Role pe
 - `PATCH /api/users/:id/role` — set role ('admin' | 'employee')
 
 ### Event Staff
-- `GET /api/events/:id/employees` — list staff assigned to event
-- `POST /api/events/:id/employees` — assign staff to event (`{ employeeId, role?, pay?, notes? }`)
+- `GET /api/events/:id/employees` — list staff assigned to event (includes `minutesBefore`, `minutesAfter`)
+- `POST /api/events/:id/employees` — assign staff to event (`{ employeeId, role?, pay?, notes?, minutesBefore?, minutesAfter? }`)
+- `PATCH /api/events/:id/employees/:assignmentId` — update staff timing/role/pay (`{ minutesBefore?, minutesAfter?, role?, pay?, notes? }`)
 - `DELETE /api/events/:id/employees/:assignmentId` — remove staff assignment
+
+### Comm Tasks
+- `PATCH /api/comm-schedule/tasks/:id` — now accepts `{ assignedToEmployeeId? }` in addition to status/notes
+- `GET /api/comm-schedule/my-tasks` — returns `{ tasks, employee }` — comm tasks assigned to logged-in user's linked employee
 
 ### Employee Portal
 - `GET /api/my-events` — returns `{ events, employee }` for the logged-in user's linked employee record

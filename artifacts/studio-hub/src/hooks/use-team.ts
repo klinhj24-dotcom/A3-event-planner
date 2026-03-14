@@ -199,6 +199,8 @@ export interface CommTask {
   googleCalendarEventId: string | null;
   status: string;
   notes: string | null;
+  assignedToEmployeeId: number | null;
+  assignedToEmployeeName: string | null;
 }
 
 export function useCommTasks(eventId: number | null) {
@@ -256,12 +258,12 @@ export function useSendLateReport() {
 export function useUpdateCommTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, eventId, status, notes }: { id: number; eventId: number; status?: string; notes?: string }) => {
+    mutationFn: async ({ id, eventId, status, notes, assignedToEmployeeId }: { id: number; eventId: number; status?: string; notes?: string; assignedToEmployeeId?: number | null }) => {
       const res = await fetch(`${BASE}/comm-schedule/tasks/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status, notes }),
+        body: JSON.stringify({ status, notes, assignedToEmployeeId }),
       });
       if (!res.ok) throw new Error("Failed to update task");
       return res.json();
@@ -320,6 +322,36 @@ export function useUpsertDebrief(eventId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/debrief`] });
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+}
+
+export function useMyCommTasks() {
+  return useQuery<{ tasks: any[]; employee: any | null }>({
+    queryKey: ["/api/comm-schedule/my-tasks"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/comm-schedule/my-tasks`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load my tasks");
+      return res.json();
+    },
+  });
+}
+
+export function useUpdateEventEmployee(eventId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ assignmentId, minutesBefore, minutesAfter }: { assignmentId: number; minutesBefore?: number | null; minutesAfter?: number | null }) => {
+      const res = await fetch(`${BASE}/events/${eventId}/employees/${assignmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ minutesBefore, minutesAfter }),
+      });
+      if (!res.ok) throw new Error("Failed to update staff assignment");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/employees`] });
     },
   });
 }

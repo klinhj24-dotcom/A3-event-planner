@@ -193,6 +193,8 @@ router.get("/events/:id/employees", async (req, res) => {
         role: eventEmployeesTable.role,
         pay: eventEmployeesTable.pay,
         notes: eventEmployeesTable.notes,
+        minutesBefore: eventEmployeesTable.minutesBefore,
+        minutesAfter: eventEmployeesTable.minutesAfter,
       })
       .from(eventEmployeesTable)
       .innerJoin(employeesTable, eq(eventEmployeesTable.employeeId, employeesTable.id))
@@ -211,19 +213,43 @@ router.post("/events/:id/employees", async (req, res) => {
   }
   try {
     const eventId = parseInt(req.params.id);
-    const { employeeId, role, pay, notes } = req.body;
+    const { employeeId, role, pay, notes, minutesBefore, minutesAfter } = req.body;
     if (!employeeId) {
       res.status(400).json({ error: "employeeId is required" });
       return;
     }
     const [assignment] = await db
       .insert(eventEmployeesTable)
-      .values({ eventId, employeeId, role, pay: pay?.toString() ?? null, notes })
+      .values({ eventId, employeeId, role, pay: pay?.toString() ?? null, notes, minutesBefore: minutesBefore ?? null, minutesAfter: minutesAfter ?? null })
       .returning();
     const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
     res.status(201).json({ ...assignment, employeeName: emp?.name, employeeRole: emp?.role });
   } catch (err) {
     console.error("addEventEmployee error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/events/:id/employees/:assignmentId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    const { minutesBefore, minutesAfter, role, pay, notes } = req.body;
+    const [updated] = await db
+      .update(eventEmployeesTable)
+      .set({
+        ...(minutesBefore !== undefined ? { minutesBefore: minutesBefore === null ? null : parseInt(minutesBefore) } : {}),
+        ...(minutesAfter !== undefined ? { minutesAfter: minutesAfter === null ? null : parseInt(minutesAfter) } : {}),
+        ...(role !== undefined ? { role } : {}),
+        ...(pay !== undefined ? { pay: pay?.toString() ?? null } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+      })
+      .where(eq(eventEmployeesTable.id, assignmentId))
+      .returning();
+    if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    console.error("updateEventEmployee error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

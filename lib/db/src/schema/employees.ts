@@ -25,6 +25,8 @@ export const eventEmployeesTable = pgTable("event_employees", {
   role: text("role"),
   pay: decimal("pay", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  minutesBefore: integer("minutes_before"),
+  minutesAfter: integer("minutes_after"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

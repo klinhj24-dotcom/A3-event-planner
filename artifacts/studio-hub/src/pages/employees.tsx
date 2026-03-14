@@ -173,6 +173,7 @@ export default function Employees() {
                         <SelectContent>
                           <SelectItem value="staff">Staff</SelectItem>
                           <SelectItem value="intern">Intern</SelectItem>
+                          <SelectItem value="teacher">Teacher</SelectItem>
                         </SelectContent>
                       </Select>
                     </FormItem>
@@ -225,18 +226,18 @@ export default function Employees() {
               const portalRole = portalUser?.role;
               return (
                 <div key={employee.id} className="bg-card rounded-2xl p-6 border border-border/50 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                  <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl opacity-10 rounded-bl-full -z-10 transition-opacity group-hover:opacity-20 ${employee.role === 'staff' ? 'from-primary to-transparent' : 'from-orange-500 to-transparent'}`} />
+                  <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl opacity-10 rounded-bl-full -z-10 transition-opacity group-hover:opacity-20 ${employee.role === 'staff' ? 'from-primary to-transparent' : employee.role === 'teacher' ? 'from-[#00b199] to-transparent' : 'from-orange-500 to-transparent'}`} />
 
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex gap-4 items-center">
                       <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                        <AvatarFallback className={`font-display text-lg ${employee.role === 'staff' ? 'bg-primary/20 text-primary' : 'bg-orange-500/20 text-orange-600'}`}>
+                        <AvatarFallback className={`font-display text-lg ${employee.role === 'staff' ? 'bg-primary/20 text-primary' : employee.role === 'teacher' ? 'bg-[#00b199]/20 text-[#00b199]' : 'bg-orange-500/20 text-orange-600'}`}>
                           {employee.name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <h3 className="font-semibold text-lg text-foreground leading-none mb-1.5">{employee.name}</h3>
-                        <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === 'staff' ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20'}`}>
+                        <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === 'staff' ? 'bg-primary/10 text-primary hover:bg-primary/20' : employee.role === 'teacher' ? 'bg-[#00b199]/10 text-[#00b199] hover:bg-[#00b199]/20' : 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20'}`}>
                           {employee.role}
                         </Badge>
                       </div>
@@ -364,6 +365,7 @@ export default function Employees() {
                     <SelectContent>
                       <SelectItem value="staff">Staff</SelectItem>
                       <SelectItem value="intern">Intern</SelectItem>
+                      <SelectItem value="teacher">Teacher</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormItem>
