@@ -70,11 +70,11 @@ router.post("/calendar/push/:eventId", async (req, res) => {
     // Website script reads: [venue] Name, [TICKETS/REGISTER/etc] url, bare image url
     const descParts: string[] = [];
     if (event.location) descParts.push(`[venue] ${event.location}`);
-    if (event.ticketsUrl) {
-      const label = (event.ctaLabel?.trim() || "TICKETS").toUpperCase();
+    if (event.ticketsUrl && event.ctaLabel?.trim()) {
+      const label = event.ctaLabel.trim().toUpperCase();
       descParts.push(`[${label}] ${event.ticketsUrl}`);
     }
-    if (event.flyerUrl) descParts.push(event.flyerUrl);
+    if (event.flyerUrl?.trim()) descParts.push(event.flyerUrl.trim());
     if (event.notes) descParts.push(event.notes);
     const builtDescription = descParts.join("\n") || undefined;
 

@@ -583,12 +583,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "TICKETS" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "TICKETS" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "" }
   });
 
   function openEdit(ev: any) {
@@ -607,7 +607,7 @@ export default function Events() {
       notes: ev.notes ?? "",
       flyerUrl: ev.flyerUrl ?? "",
       ticketsUrl: ev.ticketsUrl ?? "",
-      ctaLabel: ev.ctaLabel ?? "TICKETS",
+      ctaLabel: ev.ctaLabel ?? "",
     });
   }
 

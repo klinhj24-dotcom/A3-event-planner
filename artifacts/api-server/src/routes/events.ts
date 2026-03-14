@@ -53,9 +53,9 @@ router.post("/events", async (req, res) => {
         notes, signupToken,
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
         imageUrl: imageUrl ?? null,
-        flyerUrl: flyerUrl ?? null,
-        ticketsUrl: ticketsUrl ?? null,
-        ctaLabel: ctaLabel?.trim() || "TICKETS",
+        flyerUrl: flyerUrl?.trim() || null,
+        ticketsUrl: ticketsUrl?.trim() || null,
+        ctaLabel: ctaLabel?.trim() || null,
       })
       .returning();
     res.status(201).json(event);
@@ -104,9 +104,9 @@ router.put("/events/:id", async (req, res) => {
         notes,
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
         imageUrl: imageUrl !== undefined ? imageUrl : undefined,
-        flyerUrl: flyerUrl !== undefined ? flyerUrl : undefined,
-        ticketsUrl: ticketsUrl !== undefined ? ticketsUrl : undefined,
-        ctaLabel: ctaLabel !== undefined ? (ctaLabel?.trim() || "TICKETS") : undefined,
+        flyerUrl: flyerUrl !== undefined ? (flyerUrl?.trim() || null) : undefined,
+        ticketsUrl: ticketsUrl !== undefined ? (ticketsUrl?.trim() || null) : undefined,
+        ctaLabel: ctaLabel !== undefined ? (ctaLabel?.trim() || null) : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))
