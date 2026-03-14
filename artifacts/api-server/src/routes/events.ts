@@ -55,7 +55,7 @@ router.post("/events", async (req, res) => {
         imageUrl: imageUrl ?? null,
         flyerUrl: flyerUrl ?? null,
         ticketsUrl: ticketsUrl ?? null,
-        ctaLabel: ctaLabel ?? "TICKETS",
+        ctaLabel: ctaLabel?.trim() || "TICKETS",
       })
       .returning();
     res.status(201).json(event);
@@ -106,7 +106,7 @@ router.put("/events/:id", async (req, res) => {
         imageUrl: imageUrl !== undefined ? imageUrl : undefined,
         flyerUrl: flyerUrl !== undefined ? flyerUrl : undefined,
         ticketsUrl: ticketsUrl !== undefined ? ticketsUrl : undefined,
-        ctaLabel: ctaLabel !== undefined ? ctaLabel : undefined,
+        ctaLabel: ctaLabel !== undefined ? (ctaLabel?.trim() || "TICKETS") : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))

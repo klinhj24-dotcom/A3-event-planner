@@ -71,7 +71,7 @@ router.post("/calendar/push/:eventId", async (req, res) => {
     const descParts: string[] = [];
     if (event.location) descParts.push(`[venue] ${event.location}`);
     if (event.ticketsUrl) {
-      const label = (event.ctaLabel ?? "TICKETS").toUpperCase();
+      const label = (event.ctaLabel?.trim() || "TICKETS").toUpperCase();
       descParts.push(`[${label}] ${event.ticketsUrl}`);
     }
     if (event.flyerUrl) descParts.push(event.flyerUrl);
