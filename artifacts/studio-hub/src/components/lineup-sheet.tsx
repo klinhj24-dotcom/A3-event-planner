@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface Band { id: number; name: string; genre?: string | null; members?: number | null; notes?: string | null; }
+interface Band { id: number; name: string; genre?: string | null; members?: number | null; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null; notes?: string | null; }
 interface LineupSlot {
   id: number; eventId: number; bandId?: number | null; bandName?: string | null;
   position: number; label?: string | null; startTime?: string | null;
@@ -274,7 +274,13 @@ export function LineupSheet({ event, open, onClose }: {
   const [newBandName, setNewBandName] = useState("");
   const [newBandGenre, setNewBandGenre] = useState("");
   const [newBandMembers, setNewBandMembers] = useState("");
+  const [newBandContactName, setNewBandContactName] = useState("");
+  const [newBandContactEmail, setNewBandContactEmail] = useState("");
+  const [newBandContactPhone, setNewBandContactPhone] = useState("");
   const [addBandOpen, setAddBandOpen] = useState(false);
+
+  const [editingBand, setEditingBand] = useState<Band | null>(null);
+  const [editBandForm, setEditBandForm] = useState({ name: "", genre: "", members: "", contactName: "", contactEmail: "", contactPhone: "", notes: "" });
 
   const { mutate: createBand, isPending: creatingBand } = useMutation({
     mutationFn: async (data: any) => {
@@ -283,9 +289,24 @@ export function LineupSheet({ event, open, onClose }: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bands"] });
-      setNewBandName(""); setNewBandGenre(""); setNewBandMembers(""); setAddBandOpen(false);
+      setNewBandName(""); setNewBandGenre(""); setNewBandMembers("");
+      setNewBandContactName(""); setNewBandContactEmail(""); setNewBandContactPhone("");
+      setAddBandOpen(false);
       toast({ title: "Band added" });
     },
+  });
+
+  const { mutate: updateBand, isPending: updatingBand } = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const r = await fetch(`/api/bands/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bands"] });
+      setEditingBand(null);
+      toast({ title: "Band updated" });
+    },
+    onError: () => toast({ title: "Failed to update band", variant: "destructive" }),
   });
 
   const { mutate: deleteBand } = useMutation({
@@ -405,21 +426,43 @@ export function LineupSheet({ event, open, onClose }: {
                 <p className="text-xs text-muted-foreground text-center py-6">No bands yet. Add one to get started.</p>
               )}
               {rawBands.map(band => (
-                <div key={band.id} className="flex items-start gap-2 rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{band.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
-                      {band.members && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                          <Users className="h-2.5 w-2.5" />{band.members}
-                        </span>
-                      )}
+                <div key={band.id} className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{band.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
+                        {band.members && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
+                            <Users className="h-2.5 w-2.5" />{band.members}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", contactName: band.contactName ?? "", contactEmail: band.contactEmail ?? "", contactPhone: band.contactPhone ?? "", notes: band.notes ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button onClick={() => deleteBand(band.id)} className="text-muted-foreground hover:text-destructive p-0.5">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
                     </div>
                   </div>
-                  <button onClick={() => deleteBand(band.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive p-0.5">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  {(band.contactName || band.contactEmail || band.contactPhone) && (
+                    <div className="mt-2 pt-2 border-t border-border/20 space-y-0.5">
+                      {band.contactName && <p className="text-[11px] font-medium text-foreground/80 truncate">{band.contactName}</p>}
+                      {band.contactEmail && (
+                        <a href={`mailto:${band.contactEmail}`} className="flex items-center gap-1 text-[10px] text-primary hover:underline truncate">
+                          <span>✉</span>{band.contactEmail}
+                        </a>
+                      )}
+                      {band.contactPhone && (
+                        <a href={`tel:${band.contactPhone}`} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground truncate">
+                          <span>📞</span>{band.contactPhone}
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -483,7 +526,7 @@ export function LineupSheet({ event, open, onClose }: {
 
       {/* Add Band Dialog */}
       <Dialog open={addBandOpen} onOpenChange={setAddBandOpen}>
-        <DialogContent className="sm:max-w-[360px] rounded-2xl">
+        <DialogContent className="sm:max-w-[400px] rounded-2xl">
           <DialogHeader><DialogTitle className="font-display text-xl">Add Band / Act</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><label className="text-xs font-medium">Name *</label>
@@ -497,12 +540,63 @@ export function LineupSheet({ event, open, onClose }: {
                 <Input type="number" min="1" className="rounded-xl" value={newBandMembers} onChange={e => setNewBandMembers(e.target.value)} placeholder="4" />
               </div>
             </div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-1">Point of Contact</p>
+            <div className="space-y-1"><label className="text-xs font-medium">Contact Name</label>
+              <Input className="rounded-xl" value={newBandContactName} onChange={e => setNewBandContactName(e.target.value)} placeholder="Jane Smith" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><label className="text-xs font-medium">Email</label>
+                <Input type="email" className="rounded-xl" value={newBandContactEmail} onChange={e => setNewBandContactEmail(e.target.value)} placeholder="jane@band.com" />
+              </div>
+              <div className="space-y-1"><label className="text-xs font-medium">Phone</label>
+                <Input type="tel" className="rounded-xl" value={newBandContactPhone} onChange={e => setNewBandContactPhone(e.target.value)} placeholder="(555) 000-0000" />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setAddBandOpen(false)}>Cancel</Button>
             <Button className="rounded-xl" disabled={!newBandName || creatingBand}
-              onClick={() => createBand({ name: newBandName, genre: newBandGenre || null, members: newBandMembers ? Number(newBandMembers) : null })}>
+              onClick={() => createBand({ name: newBandName, genre: newBandGenre || null, members: newBandMembers ? Number(newBandMembers) : null, contactName: newBandContactName || null, contactEmail: newBandContactEmail || null, contactPhone: newBandContactPhone || null })}>
               Add Band
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Band Dialog */}
+      <Dialog open={!!editingBand} onOpenChange={o => !o && setEditingBand(null)}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl">
+          <DialogHeader><DialogTitle className="font-display text-xl">Edit Band / Act</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1"><label className="text-xs font-medium">Name *</label>
+              <Input className="rounded-xl" value={editBandForm.name} onChange={e => setEditBandForm(f => ({ ...f, name: e.target.value }))} placeholder="The Midnight Groove" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><label className="text-xs font-medium">Genre</label>
+                <Input className="rounded-xl" value={editBandForm.genre} onChange={e => setEditBandForm(f => ({ ...f, genre: e.target.value }))} placeholder="Jazz, Rock…" />
+              </div>
+              <div className="space-y-1"><label className="text-xs font-medium">Members</label>
+                <Input type="number" min="1" className="rounded-xl" value={editBandForm.members} onChange={e => setEditBandForm(f => ({ ...f, members: e.target.value }))} placeholder="4" />
+              </div>
+            </div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-1">Point of Contact</p>
+            <div className="space-y-1"><label className="text-xs font-medium">Contact Name</label>
+              <Input className="rounded-xl" value={editBandForm.contactName} onChange={e => setEditBandForm(f => ({ ...f, contactName: e.target.value }))} placeholder="Jane Smith" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><label className="text-xs font-medium">Email</label>
+                <Input type="email" className="rounded-xl" value={editBandForm.contactEmail} onChange={e => setEditBandForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="jane@band.com" />
+              </div>
+              <div className="space-y-1"><label className="text-xs font-medium">Phone</label>
+                <Input type="tel" className="rounded-xl" value={editBandForm.contactPhone} onChange={e => setEditBandForm(f => ({ ...f, contactPhone: e.target.value }))} placeholder="(555) 000-0000" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl" onClick={() => setEditingBand(null)}>Cancel</Button>
+            <Button className="rounded-xl" disabled={!editBandForm.name || updatingBand}
+              onClick={() => editingBand && updateBand({ id: editingBand.id, data: { name: editBandForm.name, genre: editBandForm.genre || null, members: editBandForm.members ? Number(editBandForm.members) : null, contactName: editBandForm.contactName || null, contactEmail: editBandForm.contactEmail || null, contactPhone: editBandForm.contactPhone || null, notes: editBandForm.notes || null } })}>
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

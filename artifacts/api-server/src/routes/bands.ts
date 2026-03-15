@@ -20,10 +20,10 @@ router.get("/bands", async (req, res) => {
 router.post("/bands", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const { name, genre, members, notes } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const [band] = await db.insert(bandsTable)
-      .values({ name, genre, members: members ? Number(members) : null, notes })
+      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes })
       .returning();
     res.status(201).json(band);
   } catch (err) {
@@ -36,9 +36,9 @@ router.put("/bands/:id", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const id = parseInt(req.params.id);
-    const { name, genre, members, notes } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes } = req.body;
     const [band] = await db.update(bandsTable)
-      .set({ name, genre, members: members ? Number(members) : null, notes, updatedAt: new Date() })
+      .set({ name, genre, members: members ? Number(members) : null, contactName: contactName !== undefined ? (contactName || null) : undefined, contactEmail: contactEmail !== undefined ? (contactEmail || null) : undefined, contactPhone: contactPhone !== undefined ? (contactPhone || null) : undefined, notes, updatedAt: new Date() })
       .where(eq(bandsTable.id, id))
       .returning();
     if (!band) { res.status(404).json({ error: "Not found" }); return; }
