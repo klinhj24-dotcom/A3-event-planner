@@ -4,16 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { format, isPast } from "date-fns";
+import { format, isPast, isToday, startOfDay } from "date-fns";
 import { Calendar, MapPin, CalendarDays, Info, ClipboardList, AlertCircle } from "lucide-react";
-
-const TAG_NAMES: Record<string, string> = {
-  TW: "Teachers in the Wild",
-  MSH: "Music Space Hollywood",
-  MSS: "Music Space Silver Lake",
-  CF: "Camp Forte",
-  CAL: "All Locations",
-};
 
 const STATUS_STYLES: Record<string, string> = {
   planning: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
@@ -54,12 +46,28 @@ export default function MySchedule() {
   const upcoming = data?.events?.filter(e => !e.startDate || !isPast(new Date(e.startDate))) ?? [];
   const past = data?.events?.filter(e => e.startDate && isPast(new Date(e.startDate))) ?? [];
 
-  const allNonDoneTasks = taskData?.tasks?.filter(t => t.status !== "done") ?? [];
+  const todayStart = startOfDay(new Date());
+
+  const allNonDoneTasks = (taskData?.tasks ?? []).filter(t => {
+    if (t.status === "done") return false;
+    if (!t.eventStartDate) return true;
+    return new Date(t.eventStartDate) >= todayStart;
+  });
   const doneTasks = taskData?.tasks?.filter(t => t.status === "done") ?? [];
   const lateCount = allNonDoneTasks.filter(t => t.status === "late").length;
+  const dueTodayCount = allNonDoneTasks.filter(t => t.dueDate && isToday(new Date(t.dueDate))).length;
 
   const taskEventOptions = Array.from(
-    new Map(allNonDoneTasks.filter(t => t.eventId).map(t => [t.eventId, t.eventTitle ?? `Event #${t.eventId}`])).entries()
+    new Map(
+      allNonDoneTasks
+        .filter(t => t.eventId)
+        .sort((a: any, b: any) => {
+          if (!a.eventStartDate) return 1;
+          if (!b.eventStartDate) return -1;
+          return new Date(a.eventStartDate).getTime() - new Date(b.eventStartDate).getTime();
+        })
+        .map((t: any) => [t.eventId, { title: t.eventTitle ?? `Event #${t.eventId}`, startDate: t.eventStartDate }])
+    ).entries()
   );
 
   const filteredTasks = allNonDoneTasks.filter(t => {
@@ -69,6 +77,19 @@ export default function MySchedule() {
       taskStatusFilter === "pending" ? t.status === "pending" : true;
     const eventOk = taskEventFilter === "all" ? true : String(t.eventId) === taskEventFilter;
     return statusOk && eventOk;
+  });
+
+  const tasksByEvent = filteredTasks.reduce<Record<number, { eventTitle: string; eventStartDate: string | null; tasks: any[] }>>((acc, t) => {
+    const key = t.eventId ?? 0;
+    if (!acc[key]) acc[key] = { eventTitle: t.eventTitle ?? "Unknown Event", eventStartDate: t.eventStartDate ?? null, tasks: [] };
+    acc[key].tasks.push(t);
+    return acc;
+  }, {});
+
+  const sortedEventGroups = Object.entries(tasksByEvent).sort(([, a], [, b]) => {
+    if (!a.eventStartDate) return 1;
+    if (!b.eventStartDate) return -1;
+    return new Date(a.eventStartDate).getTime() - new Date(b.eventStartDate).getTime();
   });
 
   return (
@@ -103,15 +124,20 @@ export default function MySchedule() {
         ) : (
           <div className="space-y-8">
             {/* Assigned comm tasks */}
-            {((allNonDoneTasks.length > 0) || (doneTasks.length > 0)) && (
+            {(allNonDoneTasks.length > 0 || doneTasks.length > 0) && (
               <section>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
                   <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 shrink-0">
                     <ClipboardList className="h-3.5 w-3.5" />
                     My Comm Tasks
                     {lateCount > 0 && (
                       <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-500 bg-amber-500/10">
                         {lateCount} late
+                      </Badge>
+                    )}
+                    {dueTodayCount > 0 && (
+                      <Badge variant="outline" className="text-[10px] border-primary/40 text-primary bg-primary/10">
+                        {dueTodayCount} due today
                       </Badge>
                     )}
                   </h2>
@@ -142,24 +168,54 @@ export default function MySchedule() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all" className="text-xs">All events</SelectItem>
-                          {taskEventOptions.map(([evId, evTitle]) => (
-                            <SelectItem key={evId} value={String(evId)} className="text-xs">{evTitle}</SelectItem>
+                          {taskEventOptions.map(([evId, evInfo]) => (
+                            <SelectItem key={evId} value={String(evId)} className="text-xs">
+                              {(evInfo as any).title}
+                              {(evInfo as any).startDate && (
+                                <span className="text-muted-foreground ml-1">
+                                  · {format(new Date((evInfo as any).startDate), "MMM d")}
+                                </span>
+                              )}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {filteredTasks.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">No tasks match the current filter.</p>
-                  ) : (
-                    filteredTasks.map(task => (
-                      <CommTaskCard key={task.id} task={task} />
-                    ))
-                  )}
+
+                {filteredTasks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">No tasks match the current filter.</p>
+                ) : (
+                  <div className="space-y-5">
+                    {sortedEventGroups.map(([eventId, group]) => (
+                      <div key={eventId}>
+                        {/* Event subheader */}
+                        <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-border/40">
+                          <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="text-xs font-semibold text-foreground">{group.eventTitle}</span>
+                          {group.eventStartDate && (
+                            <span className={`text-[11px] font-medium ${isToday(new Date(group.eventStartDate)) ? "text-primary" : "text-muted-foreground"}`}>
+                              {isToday(new Date(group.eventStartDate))
+                                ? "Today"
+                                : format(new Date(group.eventStartDate), "EEE, MMM d")}
+                            </span>
+                          )}
+                        </div>
+                        {/* Tasks for this event */}
+                        <div className="space-y-2 pl-1">
+                          {group.tasks.map(task => (
+                            <CommTaskCard key={task.id} task={task} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-3">
                   {doneTasks.length > 0 && allNonDoneTasks.length > 0 && (
-                    <p className="text-xs text-muted-foreground pt-1">{doneTasks.length} completed task{doneTasks.length !== 1 ? "s" : ""} not shown</p>
+                    <p className="text-xs text-muted-foreground">{doneTasks.length} completed task{doneTasks.length !== 1 ? "s" : ""} not shown</p>
                   )}
                   {doneTasks.length > 0 && allNonDoneTasks.length === 0 && (
                     <p className="text-xs text-muted-foreground">All {doneTasks.length} assigned tasks completed.</p>
@@ -188,7 +244,7 @@ export default function MySchedule() {
               </section>
             )}
 
-            {data.events.length === 0 && pendingTasks.length === 0 && doneTasks.length === 0 && (
+            {data.events.length === 0 && allNonDoneTasks.length === 0 && doneTasks.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 bg-card border border-border/50 rounded-2xl text-center">
                 <CalendarDays className="h-10 w-10 text-muted-foreground/40 mb-4" />
                 <p className="text-muted-foreground font-medium">No events or tasks assigned yet</p>
@@ -205,16 +261,22 @@ export default function MySchedule() {
 function CommTaskCard({ task }: { task: any }) {
   const isLate = task.status === "late";
   const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+  const isDueToday = dueDate ? isToday(dueDate) : false;
 
   return (
-    <div className={`bg-card border rounded-xl p-4 shadow-sm ${isLate ? "border-amber-500/30 bg-amber-500/5" : "border-border/50"}`}>
+    <div className={`bg-card border rounded-xl p-4 shadow-sm transition-colors ${
+      isLate
+        ? "border-amber-500/30 bg-amber-500/5"
+        : isDueToday
+          ? "border-primary/30 bg-primary/5"
+          : "border-border/50"
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             {isLate && <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
             <p className="text-sm font-medium text-foreground">{task.messageName || task.commType}</p>
           </div>
-          <p className="text-xs text-muted-foreground">{task.eventTitle}</p>
           {task.channel && (
             <p className="text-xs text-muted-foreground mt-0.5">{task.channel}</p>
           )}
@@ -224,8 +286,10 @@ function CommTaskCard({ task }: { task: any }) {
             {task.status}
           </Badge>
           {dueDate && (
-            <span className={`text-[11px] font-medium ${isLate ? "text-amber-500" : "text-muted-foreground"}`}>
-              {format(dueDate, "MMM d")}
+            <span className={`text-[11px] font-medium ${
+              isLate ? "text-amber-500" : isDueToday ? "text-primary font-semibold" : "text-muted-foreground"
+            }`}>
+              {isDueToday ? "Due today" : format(dueDate, "MMM d")}
             </span>
           )}
         </div>
