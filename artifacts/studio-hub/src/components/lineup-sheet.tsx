@@ -19,7 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
-  Clock, Timer, Save, Pencil, X, Users, Layers,
+  Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ interface LineupSlot {
   id: number; eventId: number; bandId?: number | null; bandName?: string | null;
   position: number; label?: string | null; startTime?: string | null;
   durationMinutes?: number | null; bufferMinutes?: number | null;
-  isOverlapping: boolean; type: string; notes?: string | null;
+  isOverlapping: boolean; confirmed: boolean; type: string; notes?: string | null;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -144,6 +144,19 @@ function SlotRow({
           <Badge variant="outline" className="text-[10px] shrink-0 border-dashed border-border/30 text-muted-foreground gap-1">
             +{slot.bufferMinutes}m
           </Badge>
+        )}
+
+        {/* Confirmed toggle (acts only) */}
+        {slot.type === "act" && (
+          <button
+            title={slot.confirmed ? "Confirmed — click to unmark" : "Mark as confirmed"}
+            onClick={() => onUpdate(slot.id, { confirmed: !slot.confirmed })}
+            className={`shrink-0 transition-colors p-0.5 ${slot.confirmed ? "text-emerald-500 hover:text-emerald-400" : "text-muted-foreground/40 hover:text-emerald-500"}`}
+          >
+            {slot.confirmed
+              ? <CheckCircle2 className="h-4 w-4" />
+              : <Circle className="h-4 w-4" />}
+          </button>
         )}
 
         {/* Expand / delete */}

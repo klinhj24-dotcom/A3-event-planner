@@ -74,6 +74,7 @@ const LINEUP_SELECT = {
   durationMinutes: eventLineupTable.durationMinutes,
   bufferMinutes: eventLineupTable.bufferMinutes,
   isOverlapping: eventLineupTable.isOverlapping,
+  confirmed: eventLineupTable.confirmed,
   type: eventLineupTable.type,
   notes: eventLineupTable.notes,
 };
@@ -99,7 +100,7 @@ router.post("/events/:id/lineup", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const eventId = parseInt(req.params.id);
-    const { bandId, label, startTime, durationMinutes, bufferMinutes, isOverlapping, type, notes, position } = req.body;
+    const { bandId, label, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position } = req.body;
     const [slot] = await db.insert(eventLineupTable)
       .values({
         eventId,
@@ -109,6 +110,7 @@ router.post("/events/:id/lineup", async (req, res) => {
         durationMinutes: durationMinutes ? Number(durationMinutes) : null,
         bufferMinutes: bufferMinutes !== undefined ? Number(bufferMinutes) : 15,
         isOverlapping: isOverlapping ?? false,
+        confirmed: confirmed ?? false,
         type: type ?? "act",
         notes,
         position: position ?? 0,
@@ -143,7 +145,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const slotId = parseInt(req.params.slotId);
-    const { bandId, label, startTime, durationMinutes, bufferMinutes, isOverlapping, type, notes } = req.body;
+    const { bandId, label, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes } = req.body;
     const [slot] = await db.update(eventLineupTable)
       .set({
         bandId: bandId !== undefined ? (bandId ? Number(bandId) : null) : undefined,
@@ -152,6 +154,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
         durationMinutes: durationMinutes !== undefined ? (durationMinutes ? Number(durationMinutes) : null) : undefined,
         bufferMinutes: bufferMinutes !== undefined ? Number(bufferMinutes) : undefined,
         isOverlapping: isOverlapping !== undefined ? isOverlapping : undefined,
+        confirmed: confirmed !== undefined ? confirmed : undefined,
         type,
         notes,
         updatedAt: new Date(),

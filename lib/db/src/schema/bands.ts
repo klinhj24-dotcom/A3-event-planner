@@ -25,6 +25,7 @@ export const eventLineupTable = pgTable("event_lineup", {
   durationMinutes: integer("duration_minutes"),
   bufferMinutes: integer("buffer_minutes").default(15),
   isOverlapping: boolean("is_overlapping").notNull().default(false),
+  confirmed: boolean("confirmed").notNull().default(false),
   type: text("type").notNull().default("act"),       // 'act' | 'announcement' | 'break'
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
