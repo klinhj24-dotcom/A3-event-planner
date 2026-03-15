@@ -149,9 +149,14 @@ function TemplateCard({ template, onDelete }: { template: EmailTemplate; onDelet
     <div className="border border-border/50 rounded-xl bg-card overflow-hidden">
       <div className="flex items-start justify-between p-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <FileText className="h-4 w-4 text-primary shrink-0" />
             <h3 className="font-semibold text-foreground truncate">{template.name}</h3>
+            {template.category && (
+              <Badge variant="secondary" className="text-[10px] font-medium py-0 px-1.5 rounded-full shrink-0">
+                {template.category.replace(/-/g, " ")}
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground truncate">{template.subject}</p>
         </div>
@@ -182,7 +187,7 @@ function TemplateCard({ template, onDelete }: { template: EmailTemplate; onDelet
             {template.body}
           </div>
           <p className="text-[10px] text-muted-foreground mt-2">
-            Merge fields: <code className="bg-muted px-1 rounded">{"{name}"}</code> <code className="bg-muted px-1 rounded">{"{first_name}"}</code> <code className="bg-muted px-1 rounded">{"{organization}"}</code>
+            Variables: <code className="bg-muted px-1 rounded">{`{{recipient_name}}`}</code> <code className="bg-muted px-1 rounded">{`{{event_title}}`}</code> <code className="bg-muted px-1 rounded">{`{{event_date}}`}</code> <code className="bg-muted px-1 rounded">{`{{event_location}}`}</code> <code className="bg-muted px-1 rounded">{`{{signup_link}}`}</code>
           </p>
         </div>
       )}

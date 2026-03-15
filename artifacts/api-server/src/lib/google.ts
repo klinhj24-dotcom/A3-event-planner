@@ -66,6 +66,87 @@ export function makeRawEmail({
   return Buffer.from(email).toString("base64url");
 }
 
+// Encode an HTML email as base64url for Gmail API
+export function makeHtmlEmail({
+  to,
+  from,
+  subject,
+  html,
+  threadId,
+  replyToMessageId,
+}: {
+  to: string;
+  from: string;
+  subject: string;
+  html: string;
+  threadId?: string;
+  replyToMessageId?: string;
+}): string {
+  const headers = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    ...(replyToMessageId ? [`In-Reply-To: ${replyToMessageId}`, `References: ${replyToMessageId}`] : []),
+  ].join("\r\n");
+
+  const email = `${headers}\r\n\r\n${html}`;
+  return Buffer.from(email).toString("base64url");
+}
+
+// Build a branded HTML email from a plain-text body, optionally with a CTA button
+export function buildHtmlEmail({
+  recipientName,
+  body,
+  ctaLabel,
+  ctaUrl,
+}: {
+  recipientName?: string;
+  body: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+}): string {
+  const escapedBody = body
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+
+  const ctaBlock = ctaLabel && ctaUrl
+    ? `<div style="text-align:center;margin:32px 0;">
+        <a href="${ctaUrl}" style="display:inline-block;background:#7250ef;color:#ffffff;font-family:'Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:8px;letter-spacing:0.02em;">${ctaLabel}</a>
+      </div>
+      <p style="font-size:13px;color:#888;text-align:center;margin-top:-16px;">Or copy this link: <a href="${ctaUrl}" style="color:#7250ef;">${ctaUrl}</a></p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr><td style="background:#0f0f0f;padding:24px 32px;text-align:center;">
+          <span style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:0.05em;">THE MUSIC SPACE</span>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:32px 32px 16px;">
+          <p style="font-size:15px;color:#1a1a1a;line-height:1.7;margin:0;">${escapedBody}</p>
+          ${ctaBlock}
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:16px 32px 32px;border-top:1px solid #f0f0f0;">
+          <p style="font-size:12px;color:#aaa;margin:0;line-height:1.6;">The Music Space &bull; This email was sent on behalf of your studio coordinator.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // Extract plain text from Gmail message parts
 export function extractEmailBody(payload: any): string {
   if (!payload) return "";

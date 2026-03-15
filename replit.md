@@ -47,7 +47,8 @@ artifacts-monorepo/
 - **Payroll**: Track employee hours per event per pay period (Saturday–Friday). Log hours entries (employee, event, date, hours, notes). Per-employee summary with total hours, hourly rate, and total pay. Summary cards (active staff, total hours, total payroll cost). Edit hourly rate inline. Expandable rows show individual entries with delete.
 - **Sign-up system**: Each event gets a unique public link (/signup/:token)
 - **Gmail Integration**: Per-user OAuth2 Gmail connect/disconnect. Send emails to contacts, track threads, import existing Gmail threads, reply to threads in-app.
-- **Email Templates**: Create/manage reusable email templates with merge fields (`{name}`, `{organization}`, `{first_name}`). Applied automatically when composing emails.
+- **Email Templates**: Create/manage reusable email templates with category tagging. Six default templates pre-seeded: Show Request, Staff/Intern/Band Leader invitations, 1-week and 1-day reminders. Templates support `{{event_title}}`, `{{event_date}}`, `{{event_location}}`, `{{recipient_name}}`, `{{signup_link}}` variables.
+- **Send Invite Email**: Purple mail icon on each event row opens a dialog to send branded HTML emails from any template. Picks recipient from band lineup contacts or employees. Includes branded CTA signup button linking to the event's public signup page. Sends via the logged-in user's connected Gmail.
 - **Google Calendar Push**: Push events directly to TMS Google Calendar from the events page.
 - **Settings page**: Tabbed: Gmail connection, email templates, Team management (admin only — set user roles).
 - **Staff Assignment**: Assign staff members to events in the Create Event form (checkbox-style multi-select) and in the Edit Event dialog. Each assignment shows "Arrive before" and "Stay after" minute fields, saved per-assignment. Staff assigned to events appear in the employee portal.
@@ -77,7 +78,7 @@ Role is stored in `users.role`. It is set by admins via Settings > Team. Role pe
 - `event_employees` — many-to-many: events ↔ employees with pay tracking
 - `event_signups` — public signup submissions per event
 - `outreach` — outreach history log per contact. Includes `userId` for attribution. Gmail fields: `gmailThreadId`, `gmailMessageId`, `subject`, `body`, `direction`, `fromEmail`, `toEmail`
-- `email_templates` — reusable email templates with name, subject, body
+- `email_templates` — reusable email templates with name, category (show-request|event-invite-staff|event-invite-intern|event-invite-band|reminder-week|reminder-day), subject, body; variable substitution for `{{event_title}}`, `{{event_date}}`, `{{event_location}}`, `{{recipient_name}}`, `{{signup_link}}`
 - `comm_schedule_rules` — communication rules by event type (seeded from CSV: 76 rules). Fields: eventType, eventTagGroup, eventTag, commType, messageName, timingDays, channel, notes, isActive
 - `comm_tasks` — generated comm tasks per event (eventId, ruleId, commType, messageName, channel, dueDate, status, googleCalendarEventId)
 

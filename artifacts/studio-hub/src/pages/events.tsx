@@ -28,6 +28,7 @@ import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
 import { PackingSheet } from "@/components/packing-sheet";
 import { StaffSlotsSheet } from "@/components/staff-slots-sheet";
+import { SendInviteDialog } from "@/components/send-invite-dialog";
 import { useActiveEventTypes } from "@/hooks/use-event-types";
 
 // ─── Channel icon map ─────────────────────────────────────────────────────────
@@ -599,6 +600,7 @@ export default function Events() {
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
+  const [inviteEvent, setInviteEvent] = useState<{ id: number; title: string; startDate?: string | null; location?: string | null; signupToken?: string | null } | null>(null);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
 
   const { data: allEmployees } = useListEmployees();
@@ -1139,6 +1141,16 @@ export default function Events() {
                             >
                               <FileText className="h-3.5 w-3.5" />
                             </Button>
+                            {/* Send invite email */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Send invite email"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-violet-400 hover:bg-violet-500/10"
+                              onClick={() => setInviteEvent({ id: event.id, title: event.title, startDate: event.startDate, location: event.location, signupToken: event.signupToken })}
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                            </Button>
                             {/* Packing list */}
                             <Button
                               size="sm"
@@ -1430,6 +1442,13 @@ export default function Events() {
         open={!!staffSlotsEvent}
         onClose={() => setStaffSlotsEvent(null)}
       />
+      {inviteEvent && (
+        <SendInviteDialog
+          event={inviteEvent}
+          open={!!inviteEvent}
+          onClose={() => setInviteEvent(null)}
+        />
+      )}
     </AppLayout>
   );
 }

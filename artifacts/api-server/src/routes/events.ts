@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import { google } from "googleapis";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
 const router = Router();
 
@@ -307,6 +309,72 @@ router.post("/events/:id/notify", async (req, res) => {
   } catch (err) {
     console.error("notifyEventSignup error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /events/:id/send-invite — send a templated invite/reminder email from this event
+router.post("/events/:id/send-invite", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const eventId = parseInt(req.params.id);
+    const { templateId, recipientEmail, recipientName, ctaLabel } = req.body;
+    if (!templateId || !recipientEmail) {
+      res.status(400).json({ error: "templateId and recipientEmail are required" });
+      return;
+    }
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
+    const [template] = await db.select().from(emailTemplatesTable).where(eq(emailTemplatesTable.id, parseInt(templateId)));
+    if (!template) { res.status(404).json({ error: "Template not found" }); return; }
+
+    const userId = (req.user as any)?.id;
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user?.googleAccessToken) { res.status(400).json({ error: "Gmail not connected" }); return; }
+
+    // Build event variables
+    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
+    const signupUrl = `https://${domain}/signup/${event.signupToken}`;
+    const eventDate = event.startDate
+      ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(event.startDate))
+      : "TBD";
+    const eventLocation = event.location || "TBD";
+
+    const substitute = (text: string) =>
+      text
+        .replace(/\{\{recipient_name\}\}/g, recipientName || "there")
+        .replace(/\{\{event_title\}\}/g, event.title)
+        .replace(/\{\{event_date\}\}/g, eventDate)
+        .replace(/\{\{event_location\}\}/g, eventLocation)
+        .replace(/\{\{signup_link\}\}/g, signupUrl);
+
+    const subject = substitute(template.subject);
+    const body = substitute(template.body);
+
+    // Determine if this template type should include a signup CTA button
+    const inviteCategories = ["show-request", "event-invite-staff", "event-invite-intern", "event-invite-band", "reminder-week", "reminder-day"];
+    const hasSignup = template.category && inviteCategories.includes(template.category);
+    const buttonLabel = ctaLabel || (template.category === "show-request" ? "Register Interest" : "Confirm My Spot");
+
+    const html = buildHtmlEmail({
+      recipientName: recipientName || undefined,
+      body,
+      ctaLabel: hasSignup ? buttonLabel : undefined,
+      ctaUrl: hasSignup ? signupUrl : undefined,
+    });
+
+    // Send via Gmail
+    const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken!, user.googleTokenExpiry);
+    const gmail = google.gmail({ version: "v1", auth });
+    const senderEmail = user.email || "";
+    const raw = makeHtmlEmail({ to: recipientEmail, from: senderEmail, subject, html });
+    const sent = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+
+    res.json({ success: true, messageId: sent.data.id, subject, to: recipientEmail });
+  } catch (err) {
+    console.error("sendInvite error:", err);
+    res.status(500).json({ error: "Failed to send invite" });
   }
 });
 

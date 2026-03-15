@@ -112,7 +112,7 @@ export function useSyncContactEmails() {
 
 // ── Email Templates ───────────────────────────────────────────────────────────
 
-export type EmailTemplate = { id: number; name: string; subject: string; body: string };
+export type EmailTemplate = { id: number; name: string; category: string | null; subject: string; body: string };
 
 export function useEmailTemplates() {
   return useQuery({
@@ -124,7 +124,7 @@ export function useEmailTemplates() {
 export function useCreateEmailTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; subject: string; body: string }) =>
+    mutationFn: (data: { name: string; category?: string | null; subject: string; body: string }) =>
       apiFetch<EmailTemplate>("/api/email-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

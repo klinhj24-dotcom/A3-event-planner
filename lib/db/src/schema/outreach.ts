@@ -26,6 +26,7 @@ export const outreachTable = pgTable("outreach", {
 export const emailTemplatesTable = pgTable("email_templates", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  category: text("category"), // show-request | event-invite-staff | event-invite-intern | event-invite-band | reminder-week | reminder-day
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -68,6 +68,8 @@ const LINEUP_SELECT = {
   eventId: eventLineupTable.eventId,
   bandId: eventLineupTable.bandId,
   bandName: bandsTable.name,
+  contactName: bandsTable.contactName,
+  contactEmail: bandsTable.contactEmail,
   position: eventLineupTable.position,
   label: eventLineupTable.label,
   startTime: eventLineupTable.startTime,

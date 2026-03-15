@@ -307,20 +307,148 @@ router.get("/email-templates", async (req, res) => {
 
 router.post("/email-templates", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const { name, subject, body } = req.body;
+  const { name, category, subject, body } = req.body;
   if (!name || !subject || !body) {
     res.status(400).json({ error: "name, subject, and body are required" });
     return;
   }
-  const [template] = await db.insert(emailTemplatesTable).values({ name, subject, body }).returning();
+  const [template] = await db.insert(emailTemplatesTable).values({ name, category: category || null, subject, body }).returning();
   res.status(201).json(template);
+});
+
+router.post("/email-templates/seed-defaults", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const defaults = [
+    {
+      name: "Show Request",
+      category: "show-request",
+      subject: "Performance Opportunity at {{event_title}}",
+      body: `Hi {{recipient_name}},
+
+We'd love to have your band perform at an upcoming event through The Music Space!
+
+EVENT DETAILS
+• {{event_title}}
+• {{event_date}}
+• {{event_location}}
+
+Interested? Click below to sign up and let us know — you can also leave any questions or notes for our team.
+
+We look forward to hearing from you!
+
+— The Music Space`,
+    },
+    {
+      name: "Event Invitation — Staff",
+      category: "event-invite-staff",
+      subject: "Staff Invitation: {{event_title}}",
+      body: `Hi {{recipient_name}},
+
+You're invited to join us as staff for {{event_title}}!
+
+EVENT DETAILS
+• {{event_date}}
+• {{event_location}}
+
+Please click below to confirm your availability. You can also leave a note with any questions or special requests.
+
+Thanks for being part of the team!
+
+— The Music Space`,
+    },
+    {
+      name: "Event Invitation — Intern",
+      category: "event-invite-intern",
+      subject: "Intern Opportunity: {{event_title}}",
+      body: `Hi {{recipient_name}},
+
+We have a great opportunity for you at {{event_title}} and we'd love to have you join us!
+
+EVENT DETAILS
+• {{event_date}}
+• {{event_location}}
+
+Click below to confirm your spot and leave any notes or questions for the team.
+
+Looking forward to working with you!
+
+— The Music Space`,
+    },
+    {
+      name: "Event Invitation — Band Leader",
+      category: "event-invite-band",
+      subject: "Artist Invitation: {{event_title}}",
+      body: `Hi {{recipient_name}},
+
+We'd love to have you and your group participate in {{event_title}}!
+
+EVENT DETAILS
+• {{event_date}}
+• {{event_location}}
+
+Please register below to confirm your participation. Feel free to leave any questions or notes — someone from our team will follow up.
+
+We can't wait to see you there!
+
+— The Music Space`,
+    },
+    {
+      name: "Reminder — 1 Week Before",
+      category: "reminder-week",
+      subject: "Reminder: {{event_title}} is one week away!",
+      body: `Hi {{recipient_name}},
+
+Just a heads-up — {{event_title}} is coming up in one week!
+
+EVENT DETAILS
+• {{event_date}}
+• {{event_location}}
+
+If you haven't confirmed your spot yet, please do so using the link below. Reply to this email if you have any questions.
+
+See you soon!
+
+— The Music Space`,
+    },
+    {
+      name: "Reminder — 1 Day Before",
+      category: "reminder-day",
+      subject: "Tomorrow: {{event_title}} — See You There!",
+      body: `Hi {{recipient_name}},
+
+This is your final reminder — {{event_title}} is TOMORROW!
+
+EVENT DETAILS
+• {{event_date}}
+• {{event_location}}
+
+Make sure you have everything ready to go. If anything has come up, please let us know as soon as possible.
+
+See you tomorrow!
+
+— The Music Space`,
+    },
+  ];
+
+  const seeded: string[] = [];
+  for (const t of defaults) {
+    const existing = await db
+      .select({ id: emailTemplatesTable.id })
+      .from(emailTemplatesTable)
+      .where(eq(emailTemplatesTable.category, t.category));
+    if (existing.length === 0) {
+      await db.insert(emailTemplatesTable).values(t);
+      seeded.push(t.category);
+    }
+  }
+  res.json({ seeded, message: seeded.length > 0 ? `Seeded ${seeded.length} default template(s)` : "All defaults already exist" });
 });
 
 router.put("/email-templates/:id", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const { name, subject, body } = req.body;
+  const { name, category, subject, body } = req.body;
   const [updated] = await db.update(emailTemplatesTable)
-    .set({ name, subject, body, updatedAt: new Date() })
+    .set({ name, category: category ?? undefined, subject, body, updatedAt: new Date() })
     .where(eq(emailTemplatesTable.id, parseInt(req.params.id)))
     .returning();
   if (!updated) { res.status(404).json({ error: "Template not found" }); return; }
