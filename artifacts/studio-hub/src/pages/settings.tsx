@@ -33,6 +33,7 @@ import {
 } from "@/hooks/use-google";
 import { useTeamMembers, useUpdateUserRole, type TeamMember } from "@/hooks/use-team";
 import { useEventTypes, useCreateEventType, useUpdateEventType, useDeleteEventType, type EventType } from "@/hooks/use-event-types";
+import { useStaffRoleTypes, useCreateStaffRoleType, useUpdateStaffRoleType, useDeleteStaffRoleType, type StaffRoleType } from "@/hooks/use-staff-roles";
 
 function EventTypeRow({ et }: { et: EventType }) {
   const [editing, setEditing] = useState(false);
@@ -75,6 +76,56 @@ function EventTypeRow({ et }: { et: EventType }) {
             <Pencil className="h-3.5 w-3.5" />
           </button>
           <button onClick={() => del(et.id, { onError: (e: any) => toast({ title: e.message ?? "Delete failed", variant: "destructive" }) })} disabled={deleting} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StaffRoleRow({ role }: { role: StaffRoleType }) {
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(role.name);
+  const [draftColor, setDraftColor] = useState(role.color ?? "#7250ef");
+  const { mutate: update, isPending: saving } = useUpdateStaffRoleType();
+  const { mutate: del, isPending: deleting } = useDeleteStaffRoleType();
+  const { toast } = useToast();
+
+  const save = () => {
+    update({ id: role.id, name: draftName.trim() || role.name, color: draftColor }, {
+      onSuccess: () => { toast({ title: "Role updated" }); setEditing(false); },
+      onError: (e: any) => toast({ title: e.message ?? "Update failed", variant: "destructive" }),
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 last:border-0 group">
+      <span className="w-3 h-3 rounded-full shrink-0 border border-white/10" style={{ backgroundColor: role.color ?? "#7250ef" }} />
+      {editing ? (
+        <>
+          <input type="color" value={draftColor} onChange={e => setDraftColor(e.target.value)} className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent p-0" />
+          <input
+            autoFocus
+            value={draftName}
+            onChange={e => setDraftName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setDraftName(role.name); setDraftColor(role.color ?? "#7250ef"); } }}
+            className="flex-1 bg-transparent text-sm border-b border-primary outline-none py-0.5"
+          />
+          <button onClick={save} disabled={saving} className="text-primary hover:text-primary/80">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          </button>
+          <button onClick={() => { setEditing(false); setDraftName(role.name); setDraftColor(role.color ?? "#7250ef"); }} className="text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="flex-1 text-sm text-foreground">{role.name}</span>
+          <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => del(role.id, { onError: (e: any) => toast({ title: e.message ?? "Delete failed", variant: "destructive" }) })} disabled={deleting} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
             {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
           </button>
         </>
@@ -207,6 +258,10 @@ export default function Settings() {
   const { data: eventTypes = [], isLoading: isLoadingTypes } = useEventTypes();
   const { mutate: createEventType, isPending: isCreatingType } = useCreateEventType();
   const [newTypeName, setNewTypeName] = useState("");
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleColor, setNewRoleColor] = useState("#7250ef");
+  const { data: staffRoles = [], isLoading: isLoadingRoles } = useStaffRoleTypes();
+  const { mutate: createRole, isPending: isCreatingRole } = useCreateStaffRoleType();
 
   const handleAddEventType = () => {
     if (!newTypeName.trim()) return;
@@ -260,6 +315,11 @@ export default function Settings() {
             {isAdmin && (
               <TabsTrigger value="event-types" className="rounded-lg">
                 <Tag className="h-4 w-4 mr-2" /> Event Types
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger value="staff-roles" className="rounded-lg">
+                <Users className="h-4 w-4 mr-2" /> Staff Roles
               </TabsTrigger>
             )}
           </TabsList>
@@ -387,6 +447,50 @@ export default function Settings() {
                   />
                   <Button size="sm" variant="ghost" className="h-7 px-3 rounded-lg text-xs" onClick={handleAddEventType} disabled={isCreatingType || !newTypeName.trim()}>
                     {isCreatingType ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          )}
+
+          {isAdmin && (
+            <TabsContent value="staff-roles" className="space-y-4 mt-0">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="h-5 w-5 text-primary" />
+                <h2 className="font-display text-xl font-semibold">Staff Roles</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Define the roles available when scheduling staff for events — e.g. Sound Engineer, Booth Staff, Intern. Each role gets a color used in the staff schedule.
+              </p>
+              <div className="border border-border/50 rounded-xl bg-card overflow-hidden">
+                {isLoadingRoles ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : staffRoles.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground text-sm">No staff roles yet.</div>
+                ) : (
+                  <div>{staffRoles.map(r => <StaffRoleRow key={r.id} role={r} />)}</div>
+                )}
+                <div className="flex items-center gap-2 p-3 border-t border-border/40 bg-muted/20">
+                  <input
+                    type="color"
+                    value={newRoleColor}
+                    onChange={e => setNewRoleColor(e.target.value)}
+                    className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent p-0 shrink-0"
+                  />
+                  <input
+                    value={newRoleName}
+                    onChange={e => setNewRoleName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && newRoleName.trim()) {
+                        createRole({ name: newRoleName.trim(), color: newRoleColor }, { onSuccess: () => setNewRoleName("") });
+                      }
+                    }}
+                    placeholder="New role name…"
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+                  />
+                  <Button size="sm" variant="ghost" className="h-7 px-3 rounded-lg text-xs" onClick={() => { if (newRoleName.trim()) createRole({ name: newRoleName.trim(), color: newRoleColor }, { onSuccess: () => setNewRoleName("") }); }} disabled={isCreatingRole || !newRoleName.trim()}>
+                    {isCreatingRole ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
                     Add
                   </Button>
                 </div>

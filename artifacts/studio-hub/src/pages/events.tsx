@@ -27,6 +27,7 @@ import { useCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmplo
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
 import { PackingSheet } from "@/components/packing-sheet";
+import { StaffSlotsSheet } from "@/components/staff-slots-sheet";
 import { useActiveEventTypes } from "@/hooks/use-event-types";
 
 // ─── Channel icon map ─────────────────────────────────────────────────────────
@@ -310,10 +311,20 @@ function CallSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { data: staff = [], isLoading } = useQuery<any[]>({
+  const { data: staff = [], isLoading: loadingStaff } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/employees`],
     queryFn: async () => {
       const res = await fetch(`/api/events/${event!.id}/employees`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!event,
+  });
+
+  const { data: staffSlots = [], isLoading: loadingSlots } = useQuery<any[]>({
+    queryKey: [`/api/events/${event?.id}/staff-slots`],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${event!.id}/staff-slots`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -339,6 +350,17 @@ function CallSheet({
   const eventDateStr = event.startDate ? format(new Date(event.startDate), "EEEE, MMMM d, yyyy") : "";
   const startTimeStr = event.startDate ? format(new Date(event.startDate), "h:mm a") : "";
   const endTimeStr = event.endDate ? format(new Date(event.endDate), "h:mm a") : "";
+
+  const isLoading = loadingStaff || loadingSlots;
+  const hasContent = staff.length > 0 || staffSlots.length > 0;
+
+  // Group slots by role name for the call sheet
+  const slotsByRole = staffSlots.reduce((acc: Record<string, any[]>, s: any) => {
+    const key = s.roleName ?? "Other";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {});
 
   return (
     <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -368,54 +390,106 @@ function CallSheet({
           </div>
         </div>
 
-        {/* Staff table */}
-        <div className="flex-1 p-6">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Staff Call Times</h3>
+        <div className="flex-1 p-6 space-y-8">
           {isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : staff.length === 0 ? (
+          ) : !hasContent ? (
             <div className="text-center py-12 text-muted-foreground">
               <Users2 className="h-10 w-10 mx-auto opacity-20 mb-3" />
               <p className="text-sm">No staff assigned to this event yet.</p>
-              <p className="text-xs mt-1">Use the edit event dialog to assign staff.</p>
+              <p className="text-xs mt-1">Use the Staff Schedule to add role-based slots.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
-                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
-                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Arrive By</th>
-                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Depart By</th>
-                    <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {staff.map((s: any) => {
-                    const arriveTime = getArrivalTime(event.startDate, s.minutesBefore);
-                    const departTime = getDepartureTime(event.endDate, s.minutesAfter);
-                    return (
-                      <tr key={s.id} className="border-b border-border/30 hover:bg-muted/20">
-                        <td className="py-3.5 pr-4 font-semibold text-foreground">{s.employeeName}</td>
-                        <td className="py-3.5 pr-4 text-muted-foreground capitalize text-xs">{s.role || s.employeeRole || "—"}</td>
-                        <td className="py-3.5 pr-4">
-                          <span className="text-foreground font-medium">{arriveTime}</span>
-                          {s.minutesBefore ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesBefore} min early</span> : null}
-                        </td>
-                        <td className="py-3.5 pr-4">
-                          <span className="text-foreground font-medium">{departTime}</span>
-                          {s.minutesAfter ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesAfter} min after</span> : null}
-                        </td>
-                        <td className="py-3.5 text-xs text-muted-foreground">{s.notes || "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Role-based staff slots */}
+              {staffSlots.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Role Assignments</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-border/50">
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Shift Start</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Shift End</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {staffSlots.map((s: any) => (
+                          <tr key={s.id} className="border-b border-border/30 hover:bg-muted/20">
+                            <td className="py-3 pr-4 font-semibold text-foreground">
+                              {s.assignedEmployeeName
+                                ? s.assignedEmployeeName
+                                : <span className="text-muted-foreground/50 italic font-normal text-xs">Unassigned</span>}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <span
+                                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
+                                style={{ backgroundColor: `${s.roleColor ?? "#7250ef"}20`, color: s.roleColor ?? "#7250ef" }}
+                              >
+                                {s.roleName}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-4 font-medium text-foreground">
+                              {s.startTime ? format(new Date(s.startTime), "EEE M/d, h:mm a") : "—"}
+                            </td>
+                            <td className="py-3 pr-4 font-medium text-foreground">
+                              {s.endTime ? format(new Date(s.endTime), "EEE M/d, h:mm a") : "—"}
+                            </td>
+                            <td className="py-3 text-xs text-muted-foreground">{s.notes || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Legacy event_employees (general assignment) */}
+              {staff.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">General Staff</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-border/50">
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Arrive By</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Depart By</th>
+                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {staff.map((s: any) => {
+                          const arriveTime = getArrivalTime(event.startDate, s.minutesBefore);
+                          const departTime = getDepartureTime(event.endDate, s.minutesAfter);
+                          return (
+                            <tr key={s.id} className="border-b border-border/30 hover:bg-muted/20">
+                              <td className="py-3.5 pr-4 font-semibold text-foreground">{s.employeeName}</td>
+                              <td className="py-3.5 pr-4 text-muted-foreground capitalize text-xs">{s.role || s.employeeRole || "—"}</td>
+                              <td className="py-3.5 pr-4">
+                                <span className="text-foreground font-medium">{arriveTime}</span>
+                                {s.minutesBefore ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesBefore} min early</span> : null}
+                              </td>
+                              <td className="py-3.5 pr-4">
+                                <span className="text-foreground font-medium">{departTime}</span>
+                                {s.minutesAfter ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesAfter} min after</span> : null}
+                              </td>
+                              <td className="py-3.5 text-xs text-muted-foreground">{s.notes || "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </SheetContent>
@@ -524,6 +598,7 @@ export default function Events() {
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
+  const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
 
   const { data: allEmployees } = useListEmployees();
@@ -1044,6 +1119,16 @@ export default function Events() {
                             >
                               <Music className="h-3.5 w-3.5" />
                             </Button>
+                            {/* Staff schedule */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Staff schedule"
+                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10"
+                              onClick={() => setStaffSlotsEvent({ id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate, location: event.location })}
+                            >
+                              <Users2 className="h-3.5 w-3.5" />
+                            </Button>
                             {/* Call sheet */}
                             <Button
                               size="sm"
@@ -1339,6 +1424,11 @@ export default function Events() {
         event={packingEvent}
         open={!!packingEvent}
         onClose={() => setPackingEvent(null)}
+      />
+      <StaffSlotsSheet
+        event={staffSlotsEvent}
+        open={!!staffSlotsEvent}
+        onClose={() => setStaffSlotsEvent(null)}
       />
     </AppLayout>
   );
