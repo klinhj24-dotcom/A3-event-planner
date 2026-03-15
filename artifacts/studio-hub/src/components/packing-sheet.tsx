@@ -190,7 +190,7 @@ export function PackingSheet({ event, open, onClose }: {
 
   return (
     <Sheet open={open} onOpenChange={o => !o && onClose()}>
-      <SheetContent side="right" className="w-full max-w-5xl p-0 flex flex-col overflow-hidden">
+      <SheetContent side="right" className="w-full sm:w-full sm:max-w-5xl p-0 flex flex-col overflow-hidden">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/30 shrink-0">
           <div className="flex items-start justify-between">
             <div>
