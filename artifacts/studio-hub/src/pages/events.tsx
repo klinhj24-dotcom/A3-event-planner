@@ -479,6 +479,19 @@ const CALENDAR_TAGS = [
   { value: "CAL", label: "Music Space Calendar Event" },
 ];
 
+function toDatetimeLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localsToUtc(data: Record<string, any>) {
+  const out = { ...data };
+  if (out.startDate) out.startDate = new Date(out.startDate).toISOString();
+  if (out.endDate) out.endDate = new Date(out.endDate).toISOString();
+  if (out.signupDeadline) out.signupDeadline = new Date(out.signupDeadline).toISOString();
+  return out;
+}
+
 const eventSchema = z.object({
   title: z.string().min(1, "Title is required"),
   type: z.string().min(1, "Type is required"),
@@ -555,7 +568,7 @@ export default function Events() {
       const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(localsToUtc(data)),
       });
       if (!res.ok) throw new Error("Failed to create event");
       return res.json();
@@ -567,7 +580,7 @@ export default function Events() {
       const res = await fetch(`/api/events/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(localsToUtc(data)),
       });
       if (!res.ok) throw new Error("Failed to update event");
       return res.json();
@@ -598,8 +611,8 @@ export default function Events() {
       type: ev.type ?? "Recital",
       status: ev.status ?? "planning",
       location: ev.location ?? "",
-      startDate: ev.startDate ? new Date(ev.startDate).toISOString().slice(0, 16) : "",
-      endDate: ev.endDate ? new Date(ev.endDate).toISOString().slice(0, 16) : "",
+      startDate: ev.startDate ? toDatetimeLocal(new Date(ev.startDate)) : "",
+      endDate: ev.endDate ? toDatetimeLocal(new Date(ev.endDate)) : "",
       calendarTag: ev.calendarTag ?? "",
       isPaid: ev.isPaid ?? false,
       revenue: ev.revenue ? Number(ev.revenue) : undefined,
