@@ -352,8 +352,8 @@ router.post("/events/:id/send-invite", async (req, res) => {
     const subject = substitute(template.subject);
     const body = substitute(template.body);
 
-    // Determine if this template type should include a signup CTA button
-    const inviteCategories = ["show-request", "event-invite-staff", "event-invite-intern", "event-invite-band", "reminder-week", "reminder-day"];
+    // Only invite templates get a signup CTA button — reminders go to people already signed up
+    const inviteCategories = ["show-request", "event-invite-staff", "event-invite-intern", "event-invite-band"];
     const hasSignup = template.category && inviteCategories.includes(template.category);
     const buttonLabel = ctaLabel || (template.category === "show-request" ? "Register Interest" : "Confirm My Spot");
 

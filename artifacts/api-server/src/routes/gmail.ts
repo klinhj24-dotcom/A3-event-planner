@@ -398,15 +398,13 @@ We can't wait to see you there!
       subject: "Reminder: {{event_title}} is one week away!",
       body: `Hi {{recipient_name}},
 
-Just a heads-up — {{event_title}} is coming up in one week!
+Just a reminder that {{event_title}} is coming up in one week!
 
 EVENT DETAILS
 • {{event_date}}
 • {{event_location}}
 
-If you haven't confirmed your spot yet, please do so using the link below. Reply to this email if you have any questions.
-
-See you soon!
+We're looking forward to seeing you there. Reply to this email if you have any questions.
 
 — The Music Space`,
     },

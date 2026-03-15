@@ -360,7 +360,7 @@ export function SendInviteDialog({ event, open, onClose }: Props) {
                       <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Body</p>
                       <pre className="text-sm text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed">{previewBody}</pre>
                     </div>
-                    {selectedTemplate.category && ["show-request","event-invite-staff","event-invite-intern","event-invite-band","reminder-week","reminder-day"].includes(selectedTemplate.category) && (
+                    {selectedTemplate.category && ["show-request","event-invite-staff","event-invite-intern","event-invite-band"].includes(selectedTemplate.category) && (
                       <div className="pt-1">
                         <div className="inline-block bg-[#7250ef] text-white text-sm font-semibold px-6 py-3 rounded-lg">
                           {selectedTemplate.category === "show-request" ? "Register Interest" : "Confirm My Spot"} →
