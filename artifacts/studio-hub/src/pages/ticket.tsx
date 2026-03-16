@@ -72,14 +72,14 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
           <FormField control={form.control} name="contactFirstName" render={({ field }) => (
             <FormItem>
               <FormLabel>First Name <span className="text-destructive">*</span></FormLabel>
-              <FormControl><Input className="rounded-xl" placeholder="Jane" {...field} /></FormControl>
+              <FormControl><Input className="rounded-xl" placeholder="Rigby" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="contactLastName" render={({ field }) => (
             <FormItem>
               <FormLabel>Last Name <span className="text-destructive">*</span></FormLabel>
-              <FormControl><Input className="rounded-xl" placeholder="Smith" {...field} /></FormControl>
+              <FormControl><Input className="rounded-xl" placeholder="Levy" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
@@ -87,7 +87,7 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
         <FormField control={form.control} name="contactEmail" render={({ field }) => (
           <FormItem>
             <FormLabel>Email Address <span className="text-destructive">*</span></FormLabel>
-            <FormControl><Input className="rounded-xl" type="email" placeholder="jane@example.com" {...field} /></FormControl>
+            <FormControl><Input className="rounded-xl" type="email" placeholder="rigby@example.com" {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
@@ -157,7 +157,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
             <FormField control={form.control} name="studentLastName" render={({ field }) => (
               <FormItem>
                 <FormLabel>Last Name <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input className="rounded-xl" placeholder="Smith" {...field} /></FormControl>
+                <FormControl><Input className="rounded-xl" placeholder="Levy" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -191,14 +191,14 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
             <FormField control={form.control} name="contactFirstName" render={({ field }) => (
               <FormItem>
                 <FormLabel>First Name <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input className="rounded-xl" placeholder="Jane" {...field} /></FormControl>
+                <FormControl><Input className="rounded-xl" placeholder="Rigby" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="contactLastName" render={({ field }) => (
               <FormItem>
                 <FormLabel>Last Name <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input className="rounded-xl" placeholder="Smith" {...field} /></FormControl>
+                <FormControl><Input className="rounded-xl" placeholder="Levy" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
