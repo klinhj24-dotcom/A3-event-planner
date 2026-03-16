@@ -7,10 +7,18 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
+function getAppDomain(): string {
+  // In production deployments REPLIT_DEPLOYMENT is set to "1"
+  if (process.env.REPLIT_DEPLOYMENT === "1") {
+    return process.env.APP_DOMAIN ?? "event-mgmt.replit.app";
+  }
+  return process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080";
+}
+
 export function createOAuth2Client() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = `https://${process.env.REPLIT_DEV_DOMAIN}/api/auth/google/callback`;
+  const redirectUri = `https://${getAppDomain()}/api/auth/google/callback`;
 
   if (!clientId || !clientSecret) {
     throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set");
