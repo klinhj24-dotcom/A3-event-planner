@@ -32,9 +32,9 @@ export default function Dashboard() {
 
   // Use brand colors for stat cards
   const statCards = [
-    { title: "Total Contacts", value: stats?.totalContacts || 0, icon: Users, color: "text-[#7250ef]", bg: "bg-[#7250ef]/10" },
-    { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10" },
-    { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10" },
+    { title: "Total Contacts", value: stats?.totalContacts || 0, icon: Users, color: "text-[#7250ef]", bg: "bg-[#7250ef]/10", href: "/contacts" },
+    { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10", href: "/events" },
+    { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10", href: "/employees" },
     { title: "Pending Signups", value: stats?.pendingSignups || 0, icon: ClipboardList, color: "text-[#f7b617]", bg: "bg-[#f7b617]/10" },
   ];
 
@@ -47,30 +47,33 @@ export default function Dashboard() {
         </div>
 
         <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          {statCards.map((stat, i) => (
-            <Card key={i} className="border-border/10 bg-card shadow-md shadow-black/10 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group">
-              <CardContent className="p-6 relative">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2 z-10">
-                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                    <p className="font-display text-4xl font-bold text-foreground tracking-tight">{stat.value}</p>
-                    {i === 0 && (stats?.overdueContacts ?? 0) > 0 && (
-                      <Link href="/contacts">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-full px-2 py-0.5 cursor-pointer hover:bg-destructive/20 transition-colors">
+          {statCards.map((stat, i) => {
+            const card = (
+              <Card key={i} className={`border-border/10 bg-card shadow-md shadow-black/10 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group${stat.href ? " cursor-pointer" : ""}`}>
+                <CardContent className="p-6 relative">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-2 z-10">
+                      <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
+                      <p className="font-display text-4xl font-bold text-foreground tracking-tight">{stat.value}</p>
+                      {i === 0 && (stats?.overdueContacts ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-full px-2 py-0.5">
                           <AlertTriangle className="h-3 w-3" />
                           {stats!.overdueContacts} overdue
                         </span>
-                      </Link>
-                    )}
+                      )}
+                    </div>
+                    <div className={`p-3 rounded-xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300`}>
+                      <stat.icon className="h-6 w-6" />
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300`}>
-                    <stat.icon className="h-6 w-6" />
-                  </div>
-                </div>
-                <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full ${stat.bg} blur-2xl opacity-50 transition-opacity group-hover:opacity-100`} />
-              </CardContent>
-            </Card>
-          ))}
+                  <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full ${stat.bg} blur-2xl opacity-50 transition-opacity group-hover:opacity-100`} />
+                </CardContent>
+              </Card>
+            );
+            return stat.href
+              ? <Link key={i} href={stat.href}>{card}</Link>
+              : card;
+          })}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
