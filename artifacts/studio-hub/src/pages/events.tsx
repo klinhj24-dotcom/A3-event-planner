@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, Copy, ExternalLink, ChevronRight, Info
+  Clock, ExternalLink, ChevronRight, Info
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -625,14 +625,6 @@ function EventOverviewSheet({
 
   const startDate = event.startDate ? new Date(event.startDate) : null;
   const endDate = event.endDate ? new Date(event.endDate) : null;
-  const domain = window.location.host;
-  const signupUrl = event.signupToken ? `https://${domain}/signup/${event.signupToken}` : null;
-
-  function copySignupLink() {
-    if (!signupUrl) return;
-    navigator.clipboard.writeText(signupUrl).then(() => toast({ title: "Signup link copied!" }));
-  }
-
   const ACTIONS = [
     { label: "Edit Event", icon: <Pencil className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onEdit(event); } },
     { label: "Comm Tasks", icon: <ClipboardList className="h-4 w-4" />, color: "text-foreground", bg: "hover:bg-muted/60", fn: () => { onClose(); actions.onTasks(event); } },
@@ -743,19 +735,6 @@ function EventOverviewSheet({
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Internal Notes</h4>
               <div className="p-3 rounded-xl bg-muted/30 border border-border/40">
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{event.notes}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Signup link */}
-          {signupUrl && (
-            <div className="space-y-1.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Signup Link</h4>
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border/40">
-                <p className="text-xs text-muted-foreground flex-1 truncate font-mono">{signupUrl}</p>
-                <button onClick={copySignupLink} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
               </div>
             </div>
           )}
