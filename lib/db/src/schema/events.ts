@@ -65,6 +65,8 @@ export const eventTicketRequestsTable = pgTable("event_ticket_requests", {
   // Admin
   status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
   adminNotes: text("admin_notes"),
+  charged: boolean("charged").notNull().default(false),
+  chargedAt: timestamp("charged_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

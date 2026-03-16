@@ -176,10 +176,17 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
   }
   try {
     const requestId = parseInt(req.params.requestId);
-    const { status, adminNotes } = req.body;
+    const { status, adminNotes, charged } = req.body;
     const [updated] = await db
       .update(eventTicketRequestsTable)
-      .set({ status, adminNotes })
+      .set({
+        ...(status !== undefined ? { status } : {}),
+        ...(adminNotes !== undefined ? { adminNotes } : {}),
+        ...(charged !== undefined ? {
+          charged,
+          chargedAt: charged ? new Date() : null,
+        } : {}),
+      })
       .where(eq(eventTicketRequestsTable.id, requestId))
       .returning();
     res.json(updated);

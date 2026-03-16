@@ -650,10 +650,23 @@ function EventOverviewSheet({
   actions: OverviewActions;
 }) {
   const { toast } = useToast();
-  const { data: ticketRequests } = useQuery<any[]>({
+  const { data: ticketRequests, refetch: refetchTickets } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/ticket-requests`],
     queryFn: () => fetch(`/api/events/${event!.id}/ticket-requests`).then(r => r.json()),
     enabled: !!event?.id && !!event?.ticketFormType && event?.ticketFormType !== "none",
+  });
+
+  const { mutate: toggleCharged } = useMutation({
+    mutationFn: async ({ requestId, charged }: { requestId: number; charged: boolean }) => {
+      const res = await fetch(`/api/events/${event!.id}/ticket-requests/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ charged }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => refetchTickets(),
   });
   if (!event) return null;
 
@@ -804,17 +817,33 @@ function EventOverviewSheet({
                 <Ticket className="h-3.5 w-3.5" /> Ticket Requests
                 <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
               </h4>
-              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
                 {ticketRequests.map((r: any) => (
-                  <div key={r.id} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-muted/40 border border-border/40 text-xs">
+                  <div key={r.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs transition-colors ${r.charged ? "bg-emerald-500/5 border-emerald-500/20" : "bg-muted/40 border-border/40"}`}>
+                    {/* Charged checkbox */}
+                    <button
+                      onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
+                      title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
+                      className={`shrink-0 mt-0.5 h-4 w-4 rounded border-2 flex items-center justify-center transition-all ${
+                        r.charged ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-emerald-500"
+                      }`}
+                    >
+                      {r.charged && <CheckCircle2 className="h-3 w-3" />}
+                    </button>
+
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground">{r.contactFirstName} {r.contactLastName}</div>
+                      <div className={`font-medium ${r.charged ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        {r.contactFirstName} {r.contactLastName}
+                      </div>
                       <div className="text-muted-foreground truncate">{r.contactEmail}</div>
                       {r.formType === "recital" && r.studentFirstName && (
                         <div className="text-muted-foreground">Performer: {r.studentFirstName} {r.studentLastName}{r.instrument ? ` · ${r.instrument}` : ""}</div>
                       )}
                       {r.formType === "general" && r.ticketCount && (
                         <div className="text-muted-foreground">{r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}</div>
+                      )}
+                      {r.charged && r.chargedAt && (
+                        <div className="text-emerald-600 text-[10px] mt-0.5">Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
                       )}
                     </div>
                     <span className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize ${
