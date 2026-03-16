@@ -1,6 +1,5 @@
-import { useParams } from "wouter";
+import { useParams, useSearch } from "wouter";
 import { useGetSignupPage, useSubmitSignup } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +23,12 @@ const signupSchema = z.object({
 export default function Signup() {
   const params = useParams();
   const token = params.token || "";
+  const search = useSearch();
   const [submitted, setSubmitted] = useState(false);
+
+  const qp = new URLSearchParams(search);
+  const prefillName = qp.get("name") || "";
+  const prefillEmail = qp.get("email") || "";
 
   const { data: event, isLoading, isError } = useGetSignupPage(token, {
     query: { retry: false }
@@ -38,7 +42,7 @@ export default function Signup() {
 
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: "", email: "", phone: "", role: "Event Staff", notes: "" }
+    defaultValues: { name: prefillName, email: prefillEmail, phone: "", role: "Event Staff", notes: "" }
   });
 
   if (isLoading) {
@@ -143,8 +147,12 @@ export default function Signup() {
             ) : (
               <>
                 <div className="mb-6">
-                  <h2 className="text-2xl font-display font-bold text-white">Join the Team</h2>
-                  <p className="text-zinc-400 mt-1">Fill out the form below to secure your spot.</p>
+                  <h2 className="text-2xl font-display font-bold text-white">
+                    {prefillName ? `Hey, ${prefillName.split(" ")[0]}!` : "Join the Team"}
+                  </h2>
+                  <p className="text-zinc-400 mt-1">
+                    {prefillName ? "Confirm your info below to secure your spot." : "Fill out the form below to secure your spot."}
+                  </p>
                 </div>
                 
                 <Form {...form}>

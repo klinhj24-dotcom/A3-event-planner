@@ -335,7 +335,10 @@ router.post("/events/:id/send-invite", async (req, res) => {
 
     // Build event variables
     const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
-    const signupUrl = `https://${domain}/signup/${event.signupToken}`;
+    const signupParams = new URLSearchParams();
+    if (recipientName) signupParams.set("name", recipientName);
+    if (recipientEmail) signupParams.set("email", recipientEmail);
+    const signupUrl = `https://${domain}/signup/${event.signupToken}?${signupParams.toString()}`;
     const eventDate = event.startDate
       ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(event.startDate))
       : "TBD";
