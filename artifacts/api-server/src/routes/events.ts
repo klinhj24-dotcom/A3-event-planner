@@ -333,11 +333,19 @@ router.post("/events/:id/send-invite", async (req, res) => {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
     if (!user?.googleAccessToken) { res.status(400).json({ error: "Gmail not connected" }); return; }
 
+    // Look up recipient's phone from employees or contacts by email
+    const [empRecord] = await db.select({ phone: employeesTable.phone }).from(employeesTable).where(eq(employeesTable.email, recipientEmail));
+    const [contactRecord] = !empRecord?.phone
+      ? await db.select({ phone: contactsTable.phone }).from(contactsTable).where(eq(contactsTable.email, recipientEmail))
+      : [null];
+    const recipientPhone = empRecord?.phone || contactRecord?.phone || "";
+
     // Build event variables
     const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
     const signupParams = new URLSearchParams();
     if (recipientName) signupParams.set("name", recipientName);
     if (recipientEmail) signupParams.set("email", recipientEmail);
+    if (recipientPhone) signupParams.set("phone", recipientPhone);
     const signupUrl = `https://${domain}/signup/${event.signupToken}?${signupParams.toString()}`;
     const eventDate = event.startDate
       ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(event.startDate))

@@ -29,6 +29,7 @@ export default function Signup() {
   const qp = new URLSearchParams(search);
   const prefillName = qp.get("name") || "";
   const prefillEmail = qp.get("email") || "";
+  const prefillPhone = qp.get("phone") || "";
 
   const { data: event, isLoading, isError } = useGetSignupPage(token, {
     query: { retry: false }
@@ -42,7 +43,7 @@ export default function Signup() {
 
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: prefillName, email: prefillEmail, phone: "", role: "Event Staff", notes: "" }
+    defaultValues: { name: prefillName, email: prefillEmail, phone: prefillPhone, role: "Event Staff", notes: "" }
   });
 
   if (isLoading) {
