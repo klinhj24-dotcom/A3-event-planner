@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { db, packingTemplatesTable, eventPackingTable, eventsTable } from "@workspace/db";
+import { db, packingTemplatesTable, eventPackingTable, eventsTable, packingPresetGroupsTable, packingPresetItemsTable } from "@workspace/db";
 import { eq, and, or, isNull, asc } from "drizzle-orm";
 
 const router = Router();
 
-// ── Built-in packing presets ───────────────────────────────────────────────────
+// ── Built-in seed data (used only for first-time auto-seed) ───────────────────
 const PACKING_PRESETS: Record<string, Array<{ name: string; category: string }>> = {
   "Band Backline": [
     { name: "Guitar Amp", category: "Sound & AV" },
@@ -202,36 +202,140 @@ router.post("/events/:id/packing/from-templates", async (req, res) => {
   }
 });
 
-// Add items from a named preset group
+// ── Helper: seed built-in presets if DB is empty ─────────────────────────────
+async function seedPresetsIfEmpty() {
+  const existing = await db.select({ id: packingPresetGroupsTable.id }).from(packingPresetGroupsTable);
+  if (existing.length > 0) return;
+  for (const [name, items] of Object.entries(PACKING_PRESETS)) {
+    const [group] = await db.insert(packingPresetGroupsTable).values({ name }).returning();
+    await db.insert(packingPresetItemsTable).values(
+      items.map((item, i) => ({ groupId: group.id, name: item.name, category: item.category, sortOrder: i }))
+    );
+  }
+}
+
+// List preset groups (auto-seeds on first call)
+router.get("/packing-presets", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    await seedPresetsIfEmpty();
+    const groups = await db.select().from(packingPresetGroupsTable).orderBy(asc(packingPresetGroupsTable.id));
+    const items = await db.select().from(packingPresetItemsTable).orderBy(asc(packingPresetItemsTable.sortOrder));
+    const list = groups.map(g => ({
+      id: g.id,
+      name: g.name,
+      itemCount: items.filter(i => i.groupId === g.id).length,
+      items: items.filter(i => i.groupId === g.id),
+    }));
+    res.json(list);
+  } catch (err) {
+    console.error("listPresets error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Create a new preset group
+router.post("/packing-presets", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { name } = req.body;
+    if (!name) { res.status(400).json({ error: "name required" }); return; }
+    const [group] = await db.insert(packingPresetGroupsTable).values({ name }).returning();
+    res.json({ ...group, itemCount: 0, items: [] });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Rename a preset group
+router.put("/packing-presets/:id", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { name } = req.body;
+    const [group] = await db.update(packingPresetGroupsTable)
+      .set({ name }).where(eq(packingPresetGroupsTable.id, parseInt(req.params.id))).returning();
+    if (!group) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete a preset group (cascades items)
+router.delete("/packing-presets/:id", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    await db.delete(packingPresetGroupsTable).where(eq(packingPresetGroupsTable.id, parseInt(req.params.id)));
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Add item to a preset group
+router.post("/packing-presets/:id/items", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const groupId = parseInt(req.params.id);
+    const { name, category = "General" } = req.body;
+    if (!name) { res.status(400).json({ error: "name required" }); return; }
+    const existing = await db.select({ sortOrder: packingPresetItemsTable.sortOrder })
+      .from(packingPresetItemsTable).where(eq(packingPresetItemsTable.groupId, groupId));
+    const sortOrder = existing.length;
+    const [item] = await db.insert(packingPresetItemsTable).values({ groupId, name, category, sortOrder }).returning();
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete item from a preset group
+router.delete("/packing-presets/:groupId/items/:itemId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    await db.delete(packingPresetItemsTable).where(eq(packingPresetItemsTable.id, parseInt(req.params.itemId)));
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Add items from a preset group to an event packing list
 router.post("/events/:id/packing/from-preset", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const eventId = parseInt(req.params.id);
-    const { presetName } = req.body;
-    const preset = PACKING_PRESETS[presetName];
-    if (!preset) { res.status(400).json({ error: "Unknown preset" }); return; }
+    const { presetName, presetId } = req.body;
+
+    let presetItems: Array<{ name: string; category: string }> = [];
+    if (presetId) {
+      presetItems = await db.select().from(packingPresetItemsTable)
+        .where(eq(packingPresetItemsTable.groupId, parseInt(presetId)));
+    } else if (presetName) {
+      // fallback: find group by name
+      const [group] = await db.select().from(packingPresetGroupsTable)
+        .where(eq(packingPresetGroupsTable.name, presetName));
+      if (group) {
+        presetItems = await db.select().from(packingPresetItemsTable)
+          .where(eq(packingPresetItemsTable.groupId, group.id));
+      }
+    }
+    if (presetItems.length === 0) { res.status(400).json({ error: "Unknown preset or empty group" }); return; }
 
     const existing = await db.select({ name: eventPackingTable.name })
       .from(eventPackingTable).where(eq(eventPackingTable.eventId, eventId));
     const existingNames = new Set(existing.map(e => e.name.toLowerCase()));
 
-    const toInsert = preset.filter(item => !existingNames.has(item.name.toLowerCase()));
+    const toInsert = presetItems.filter(item => !existingNames.has(item.name.toLowerCase()));
     if (toInsert.length > 0) {
       await db.insert(eventPackingTable)
         .values(toInsert.map(item => ({ eventId, name: item.name, category: item.category })));
     }
-    res.json({ added: toInsert.length, skipped: preset.length - toInsert.length });
+    res.json({ added: toInsert.length, skipped: presetItems.length - toInsert.length });
   } catch (err) {
     console.error("fromPreset error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
-});
-
-// List available presets
-router.get("/packing-presets", (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const list = Object.entries(PACKING_PRESETS).map(([name, items]) => ({ name, itemCount: items.length, items }));
-  res.json(list);
 });
 
 router.put("/events/:id/packing/:itemId", async (req, res) => {

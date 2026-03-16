@@ -10,14 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle, Layers
+  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle, Layers, X
 } from "lucide-react";
 
 // ── Preset types ──────────────────────────────────────────────────────────────
 interface PackingPreset {
+  id: number;
   name: string;
   itemCount: number;
-  items: Array<{ name: string; category: string }>;
+  items: Array<{ id: number; name: string; category: string }>;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -161,27 +162,70 @@ export function PackingSheet({ event, open, onClose }: {
 
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
-  const [addingPreset, setAddingPreset] = useState<string | null>(null);
+  const [addingPreset, setAddingPreset] = useState<number | null>(null);
   const { mutate: addFromPreset } = useMutation({
-    mutationFn: async (presetName: string) => {
+    mutationFn: async (preset: PackingPreset) => {
       const r = await fetch(`/api/events/${eventId}/packing/from-preset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ presetName }),
+        body: JSON.stringify({ presetId: preset.id, presetName: preset.name }),
       });
       return r.json();
     },
-    onSuccess: (data, presetName) => {
+    onSuccess: (data, preset) => {
       qc.invalidateQueries({ queryKey: [`/api/events/${eventId}/packing`] });
       setAddingPreset(null);
-      toast({ title: data.added > 0 ? `Added ${data.added} items from "${presetName}"` : `All "${presetName}" items already in list` });
+      toast({ title: data.added > 0 ? `Added ${data.added} items from "${preset.name}"` : `All "${preset.name}" items already in list` });
     },
     onError: () => { setAddingPreset(null); toast({ title: "Failed to add preset", variant: "destructive" }); },
   });
 
   const [presetsOpen, setPresetsOpen] = useState(true);
-  const [expandedPreset, setExpandedPreset] = useState<string | null>(null);
+  const [expandedPreset, setExpandedPreset] = useState<number | null>(null);
+  const [editingPresets, setEditingPresets] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [addItemGroupId, setAddItemGroupId] = useState<number | null>(null);
+  const [newItemForPreset, setNewItemForPreset] = useState("");
+  const [newItemCatForPreset, setNewItemCatForPreset] = useState("General");
+
+  const { mutate: createPresetGroup } = useMutation({
+    mutationFn: async (name: string) => {
+      const r = await fetch("/api/packing-presets", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ name }) });
+      return r.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/packing-presets"] }); setNewGroupName(""); setNewGroupOpen(false); },
+  });
+
+  const { mutate: renamePresetGroup } = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      await fetch(`/api/packing-presets/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ name }) });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/packing-presets"] }); setEditingGroupId(null); },
+  });
+
+  const { mutate: deletePresetGroup } = useMutation({
+    mutationFn: async (id: number) => { await fetch(`/api/packing-presets/${id}`, { method: "DELETE", credentials: "include" }); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/packing-presets"] }),
+  });
+
+  const { mutate: addPresetItem } = useMutation({
+    mutationFn: async ({ groupId, name, category }: { groupId: number; name: string; category: string }) => {
+      const r = await fetch(`/api/packing-presets/${groupId}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ name, category }) });
+      return r.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/packing-presets"] }); setNewItemForPreset(""); },
+  });
+
+  const { mutate: deletePresetItem } = useMutation({
+    mutationFn: async ({ groupId, itemId }: { groupId: number; itemId: number }) => {
+      await fetch(`/api/packing-presets/${groupId}/items/${itemId}`, { method: "DELETE", credentials: "include" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/packing-presets"] }),
+  });
 
   // ── Add custom item ───────────────────────────────────────────────────────────
   const [newItemName, setNewItemName] = useState("");
@@ -284,55 +328,115 @@ export function PackingSheet({ event, open, onClose }: {
           <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
 
             {/* Preset Groups */}
-            <button
-              onClick={() => setPresetsOpen(o => !o)}
-              className="flex items-center justify-between px-4 py-3 border-b border-border/20 hover:bg-muted/20 transition-colors shrink-0"
-            >
-              <span className="text-sm font-semibold flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5 text-primary" /> Preset Groups
-              </span>
-              {presetsOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border/20 shrink-0">
+              <button onClick={() => setPresetsOpen(o => !o)} className="flex-1 flex items-center gap-1.5 text-left hover:opacity-80 transition-opacity">
+                <Layers className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm font-semibold">Preset Groups</span>
+                {presetsOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+              </button>
+              <button
+                onClick={() => setEditingPresets(e => !e)}
+                className={`ml-2 shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${editingPresets ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {editingPresets ? "Done" : "Edit"}
+              </button>
+            </div>
 
             {presetsOpen && (
-              <div className="border-b border-border/20 p-2 space-y-1 shrink-0">
+              <div className="border-b border-border/20 p-2 space-y-1 overflow-y-auto shrink-0 max-h-72">
                 {presets.map(preset => {
-                  const isExpanded = expandedPreset === preset.name;
-                  const isAdding = addingPreset === preset.name;
+                  const isExpanded = expandedPreset === preset.id;
+                  const isAdding = addingPreset === preset.id;
+                  const isEditingName = editingGroupId === preset.id;
                   return (
-                    <div key={preset.name} className="rounded-lg border border-border/20 bg-muted/10 overflow-hidden">
-                      <div className="flex items-center gap-2 px-2.5 py-2">
-                        <button
-                          className="flex-1 flex items-center gap-1.5 text-left min-w-0"
-                          onClick={() => setExpandedPreset(isExpanded ? null : preset.name)}
-                        >
-                          <span className="text-xs font-medium text-foreground truncate">{preset.name}</span>
-                          <span className="text-[10px] text-muted-foreground shrink-0">{preset.itemCount}</span>
-                          {isExpanded
-                            ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
-                            : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
-                        </button>
-                        <button
-                          onClick={() => { setAddingPreset(preset.name); addFromPreset(preset.name); }}
-                          disabled={isAdding}
-                          className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
-                        >
-                          {isAdding ? "Adding…" : "+ Add"}
-                        </button>
+                    <div key={preset.id} className="rounded-lg border border-border/20 bg-muted/10 overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-2.5 py-2">
+                        {isEditingName ? (
+                          <div className="flex-1 flex items-center gap-1">
+                            <Input
+                              value={editGroupName}
+                              onChange={e => setEditGroupName(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") renamePresetGroup({ id: preset.id, name: editGroupName }); if (e.key === "Escape") setEditingGroupId(null); }}
+                              autoFocus
+                              className="h-6 text-xs rounded px-1.5 flex-1"
+                            />
+                            <button onClick={() => renamePresetGroup({ id: preset.id, name: editGroupName })} className="text-primary p-0.5"><Check className="h-3 w-3" /></button>
+                            <button onClick={() => setEditingGroupId(null)} className="text-muted-foreground p-0.5"><X className="h-3 w-3" /></button>
+                          </div>
+                        ) : (
+                          <button
+                            className="flex-1 flex items-center gap-1.5 text-left min-w-0"
+                            onClick={() => setExpandedPreset(isExpanded ? null : preset.id)}
+                          >
+                            <span className="text-xs font-medium text-foreground truncate">{preset.name}</span>
+                            <span className="text-[10px] text-muted-foreground shrink-0">{preset.itemCount}</span>
+                            {isExpanded ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
+                          </button>
+                        )}
+                        {editingPresets && !isEditingName && (
+                          <div className="flex gap-0.5 shrink-0">
+                            <button onClick={() => { setEditingGroupId(preset.id); setEditGroupName(preset.name); }} className="p-0.5 text-muted-foreground hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                            <button onClick={() => deletePresetGroup(preset.id)} className="p-0.5 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                          </div>
+                        )}
+                        {!editingPresets && !isEditingName && (
+                          <button
+                            onClick={() => { setAddingPreset(preset.id); addFromPreset(preset); }}
+                            disabled={isAdding}
+                            className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                          >
+                            {isAdding ? "Adding…" : "+ Add"}
+                          </button>
+                        )}
                       </div>
                       {isExpanded && (
                         <div className="px-2.5 pb-2 space-y-0.5">
-                          {preset.items.map((item, idx) => (
-                            <p key={idx} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                          {preset.items.map((item) => (
+                            <div key={item.id} className="flex items-center gap-1.5 group/item">
                               <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                              {item.name}
-                            </p>
+                              <p className="text-[11px] text-muted-foreground flex-1">{item.name}</p>
+                              {editingPresets && (
+                                <button onClick={() => deletePresetItem({ groupId: preset.id, itemId: item.id })} className="opacity-0 group-hover/item:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity">
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </button>
+                              )}
+                            </div>
                           ))}
+                          {editingPresets && (
+                            addItemGroupId === preset.id ? (
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <Input value={newItemForPreset} onChange={e => setNewItemForPreset(e.target.value)} placeholder="Item name…" className="h-6 text-xs rounded px-1.5 flex-1"
+                                  onKeyDown={e => { if (e.key === "Enter" && newItemForPreset.trim()) { addPresetItem({ groupId: preset.id, name: newItemForPreset.trim(), category: newItemCatForPreset }); setAddItemGroupId(null); } if (e.key === "Escape") setAddItemGroupId(null); }} autoFocus />
+                                <Select value={newItemCatForPreset} onValueChange={setNewItemCatForPreset}>
+                                  <SelectTrigger className="h-6 w-24 text-[10px] rounded px-1"><SelectValue /></SelectTrigger>
+                                  <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
+                                </Select>
+                                <button onClick={() => { if (newItemForPreset.trim()) { addPresetItem({ groupId: preset.id, name: newItemForPreset.trim(), category: newItemCatForPreset }); setAddItemGroupId(null); }}} className="text-primary p-0.5"><Check className="h-3 w-3" /></button>
+                              </div>
+                            ) : (
+                              <button onClick={() => { setAddItemGroupId(preset.id); setNewItemForPreset(""); setExpandedPreset(preset.id); }} className="mt-1 text-[10px] text-primary flex items-center gap-0.5 hover:underline">
+                                <Plus className="h-2.5 w-2.5" /> Add item
+                              </button>
+                            )
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })}
+                {editingPresets && (
+                  newGroupOpen ? (
+                    <div className="flex items-center gap-1 px-1 pt-1">
+                      <Input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Group name…" className="h-7 text-xs rounded-lg flex-1"
+                        onKeyDown={e => { if (e.key === "Enter" && newGroupName.trim()) createPresetGroup(newGroupName.trim()); if (e.key === "Escape") setNewGroupOpen(false); }} autoFocus />
+                      <button onClick={() => { if (newGroupName.trim()) createPresetGroup(newGroupName.trim()); }} className="text-primary p-1"><Check className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setNewGroupOpen(true)} className="w-full flex items-center justify-center gap-1 text-xs text-primary py-1.5 rounded-lg border border-dashed border-primary/30 hover:bg-primary/5 transition-colors mt-1">
+                      <Plus className="h-3 w-3" /> New Group
+                    </button>
+                  )
+                )}
               </div>
             )}
 

@@ -74,7 +74,7 @@ function SlotCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
-    assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "",
+    assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned",
     startTime: toLocalInput(slot.startTime),
     endTime: toLocalInput(slot.endTime),
     notes: slot.notes ?? "",
@@ -84,7 +84,7 @@ function SlotCard({
 
   function save() {
     onUpdate(slot.id, {
-      assignedEmployeeId: form.assignedEmployeeId ? Number(form.assignedEmployeeId) : null,
+      assignedEmployeeId: form.assignedEmployeeId && form.assignedEmployeeId !== "unassigned" ? Number(form.assignedEmployeeId) : null,
       startTime: form.startTime || null,
       endTime: form.endTime || null,
       notes: form.notes || null,
@@ -100,7 +100,7 @@ function SlotCard({
           <Select value={form.assignedEmployeeId} onValueChange={v => setForm(f => ({ ...f, assignedEmployeeId: v }))}>
             <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Leave unassigned…" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Unassigned</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
               {employees.map(e => (
                 <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
               ))}
@@ -141,7 +141,7 @@ function SlotCard({
         <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "" }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
+        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "" }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
           <Pencil className="h-3 w-3" />
         </button>
         <button onClick={() => onDelete(slot.id)} className="text-muted-foreground hover:text-destructive p-1">
@@ -191,7 +191,7 @@ export function StaffSlotsSheet({
   // ── Add slot dialog ────────────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({
-    roleTypeId: "", assignedEmployeeId: "", startTime: "", endTime: "", notes: "",
+    roleTypeId: "", assignedEmployeeId: "unassigned", startTime: "", endTime: "", notes: "",
   });
 
   const { mutate: addSlot, isPending: adding } = useMutation({
@@ -202,7 +202,7 @@ export function StaffSlotsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
-      setAddForm({ roleTypeId: "", assignedEmployeeId: "", startTime: "", endTime: "", notes: "" });
+      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startTime: "", endTime: "", notes: "" });
       setAddOpen(false);
       toast({ title: "Slot added" });
     },
@@ -352,7 +352,7 @@ export function StaffSlotsSheet({
               <Select value={addForm.assignedEmployeeId} onValueChange={v => setAddForm(f => ({ ...f, assignedEmployeeId: v }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue placeholder="Leave unassigned for now…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {employees.map(e => (
                     <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
                   ))}
@@ -381,7 +381,7 @@ export function StaffSlotsSheet({
             <Button className="rounded-xl" disabled={!addForm.roleTypeId || adding}
               onClick={() => addSlot({
                 roleTypeId: Number(addForm.roleTypeId),
-                assignedEmployeeId: addForm.assignedEmployeeId ? Number(addForm.assignedEmployeeId) : null,
+                assignedEmployeeId: addForm.assignedEmployeeId && addForm.assignedEmployeeId !== "unassigned" ? Number(addForm.assignedEmployeeId) : null,
                 startTime: addForm.startTime || null,
                 endTime: addForm.endTime || null,
                 notes: addForm.notes || null,
