@@ -41,6 +41,32 @@ function toLocalInput(iso: string | null | undefined): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+function toDatePart(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function toTimePart(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtDateLabel(dateStr: string): string {
+  if (!dateStr) return "";
+  return format(new Date(dateStr + "T00:00:00"), "EEE, MMM d");
+}
+const TIME_OPTIONS: { value: string; label: string }[] = Array.from({ length: 96 }, (_, i) => {
+  const h = Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const value = `${pad(h)}:${pad(m)}`;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const label = `${h12}:${pad(m)} ${period}`;
+  return { value, label };
+});
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "";
   return format(new Date(iso), "EEE M/d, h:mm a");
@@ -191,8 +217,22 @@ export function StaffSlotsSheet({
   // ── Add slot dialog ────────────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({
-    roleTypeId: "", assignedEmployeeId: "unassigned", startTime: "", endTime: "", notes: "",
+    roleTypeId: "", assignedEmployeeId: "unassigned",
+    startDate: "", startTime: "", endDate: "", endTime: "", notes: "",
   });
+
+  function openAddDialog(presetRoleTypeId?: string) {
+    const sd = toDatePart(event?.startDate);
+    const st = toTimePart(event?.startDate);
+    const ed = toDatePart(event?.endDate) || sd;
+    const et = toTimePart(event?.endDate) || st;
+    setAddForm({
+      roleTypeId: presetRoleTypeId || "",
+      assignedEmployeeId: "unassigned",
+      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "",
+    });
+    setAddOpen(true);
+  }
 
   const { mutate: addSlot, isPending: adding } = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -202,7 +242,7 @@ export function StaffSlotsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
-      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startTime: "", endTime: "", notes: "" });
+      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "" });
       setAddOpen(false);
       toast({ title: "Slot added" });
     },
@@ -270,7 +310,7 @@ export function StaffSlotsSheet({
                 <Badge variant="outline" className="text-xs rounded-lg">
                   {filledSlots}/{totalSlots} filled
                 </Badge>
-                <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => setAddOpen(true)}>
+                <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => openAddDialog()}>
                   <Plus className="h-3.5 w-3.5" /> Add Slot
                 </Button>
               </div>
@@ -300,7 +340,7 @@ export function StaffSlotsSheet({
                     </div>
                     <button
                       className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
-                      onClick={() => { setAddForm(f => ({ ...f, roleTypeId: String(roleType.id) })); setAddOpen(true); }}
+                      onClick={() => openAddDialog(String(roleType.id))}
                     >
                       <Plus className="h-3 w-3" /> slot
                     </button>
@@ -363,11 +403,23 @@ export function StaffSlotsSheet({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shift Start</label>
-                <Input type="datetime-local" className="rounded-xl" value={addForm.startTime} onChange={e => setAddForm(f => ({ ...f, startTime: e.target.value }))} />
+                <Input type="date" className="rounded-xl h-9 text-sm" value={addForm.startDate} onChange={e => setAddForm(f => ({ ...f, startDate: e.target.value }))} />
+                <Select value={addForm.startTime} onValueChange={v => setAddForm(f => ({ ...f, startTime: v }))}>
+                  <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Time…" /></SelectTrigger>
+                  <SelectContent className="max-h-52">
+                    {TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shift End</label>
-                <Input type="datetime-local" className="rounded-xl" value={addForm.endTime} onChange={e => setAddForm(f => ({ ...f, endTime: e.target.value }))} />
+                <Input type="date" className="rounded-xl h-9 text-sm" value={addForm.endDate} onChange={e => setAddForm(f => ({ ...f, endDate: e.target.value }))} />
+                <Select value={addForm.endTime} onValueChange={v => setAddForm(f => ({ ...f, endTime: v }))}>
+                  <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Time…" /></SelectTrigger>
+                  <SelectContent className="max-h-52">
+                    {TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -382,8 +434,8 @@ export function StaffSlotsSheet({
               onClick={() => addSlot({
                 roleTypeId: Number(addForm.roleTypeId),
                 assignedEmployeeId: addForm.assignedEmployeeId && addForm.assignedEmployeeId !== "unassigned" ? Number(addForm.assignedEmployeeId) : null,
-                startTime: addForm.startTime || null,
-                endTime: addForm.endTime || null,
+                startTime: addForm.startDate && addForm.startTime ? `${addForm.startDate}T${addForm.startTime}:00` : null,
+                endTime: addForm.endDate && addForm.endTime ? `${addForm.endDate}T${addForm.endTime}:00` : null,
                 notes: addForm.notes || null,
               })}>
               Add Slot
