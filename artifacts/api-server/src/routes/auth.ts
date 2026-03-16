@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import {
   clearSession,
   getSessionId,
@@ -90,18 +91,28 @@ router.get("/logout", async (req: Request, res: Response) => {
   res.redirect("/login");
 });
 
+function generateTempPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let pw = "";
+  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
 // ── Admin: create portal user ─────────────────────────────────────────────────
 router.post("/users", async (req: Request, res: Response) => {
   if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const { email, password, firstName, lastName, role } = req.body;
-  if (!email || !password) {
-    res.status(400).json({ error: "Email and password are required" });
+  const { email, firstName, lastName, role } = req.body;
+  if (!email) {
+    res.status(400).json({ error: "Email is required" });
     return;
   }
-  const passwordHash = await bcrypt.hash(password, 12);
+
+  const tempPassword = generateTempPassword();
+  const passwordHash = await bcrypt.hash(tempPassword, 12);
+
   try {
     const [user] = await db
       .insert(usersTable)
@@ -113,8 +124,48 @@ router.post("/users", async (req: Request, res: Response) => {
         role: role || "employee",
       })
       .returning();
+
+    // Fire-and-forget welcome email
+    (async () => {
+      try {
+        // Find first user with Gmail connected
+        const allUsers = await db.select().from(usersTable);
+        const gmailSender = allUsers.find((u) => u.googleAccessToken && u.googleRefreshToken);
+        if (!gmailSender) return;
+
+        const displayName = firstName ? `${firstName}${lastName ? " " + lastName : ""}` : email;
+        const appUrl = process.env.REPLIT_DEPLOYMENT === "1"
+          ? `https://${process.env.APP_DOMAIN ?? "event-mgmt.replit.app"}`
+          : `https://${process.env.REPLIT_DEV_DOMAIN}`;
+
+        const html = buildHtmlEmail({
+          recipientName: displayName,
+          body: `Hi ${displayName},\n\nYour TMS Events & Contacts portal account has been created. Use the details below to sign in:\n\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nPlease change your password after your first login — you can do this from the Settings page.\n\nIf you have any questions, just reply to this email.`,
+          ctaLabel: "Sign In to TMS Portal",
+          ctaUrl: `${appUrl}/login`,
+        });
+
+        const authClient = createAuthedClient(
+          gmailSender.googleAccessToken!,
+          gmailSender.googleRefreshToken!,
+          gmailSender.googleTokenExpiry,
+        );
+        const { google } = await import("googleapis");
+        const gmail = google.gmail({ version: "v1", auth: authClient });
+        const raw = makeHtmlEmail({
+          to: email,
+          from: gmailSender.googleEmail ?? gmailSender.email ?? "",
+          subject: "Your TMS Portal Login",
+          html,
+        });
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+      } catch (emailErr) {
+        console.error("Welcome email failed (non-fatal):", emailErr);
+      }
+    })();
+
     const { passwordHash: _ph, ...safeUser } = user as any;
-    res.json(safeUser);
+    res.json({ ...safeUser, tempPassword });
   } catch (err: any) {
     if (err.code === "23505") {
       res.status(409).json({ error: "A user with that email already exists" });

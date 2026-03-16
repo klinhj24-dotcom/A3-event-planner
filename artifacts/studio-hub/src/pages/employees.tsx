@@ -32,7 +32,6 @@ const portalUserSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().optional(),
   email: z.string().email("Valid email required"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
   role: z.enum(["admin", "employee"]),
 });
 
@@ -47,7 +46,6 @@ export default function Employees() {
   const [resetPwTarget, setResetPwTarget] = useState<any | null>(null);
   const [newPw, setNewPw] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [showCreatePw, setShowCreatePw] = useState(false);
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
   const { mutate: updateRole } = useUpdateUserRole();
@@ -83,7 +81,7 @@ export default function Employees() {
   // Create a portal login account
   const portalForm = useForm<z.infer<typeof portalUserSchema>>({
     resolver: zodResolver(portalUserSchema),
-    defaultValues: { firstName: "", lastName: "", email: "", password: "", role: "employee" },
+    defaultValues: { firstName: "", lastName: "", email: "", role: "employee" },
   });
 
   const { mutate: createPortalUser, isPending: isCreatingPortal } = useMutation({
@@ -101,13 +99,12 @@ export default function Employees() {
     },
     onSuccess: async (newUser) => {
       await refetchPortalUsers();
-      // Auto-link to the employee record if we opened the dialog from a card
       if (createPortalFor) {
         linkUser({ employeeId: createPortalFor.id, userId: newUser.id });
       }
       setCreatePortalFor(null);
       portalForm.reset();
-      toast({ title: "Portal account created" });
+      toast({ title: "Portal account created", description: "A welcome email with login instructions has been sent." });
     },
     onError: (err: any) => toast({ title: err.message, variant: "destructive" }),
   });
@@ -526,8 +523,8 @@ export default function Employees() {
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Create Portal Login</DialogTitle>
             <p className="text-sm text-muted-foreground pt-1">
-              Set up login credentials for <span className="font-medium text-foreground">{createPortalFor?.name}</span>.
-              They'll use their email and password to sign in.
+              Create an account for <span className="font-medium text-foreground">{createPortalFor?.name}</span>.
+              A welcome email with their temporary password will be sent automatically.
             </p>
           </DialogHeader>
           <Form {...portalForm}>
@@ -551,20 +548,6 @@ export default function Employees() {
                 <FormItem>
                   <FormLabel>Login Email *</FormLabel>
                   <FormControl><Input type="email" className="rounded-xl" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={portalForm.control} name="password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password *</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input type={showCreatePw ? "text" : "password"} className="rounded-xl pr-10" placeholder="Min. 8 characters" {...field} />
-                      <button type="button" onClick={() => setShowCreatePw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
-                        {showCreatePw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
