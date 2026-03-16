@@ -7,47 +7,53 @@ interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: () => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const fetchUser = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/user", { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as { user: AuthUser | null };
+      setUser(data.user ?? null);
+    } catch {
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
+    fetchUser();
+  }, [fetchUser]);
 
-    fetch("/api/auth/user", { credentials: "include" })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<{ user: AuthUser | null }>;
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setUser(data.user ?? null);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUser(null);
-          setIsLoading(false);
-        }
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-
-    return () => {
-      cancelled = true;
-    };
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || "Login failed" };
+      setUser(data.user);
+      return {};
+    } catch {
+      return { error: "Network error, please try again" };
+    }
   }, []);
 
-  const login = useCallback(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
-  }, []);
-
-  const logout = useCallback(() => {
-    window.location.href = "/api/logout";
+  const logout = useCallback(async () => {
+    await fetch("/api/logout", { method: "POST", credentials: "include" });
+    setUser(null);
+    window.location.href = "/login";
   }, []);
 
   return {
@@ -56,5 +62,6 @@ export function useAuth(): AuthState {
     isAuthenticated: !!user,
     login,
     logout,
+    refetch: fetchUser,
   };
 }

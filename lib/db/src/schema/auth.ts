@@ -20,6 +20,7 @@ export const usersTable = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  passwordHash: varchar("password_hash"),
   role: text("role").notNull().default("employee"), // 'admin' | 'employee'
   googleAccessToken: text("google_access_token"),
   googleRefreshToken: text("google_refresh_token"),

@@ -4,12 +4,13 @@ import { useListEmployees, useCreateEmployee } from "@workspace/api-client-react
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Search, UserPlus, Mail, Phone, Loader2, Link2, LinkIcon, Unlink, Pencil, Shield, ShieldOff } from "lucide-react";
+import { Search, UserPlus, Mail, Phone, Loader2, Link2, Unlink, Pencil, Shield, ShieldOff, KeyRound, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +28,14 @@ const employeeSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const portalUserSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().optional(),
+  email: z.string().email("Valid email required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["admin", "employee"]),
+});
+
 export default function Employees() {
   const [search, setSearch] = useState("");
   const { data: employees, isLoading } = useListEmployees();
@@ -34,13 +43,16 @@ export default function Employees() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<any | null>(null);
-  const [linkTarget, setLinkTarget] = useState<any | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [createPortalFor, setCreatePortalFor] = useState<any | null>(null);
+  const [resetPwTarget, setResetPwTarget] = useState<any | null>(null);
+  const [newPw, setNewPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [showCreatePw, setShowCreatePw] = useState(false);
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
   const { mutate: updateRole } = useUpdateUserRole();
 
-  const { data: portalUsers } = useQuery<any[]>({
+  const { data: portalUsers, refetch: refetchPortalUsers } = useQuery<any[]>({
     queryKey: ["/api/users"],
     queryFn: async () => {
       const res = await fetch("/api/users");
@@ -50,7 +62,8 @@ export default function Employees() {
     enabled: isAdmin,
   });
 
-  const { mutate: linkUser, isPending: isLinking } = useMutation({
+  // Link employee record to a portal user
+  const { mutate: linkUser } = useMutation({
     mutationFn: async ({ employeeId, userId }: { employeeId: number; userId: string | null }) => {
       const res = await fetch(`/api/employees/${employeeId}`, {
         method: "PUT",
@@ -62,11 +75,74 @@ export default function Employees() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
-      setLinkTarget(null);
-      setSelectedUserId("");
-      toast({ title: vars.userId ? "Account linked successfully" : "Account unlinked" });
+      toast({ title: vars.userId ? "Portal account linked" : "Portal access removed" });
     },
-    onError: () => toast({ title: "Failed to update account link", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to update portal link", variant: "destructive" }),
+  });
+
+  // Create a portal login account
+  const portalForm = useForm<z.infer<typeof portalUserSchema>>({
+    resolver: zodResolver(portalUserSchema),
+    defaultValues: { firstName: "", lastName: "", email: "", password: "", role: "employee" },
+  });
+
+  const { mutate: createPortalUser, isPending: isCreatingPortal } = useMutation({
+    mutationFn: async (data: z.infer<typeof portalUserSchema>) => {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create account");
+      }
+      return res.json();
+    },
+    onSuccess: async (newUser) => {
+      await refetchPortalUsers();
+      // Auto-link to the employee record if we opened the dialog from a card
+      if (createPortalFor) {
+        linkUser({ employeeId: createPortalFor.id, userId: newUser.id });
+      }
+      setCreatePortalFor(null);
+      portalForm.reset();
+      toast({ title: "Portal account created" });
+    },
+    onError: (err: any) => toast({ title: err.message, variant: "destructive" }),
+  });
+
+  // Reset password
+  const { mutate: resetPassword, isPending: isResetting } = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      setResetPwTarget(null);
+      setNewPw("");
+      toast({ title: "Password updated" });
+    },
+    onError: () => toast({ title: "Failed to update password", variant: "destructive" }),
+  });
+
+  // Delete portal user
+  const { mutate: deletePortalUser } = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      refetchPortalUsers();
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({ title: "Portal account removed" });
+    },
+    onError: () => toast({ title: "Failed to delete portal account", variant: "destructive" }),
   });
 
   const { mutate: updateEmployee, isPending: isUpdating } = useMutation({
@@ -76,7 +152,7 @@ export default function Employees() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update employee");
+      if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     onSuccess: () => {
@@ -95,20 +171,20 @@ export default function Employees() {
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
         setCreateOpen(false);
         createForm.reset();
-        toast({ title: "Team member added successfully" });
+        toast({ title: "Team member added" });
       },
-      onError: () => toast({ title: "Failed to add team member", variant: "destructive" })
-    }
+      onError: () => toast({ title: "Failed to add team member", variant: "destructive" }),
+    },
   });
 
   const createForm = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true }
+    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true },
   });
 
   const editForm = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true }
+    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true },
   });
 
   function openEdit(employee: any) {
@@ -125,7 +201,7 @@ export default function Employees() {
 
   const filteredEmployees = employees?.filter(e =>
     e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.role.toLowerCase().includes(search.toLowerCase())
+    e.role.toLowerCase().includes(search.toLowerCase()),
   );
 
   function getPortalUser(userId: string | null | undefined) {
@@ -135,7 +211,7 @@ export default function Employees() {
 
   function getUserDisplayName(u: any) {
     if (!u) return null;
-    return u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username || u.email || "User";
+    return u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.email || "User";
   }
 
   return (
@@ -164,7 +240,7 @@ export default function Employees() {
                       <FormControl><Input placeholder="Alex Smith" className="rounded-xl" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}/>
+                  )} />
                   <FormField control={createForm.control} name="role" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role *</FormLabel>
@@ -177,25 +253,25 @@ export default function Employees() {
                         </SelectContent>
                       </Select>
                     </FormItem>
-                  )}/>
+                  )} />
                   <FormField control={createForm.control} name="email" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl><Input placeholder="alex@studio.com" type="email" className="rounded-xl" {...field} /></FormControl>
                     </FormItem>
-                  )}/>
+                  )} />
                   <FormField control={createForm.control} name="phone" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
                       <FormControl><Input placeholder="(555) 123-4567" className="rounded-xl" {...field} /></FormControl>
                     </FormItem>
-                  )}/>
+                  )} />
                   <FormField control={createForm.control} name="hourlyRate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Hourly Rate ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
                       <FormControl><Input placeholder="e.g. 18.00" type="number" step="0.01" min="0" className="rounded-xl" {...field} /></FormControl>
                     </FormItem>
-                  )}/>
+                  )} />
                   <DialogFooter className="pt-4">
                     <Button type="submit" disabled={isPending} className="w-full rounded-xl">
                       {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -226,25 +302,25 @@ export default function Employees() {
               const portalRole = portalUser?.role;
               return (
                 <div key={employee.id} className="bg-card rounded-2xl p-6 border border-border/50 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                  <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl opacity-10 rounded-bl-full -z-10 transition-opacity group-hover:opacity-20 ${employee.role === 'staff' ? 'from-primary to-transparent' : employee.role === 'teacher' ? 'from-[#00b199] to-transparent' : 'from-orange-500 to-transparent'}`} />
+                  <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl opacity-10 rounded-bl-full -z-10 transition-opacity group-hover:opacity-20 ${employee.role === "staff" ? "from-primary to-transparent" : employee.role === "teacher" ? "from-[#00b199] to-transparent" : "from-orange-500 to-transparent"}`} />
 
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex gap-4 items-center">
                       <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                        <AvatarFallback className={`font-display text-lg ${employee.role === 'staff' ? 'bg-primary/20 text-primary' : employee.role === 'teacher' ? 'bg-[#00b199]/20 text-[#00b199]' : 'bg-orange-500/20 text-orange-600'}`}>
+                        <AvatarFallback className={`font-display text-lg ${employee.role === "staff" ? "bg-primary/20 text-primary" : employee.role === "teacher" ? "bg-[#00b199]/20 text-[#00b199]" : "bg-orange-500/20 text-orange-600"}`}>
                           {employee.name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <h3 className="font-semibold text-lg text-foreground leading-none mb-1.5">{employee.name}</h3>
-                        <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === 'staff' ? 'bg-primary/10 text-primary hover:bg-primary/20' : employee.role === 'teacher' ? 'bg-[#00b199]/10 text-[#00b199] hover:bg-[#00b199]/20' : 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20'}`}>
+                        <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === "staff" ? "bg-primary/10 text-primary hover:bg-primary/20" : employee.role === "teacher" ? "bg-[#00b199]/10 text-[#00b199] hover:bg-[#00b199]/20" : "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"}`}>
                           {employee.role}
                         </Badge>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={employee.isActive ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-muted text-muted-foreground"}>
-                        {employee.isActive ? 'Active' : 'Inactive'}
+                        {employee.isActive ? "Active" : "Inactive"}
                       </Badge>
                       {isAdmin && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => openEdit(employee)}>
@@ -256,13 +332,13 @@ export default function Employees() {
 
                   <div className="space-y-2 mt-5 pt-5 border-t border-border/50">
                     {employee.email && (
-                      <div className="flex items-center text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                      <div className="flex items-center text-sm text-muted-foreground">
                         <Mail className="h-4 w-4 mr-3 opacity-50" />
                         <a href={`mailto:${employee.email}`} className="hover:underline">{employee.email}</a>
                       </div>
                     )}
                     {employee.phone && (
-                      <div className="flex items-center text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                      <div className="flex items-center text-sm text-muted-foreground">
                         <Phone className="h-4 w-4 mr-3 opacity-50" />
                         <a href={`tel:${employee.phone}`} className="hover:underline">{employee.phone}</a>
                       </div>
@@ -275,19 +351,24 @@ export default function Employees() {
                             <div className="flex items-center gap-2">
                               <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-lg flex-1 min-w-0">
                                 <Link2 className="h-3 w-3 shrink-0" />
-                                <span className="truncate">{getUserDisplayName(portalUser)}</span>
+                                <span className="truncate">{portalUser.email}</span>
                               </div>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive rounded-lg"
-                                onClick={() => linkUser({ employeeId: employee.id, userId: null })}
+                                title="Remove portal access"
+                                onClick={() => {
+                                  if (confirm(`Remove portal access for ${employee.name}? This only unlinks the account, it does not delete it.`)) {
+                                    linkUser({ employeeId: employee.id, userId: null });
+                                  }
+                                }}
                               >
                                 <Unlink className="h-3 w-3" />
                               </Button>
                             </div>
                             <div className="flex items-center justify-between px-0.5">
-                              <span className="text-xs text-muted-foreground">Portal access:</span>
+                              <span className="text-xs text-muted-foreground">Portal role:</span>
                               <div className="flex items-center gap-1.5">
                                 {portalRole === "admin" ? (
                                   <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 gap-1">
@@ -321,15 +402,46 @@ export default function Employees() {
                                 </Button>
                               </div>
                             </div>
+                            <div className="flex gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs rounded-lg gap-1.5 flex-1"
+                                onClick={() => { setResetPwTarget(portalUser); setNewPw(""); setShowPw(false); }}
+                              >
+                                <KeyRound className="h-3 w-3" /> Reset Password
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs rounded-lg gap-1 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  if (confirm(`Delete the portal account for ${portalUser.email}? They will no longer be able to log in.`)) {
+                                    deletePortalUser(portalUser.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </>
                         ) : (
                           <Button
                             variant="outline"
                             size="sm"
                             className="h-7 text-xs rounded-lg border-dashed gap-1.5 w-full"
-                            onClick={() => { setLinkTarget(employee); setSelectedUserId(""); }}
+                            onClick={() => {
+                              setCreatePortalFor(employee);
+                              portalForm.reset({
+                                firstName: employee.name.split(" ")[0] || "",
+                                lastName: employee.name.split(" ").slice(1).join(" ") || "",
+                                email: employee.email || "",
+                                password: "",
+                                role: "employee",
+                              });
+                            }}
                           >
-                            <LinkIcon className="h-3 w-3" /> Link Portal Account
+                            <KeyRound className="h-3 w-3" /> Create Portal Login
                           </Button>
                         )}
                       </div>
@@ -356,7 +468,7 @@ export default function Employees() {
                   <FormControl><Input className="rounded-xl" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
-              )}/>
+              )} />
               <FormField control={editForm.control} name="role" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role *</FormLabel>
@@ -369,25 +481,25 @@ export default function Employees() {
                     </SelectContent>
                   </Select>
                 </FormItem>
-              )}/>
+              )} />
               <FormField control={editForm.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl><Input type="email" className="rounded-xl" {...field} /></FormControl>
                 </FormItem>
-              )}/>
+              )} />
               <FormField control={editForm.control} name="phone" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Phone</FormLabel>
                   <FormControl><Input className="rounded-xl" {...field} /></FormControl>
                 </FormItem>
-              )}/>
+              )} />
               <FormField control={editForm.control} name="hourlyRate" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Hourly Rate ($)</FormLabel>
                   <FormControl><Input type="number" step="0.01" min="0" className="rounded-xl" {...field} /></FormControl>
                 </FormItem>
-              )}/>
+              )} />
               <FormField control={editForm.control} name="isActive" render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3">
                   <FormLabel className="cursor-pointer">Active</FormLabel>
@@ -395,7 +507,7 @@ export default function Employees() {
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                 </FormItem>
-              )}/>
+              )} />
               <DialogFooter className="pt-2">
                 <Button type="button" variant="outline" className="rounded-xl" onClick={() => setEditTarget(null)}>Cancel</Button>
                 <Button type="submit" disabled={isUpdating} className="rounded-xl">
@@ -408,42 +520,109 @@ export default function Employees() {
         </DialogContent>
       </Dialog>
 
-      {/* Link Account Dialog */}
-      <Dialog open={!!linkTarget} onOpenChange={(open) => !open && setLinkTarget(null)}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl">
+      {/* Create Portal Login Dialog */}
+      <Dialog open={!!createPortalFor} onOpenChange={(open) => !open && setCreatePortalFor(null)}>
+        <DialogContent className="sm:max-w-[420px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="font-display text-xl">Link Portal Account</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select the portal account to link to <span className="font-medium text-foreground">{linkTarget?.name}</span>. They'll be able to log in and see their assigned events on My Schedule.
+            <DialogTitle className="font-display text-xl">Create Portal Login</DialogTitle>
+            <p className="text-sm text-muted-foreground pt-1">
+              Set up login credentials for <span className="font-medium text-foreground">{createPortalFor?.name}</span>.
+              They'll use their email and password to sign in.
             </p>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Account</label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Select a user..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {portalUsers?.map((u: any) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {getUserDisplayName(u)}
-                      <span className="ml-2 text-muted-foreground text-xs capitalize">({u.role})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          </DialogHeader>
+          <Form {...portalForm}>
+            <form onSubmit={portalForm.handleSubmit((data) => createPortalUser(data))} className="space-y-4 mt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={portalForm.control} name="firstName" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name *</FormLabel>
+                    <FormControl><Input className="rounded-xl" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={portalForm.control} name="lastName" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl><Input className="rounded-xl" {...field} /></FormControl>
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={portalForm.control} name="email" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Login Email *</FormLabel>
+                  <FormControl><Input type="email" className="rounded-xl" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={portalForm.control} name="password" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password *</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input type={showCreatePw ? "text" : "password"} className="rounded-xl pr-10" placeholder="Min. 8 characters" {...field} />
+                      <button type="button" onClick={() => setShowCreatePw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                        {showCreatePw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={portalForm.control} name="role" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Portal Role</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="employee">Employee — can view their schedule</SelectItem>
+                      <SelectItem value="admin">Admin — full access</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setCreatePortalFor(null)}>Cancel</Button>
+                <Button type="submit" disabled={isCreatingPortal} className="rounded-xl">
+                  {isCreatingPortal ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Create Login
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetPwTarget} onOpenChange={(open) => !open && setResetPwTarget(null)}>
+        <DialogContent className="sm:max-w-[380px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Reset Password</DialogTitle>
+            <p className="text-sm text-muted-foreground pt-1">{resetPwTarget?.email}</p>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>New Password</Label>
+            <div className="relative">
+              <Input
+                type={showPw ? "text" : "password"}
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="Min. 8 characters"
+                className="rounded-xl pr-10"
+              />
+              <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="rounded-xl" onClick={() => setLinkTarget(null)}>Cancel</Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => setResetPwTarget(null)}>Cancel</Button>
             <Button
               className="rounded-xl"
-              disabled={!selectedUserId || isLinking}
-              onClick={() => linkUser({ employeeId: linkTarget.id, userId: selectedUserId })}
+              disabled={newPw.length < 8 || isResetting}
+              onClick={() => resetPassword({ userId: resetPwTarget.id, password: newPw })}
             >
-              {isLinking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Link Account
+              {isResetting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Update Password
             </Button>
           </DialogFooter>
         </DialogContent>
