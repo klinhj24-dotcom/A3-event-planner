@@ -168,6 +168,19 @@ router.delete("/events/:id/packing/:itemId", async (req, res) => {
   }
 });
 
+// Clear packing list — delete all items
+router.delete("/events/:id/packing", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const eventId = parseInt(req.params.id);
+    await db.delete(eventPackingTable).where(eq(eventPackingTable.eventId, eventId));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("clearPackingList error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Reset packing list — uncheck all
 router.post("/events/:id/packing/reset", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }

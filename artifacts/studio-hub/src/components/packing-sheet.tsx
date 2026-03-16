@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check
+  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -135,6 +135,19 @@ export function PackingSheet({ event, open, onClose }: {
     },
   });
 
+  const { mutate: clearAll, isPending: clearing } = useMutation({
+    mutationFn: async () => {
+      await fetch(`/api/events/${eventId}/packing`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/events/${eventId}/packing`] });
+      setClearConfirmOpen(false);
+      toast({ title: "Packing list cleared" });
+    },
+  });
+
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
   // ── Add custom item ───────────────────────────────────────────────────────────
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("General");
@@ -218,6 +231,13 @@ export function PackingSheet({ event, open, onClose }: {
                   onClick={() => resetAll()} disabled={resetting}>
                   <RotateCcw className="h-3 w-3" />
                   Reset
+                </Button>
+              )}
+              {total > 0 && (
+                <Button size="sm" variant="ghost" className="rounded-xl gap-1.5 text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => setClearConfirmOpen(true)} disabled={clearing}>
+                  <Trash2 className="h-3 w-3" />
+                  Clear list
                 </Button>
               )}
             </div>
@@ -353,6 +373,29 @@ export function PackingSheet({ event, open, onClose }: {
           </div>
         </div>
       </SheetContent>
+
+      {/* Clear List Confirmation */}
+      <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <DialogContent className="sm:max-w-[360px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Clear Packing List?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            This will permanently delete all {total} items from this event's packing list. This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl" onClick={() => setClearConfirmOpen(false)} disabled={clearing}>
+              Cancel
+            </Button>
+            <Button variant="destructive" className="rounded-xl" onClick={() => clearAll()} disabled={clearing}>
+              {clearing ? "Clearing…" : "Yes, clear all"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add / Edit Template Dialog */}
       <Dialog open={addTemplateOpen} onOpenChange={v => { setAddTemplateOpen(v); if (!v) setEditTemplateId(null); }}>
