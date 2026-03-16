@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearch } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useListEmployees } from "@workspace/api-client-react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
@@ -585,6 +586,16 @@ const eventSchema = z.object({
   ctaLabel: z.string().optional(),
 });
 
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+function getStatusColor(status: string) {
+  switch (status) {
+    case 'confirmed': return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
+    case 'completed': return "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20";
+    case 'cancelled': return "bg-destructive/15 text-destructive border-destructive/20";
+    default: return "bg-secondary text-secondary-foreground";
+  }
+}
+
 // ─── EventOverviewSheet ───────────────────────────────────────────────────────
 type OverviewEvent = any;
 type OverviewActions = {
@@ -811,6 +822,16 @@ export default function Events() {
   const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [inviteEvent, setInviteEvent] = useState<{ id: number; title: string; startDate?: string | null; location?: string | null; signupToken?: string | null } | null>(null);
   const [overviewEvent, setOverviewEvent] = useState<any | null>(null);
+  const searchStr = useSearch();
+  useEffect(() => {
+    if (!events) return;
+    const params = new URLSearchParams(searchStr);
+    const openId = params.get("open");
+    if (openId) {
+      const found = events.find((e: any) => String(e.id) === openId);
+      if (found) setOverviewEvent(found);
+    }
+  }, [searchStr, events]);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
 
   const { data: allEmployees } = useListEmployees();
@@ -917,15 +938,6 @@ export default function Events() {
     e.title.toLowerCase().includes(search.toLowerCase()) ||
     e.location?.toLowerCase().includes(search.toLowerCase())
   );
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
-      case 'completed': return "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20";
-      case 'cancelled': return "bg-destructive/15 text-destructive border-destructive/20";
-      default: return "bg-secondary text-secondary-foreground";
-    }
-  };
 
   return (
     <AppLayout>

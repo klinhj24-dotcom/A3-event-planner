@@ -88,7 +88,7 @@ export default function Dashboard() {
               {stats?.upcomingEventsList && stats.upcomingEventsList.length > 0 ? (
                 <div className="divide-y divide-border/20">
                   {stats.upcomingEventsList.slice(0, 5).map(event => (
-                    <div key={event.id} className="p-5 hover:bg-black/20 transition-colors flex items-center justify-between group">
+                    <Link key={event.id} href={`/events?open=${event.id}`} className="p-5 hover:bg-black/20 transition-colors flex items-center justify-between group cursor-pointer">
                       <div className="space-y-1">
                         <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{event.title}</p>
                         <div className="flex items-center text-sm text-muted-foreground gap-3">
@@ -97,7 +97,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <Badge variant="secondary" className="capitalize bg-secondary/20 text-secondary">{event.status}</Badge>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
