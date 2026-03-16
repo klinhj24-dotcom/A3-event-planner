@@ -16,8 +16,9 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, CheckCircle2
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, CheckCircle2, Trash2
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -636,6 +637,7 @@ type OverviewActions = {
   onCallSheet: (ev: OverviewEvent) => void;
   onInvite: (ev: OverviewEvent) => void;
   onPacking: (ev: OverviewEvent) => void;
+  onDelete: (ev: OverviewEvent) => void;
 };
 
 function EventOverviewSheet({
@@ -650,6 +652,7 @@ function EventOverviewSheet({
   actions: OverviewActions;
 }) {
   const { toast } = useToast();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const { data: ticketRequests, refetch: refetchTickets } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/ticket-requests`],
     queryFn: () => fetch(`/api/events/${event!.id}/ticket-requests`).then(r => r.json()),
@@ -682,6 +685,12 @@ function EventOverviewSheet({
     { label: "Send Invite", icon: <Mail className="h-4 w-4" />, color: "text-violet-400", bg: "hover:bg-violet-500/10", fn: () => { onClose(); actions.onInvite(event); } },
     { label: "Packing List", icon: <Package className="h-4 w-4" />, color: "text-amber-400", bg: "hover:bg-amber-500/10", fn: () => { onClose(); actions.onPacking(event); } },
   ];
+
+  const handleDeleteConfirm = () => {
+    setConfirmDelete(false);
+    onClose();
+    actions.onDelete(event);
+  };
 
   return (
     <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -880,8 +889,39 @@ function EventOverviewSheet({
               ))}
             </div>
           </div>
+
+          {/* Delete Event */}
+          <div className="pt-2 border-t border-border/40">
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-2.5 w-full p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-left transition-colors hover:bg-red-500/15"
+            >
+              <Trash2 className="h-4 w-4 text-red-500 shrink-0" />
+              <span className="text-xs font-medium text-red-500 flex-1">Delete Event</span>
+            </button>
+          </div>
         </div>
       </SheetContent>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{event?.title}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the event, all comm tasks, staff assignments, and any related data. Google Calendar entries will also be removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeleteConfirm}
+            >
+              Delete Event
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }
@@ -984,6 +1024,19 @@ export default function Events() {
       toast({ title: "Event updated" });
     },
     onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
+  });
+
+  const { mutate: deleteEvent } = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete event");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({ title: "Event deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete event", variant: "destructive" }),
   });
 
   const form = useForm<z.infer<typeof eventSchema>>({
@@ -1869,6 +1922,7 @@ export default function Events() {
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
           onInvite: (ev) => setInviteEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, location: ev.location, signupToken: ev.signupToken }),
           onPacking: (ev) => setPackingEvent({ id: ev.id, title: ev.title, type: ev.type }),
+          onDelete: (ev) => deleteEvent(ev.id),
         }}
       />
     </AppLayout>

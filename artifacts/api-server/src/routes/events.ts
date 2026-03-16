@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { google } from "googleapis";
@@ -209,6 +209,36 @@ router.delete("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
+
+    // Fire-and-forget: remove from Google Calendars before deleting from DB
+    (async () => {
+      try {
+        const allUsers = await db.select().from(usersTable);
+        const gmailUser = allUsers.find(u => u.googleAccessToken && u.googleRefreshToken);
+        if (!gmailUser) return;
+
+        const authClient = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
+        const cal = google.calendar({ version: "v3", auth: authClient });
+        const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
+
+        // Delete main calendar event
+        const [event] = await db.select({ gcalId: eventsTable.googleCalendarEventId }).from(eventsTable).where(eq(eventsTable.id, id));
+        if (event?.gcalId) {
+          await cal.events.delete({ calendarId: TMS_CALENDAR_ID, eventId: event.gcalId }).catch(() => {});
+        }
+
+        // Delete all comm task calendar events
+        const tasks = await db.select({ gcalId: commTasksTable.googleCalendarEventId }).from(commTasksTable).where(eq(commTasksTable.eventId, id));
+        for (const task of tasks) {
+          if (task.gcalId) {
+            await cal.events.delete({ calendarId: TMS_COMMS_CALENDAR_ID, eventId: task.gcalId }).catch(() => {});
+          }
+        }
+      } catch (calErr) {
+        console.error("Calendar cleanup failed (non-fatal):", calErr);
+      }
+    })();
+
     await db.delete(eventsTable).where(eq(eventsTable.id, id));
     res.status(204).send();
   } catch (err) {
