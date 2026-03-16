@@ -10,8 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle
+  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle, Layers
 } from "lucide-react";
+
+// ── Preset types ──────────────────────────────────────────────────────────────
+interface PackingPreset {
+  name: string;
+  itemCount: number;
+  items: Array<{ name: string; category: string }>;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PackingTemplate {
@@ -66,6 +73,12 @@ export function PackingSheet({ event, open, onClose }: {
   const eventId = event?.id;
 
   // ── Queries ──────────────────────────────────────────────────────────────────
+  const { data: presets = [] } = useQuery<PackingPreset[]>({
+    queryKey: ["/api/packing-presets"],
+    queryFn: async () => { const r = await fetch("/api/packing-presets", { credentials: "include" }); return r.json(); },
+    enabled: open,
+  });
+
   const { data: templates = [] } = useQuery<PackingTemplate[]>({
     queryKey: ["/api/packing-templates"],
     queryFn: async () => { const r = await fetch("/api/packing-templates"); return r.json(); },
@@ -147,6 +160,28 @@ export function PackingSheet({ event, open, onClose }: {
   });
 
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  const [addingPreset, setAddingPreset] = useState<string | null>(null);
+  const { mutate: addFromPreset } = useMutation({
+    mutationFn: async (presetName: string) => {
+      const r = await fetch(`/api/events/${eventId}/packing/from-preset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ presetName }),
+      });
+      return r.json();
+    },
+    onSuccess: (data, presetName) => {
+      qc.invalidateQueries({ queryKey: [`/api/events/${eventId}/packing`] });
+      setAddingPreset(null);
+      toast({ title: data.added > 0 ? `Added ${data.added} items from "${presetName}"` : `All "${presetName}" items already in list` });
+    },
+    onError: () => { setAddingPreset(null); toast({ title: "Failed to add preset", variant: "destructive" }); },
+  });
+
+  const [presetsOpen, setPresetsOpen] = useState(true);
+  const [expandedPreset, setExpandedPreset] = useState<string | null>(null);
 
   // ── Add custom item ───────────────────────────────────────────────────────────
   const [newItemName, setNewItemName] = useState("");
@@ -245,13 +280,68 @@ export function PackingSheet({ event, open, onClose }: {
         </SheetHeader>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* ── Left: Template manager ─────────────────────────────────────────── */}
+          {/* ── Left: Preset Groups + Template manager ──────────────────────── */}
           <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
+
+            {/* Preset Groups */}
+            <button
+              onClick={() => setPresetsOpen(o => !o)}
+              className="flex items-center justify-between px-4 py-3 border-b border-border/20 hover:bg-muted/20 transition-colors shrink-0"
+            >
+              <span className="text-sm font-semibold flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-primary" /> Preset Groups
+              </span>
+              {presetsOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+
+            {presetsOpen && (
+              <div className="border-b border-border/20 p-2 space-y-1 shrink-0">
+                {presets.map(preset => {
+                  const isExpanded = expandedPreset === preset.name;
+                  const isAdding = addingPreset === preset.name;
+                  return (
+                    <div key={preset.name} className="rounded-lg border border-border/20 bg-muted/10 overflow-hidden">
+                      <div className="flex items-center gap-2 px-2.5 py-2">
+                        <button
+                          className="flex-1 flex items-center gap-1.5 text-left min-w-0"
+                          onClick={() => setExpandedPreset(isExpanded ? null : preset.name)}
+                        >
+                          <span className="text-xs font-medium text-foreground truncate">{preset.name}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">{preset.itemCount}</span>
+                          {isExpanded
+                            ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
+                            : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
+                        </button>
+                        <button
+                          onClick={() => { setAddingPreset(preset.name); addFromPreset(preset.name); }}
+                          disabled={isAdding}
+                          className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                        >
+                          {isAdding ? "Adding…" : "+ Add"}
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="px-2.5 pb-2 space-y-0.5">
+                          {preset.items.map((item, idx) => (
+                            <p key={idx} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                              <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+                              {item.name}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Custom Templates */}
             <button
               onClick={() => setTemplatesOpen(o => !o)}
-              className="flex items-center justify-between px-4 py-3 border-b border-border/20 hover:bg-muted/20 transition-colors"
+              className="flex items-center justify-between px-4 py-3 border-b border-border/20 hover:bg-muted/20 transition-colors shrink-0"
             >
-              <span className="text-sm font-semibold">Templates</span>
+              <span className="text-sm font-semibold">Custom Templates</span>
               {templatesOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
             </button>
 

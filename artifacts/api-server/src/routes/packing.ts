@@ -4,6 +4,68 @@ import { eq, and, or, isNull, asc } from "drizzle-orm";
 
 const router = Router();
 
+// ── Built-in packing presets ───────────────────────────────────────────────────
+const PACKING_PRESETS: Record<string, Array<{ name: string; category: string }>> = {
+  "Band Backline": [
+    { name: "Guitar Amp", category: "Sound & AV" },
+    { name: "Bass Amp", category: "Sound & AV" },
+    { name: "Drum Hardware Pack", category: "Sound & AV" },
+    { name: "Drum Sticks", category: "Sound & AV" },
+    { name: "Monitor Wedge (x2)", category: "Sound & AV" },
+    { name: "DI Box (x2)", category: "Sound & AV" },
+    { name: "Instrument Cables", category: "Sound & AV" },
+    { name: "Extension Cord", category: "General" },
+  ],
+  "Large PA": [
+    { name: "Main Speakers (x2)", category: "Sound & AV" },
+    { name: "Subwoofer (x2)", category: "Sound & AV" },
+    { name: "FOH Mixer", category: "Sound & AV" },
+    { name: "Stage Box / Snake", category: "Sound & AV" },
+    { name: "XLR Cables", category: "Sound & AV" },
+    { name: "Speaker Stands (x2)", category: "Sound & AV" },
+    { name: "Power Conditioner / Strip", category: "Sound & AV" },
+    { name: "Extension Cords", category: "General" },
+  ],
+  "Small PA": [
+    { name: "Powered Speakers (x2)", category: "Sound & AV" },
+    { name: "Compact Mixer", category: "Sound & AV" },
+    { name: "XLR Cables (x6)", category: "Sound & AV" },
+    { name: "Microphone Stands (x2)", category: "Sound & AV" },
+    { name: "Vocal Microphone", category: "Sound & AV" },
+    { name: "DI Box", category: "Sound & AV" },
+    { name: "Extension Cord", category: "General" },
+  ],
+  "Open Mic PA": [
+    { name: "Powered Speakers (x2)", category: "Sound & AV" },
+    { name: "Vocal Mixer", category: "Sound & AV" },
+    { name: "Vocal Microphones (x4)", category: "Sound & AV" },
+    { name: "Microphone Stands (x4)", category: "Sound & AV" },
+    { name: "Boom Arms (x4)", category: "Sound & AV" },
+    { name: "XLR Cables", category: "Sound & AV" },
+    { name: "Extension Cord", category: "General" },
+  ],
+  "Instrument Demo": [
+    { name: "Demo Instruments", category: "Sound & AV" },
+    { name: "Amplifier", category: "Sound & AV" },
+    { name: "Music Stands (x4)", category: "Sound & AV" },
+    { name: "Instrument Cables", category: "Sound & AV" },
+    { name: "Lesson Signup Sheets", category: "Marketing Materials" },
+    { name: "Demo Materials / Sheet Music", category: "Marketing Materials" },
+    { name: "Extension Cord", category: "General" },
+  ],
+  "General Table": [
+    { name: "Folding Table (6ft)", category: "Booth & Display" },
+    { name: "Tablecloth", category: "Booth & Display" },
+    { name: "Booth Banner", category: "Booth & Display" },
+    { name: "Business Cards", category: "Marketing Materials" },
+    { name: "Flyers / Brochures", category: "Marketing Materials" },
+    { name: "Pens", category: "Admin & Payments" },
+    { name: "Sign-in Sheet", category: "Admin & Payments" },
+    { name: "Power Strip", category: "General" },
+    { name: "Tape / Zip Ties", category: "General" },
+  ],
+};
+
 // ── Packing Templates ─────────────────────────────────────────────────────────
 
 router.get("/packing-templates", async (req, res) => {
@@ -138,6 +200,38 @@ router.post("/events/:id/packing/from-templates", async (req, res) => {
     console.error("generatePackingFromTemplates error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// Add items from a named preset group
+router.post("/events/:id/packing/from-preset", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const eventId = parseInt(req.params.id);
+    const { presetName } = req.body;
+    const preset = PACKING_PRESETS[presetName];
+    if (!preset) { res.status(400).json({ error: "Unknown preset" }); return; }
+
+    const existing = await db.select({ name: eventPackingTable.name })
+      .from(eventPackingTable).where(eq(eventPackingTable.eventId, eventId));
+    const existingNames = new Set(existing.map(e => e.name.toLowerCase()));
+
+    const toInsert = preset.filter(item => !existingNames.has(item.name.toLowerCase()));
+    if (toInsert.length > 0) {
+      await db.insert(eventPackingTable)
+        .values(toInsert.map(item => ({ eventId, name: item.name, category: item.category })));
+    }
+    res.json({ added: toInsert.length, skipped: preset.length - toInsert.length });
+  } catch (err) {
+    console.error("fromPreset error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// List available presets
+router.get("/packing-presets", (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const list = Object.entries(PACKING_PRESETS).map(([name, items]) => ({ name, itemCount: items.length, items }));
+  res.json(list);
 });
 
 router.put("/events/:id/packing/:itemId", async (req, res) => {
