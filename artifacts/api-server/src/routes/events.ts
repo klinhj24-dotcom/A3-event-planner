@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { google } from "googleapis";
@@ -37,7 +37,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -58,6 +58,7 @@ router.post("/events", async (req, res) => {
         flyerUrl: flyerUrl?.trim() || null,
         ticketsUrl: ticketsUrl?.trim() || null,
         ctaLabel: ctaLabel?.trim() || null,
+        ticketFormType: ticketFormType ?? "none",
       })
       .returning();
     res.status(201).json(event);
@@ -93,7 +94,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType } = req.body;
     const [event] = await db
       .update(eventsTable)
       .set({
@@ -109,6 +110,7 @@ router.put("/events/:id", async (req, res) => {
         flyerUrl: flyerUrl !== undefined ? (flyerUrl?.trim() || null) : undefined,
         ticketsUrl: ticketsUrl !== undefined ? (ticketsUrl?.trim() || null) : undefined,
         ctaLabel: ctaLabel !== undefined ? (ctaLabel?.trim() || null) : undefined,
+        ticketFormType: ticketFormType !== undefined ? ticketFormType : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))

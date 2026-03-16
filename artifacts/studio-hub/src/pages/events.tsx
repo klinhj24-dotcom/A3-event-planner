@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, CheckCircle2
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -584,6 +584,7 @@ const eventSchema = z.object({
   flyerUrl: z.string().optional(),
   ticketsUrl: z.string().optional(),
   ctaLabel: z.string().optional(),
+  ticketFormType: z.string().optional(),
 });
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -594,6 +595,34 @@ function getStatusColor(status: string) {
     case 'cancelled': return "bg-destructive/15 text-destructive border-destructive/20";
     default: return "bg-secondary text-secondary-foreground";
   }
+}
+
+// ─── TicketFormLinkRow ────────────────────────────────────────────────────────
+function TicketFormLinkRow({ event }: { event: any }) {
+  const [copied, setCopied] = useState(false);
+  const domain = window.location.origin;
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+  const url = `${domain}${base}/ticket/${event.signupToken}`;
+  const label = event.ticketFormType === "recital" ? "Recital Registration Form" : "Ticket Request Form";
+
+  function handleCopy() {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Ticket className="h-3.5 w-3.5 text-primary shrink-0" />
+      <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline truncate flex-1">
+        {label}
+      </a>
+      <button onClick={handleCopy} title="Copy link" className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+        {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
 }
 
 // ─── EventOverviewSheet ───────────────────────────────────────────────────────
@@ -621,6 +650,11 @@ function EventOverviewSheet({
   actions: OverviewActions;
 }) {
   const { toast } = useToast();
+  const { data: ticketRequests } = useQuery<any[]>({
+    queryKey: [`/api/events/${event?.id}/ticket-requests`],
+    queryFn: () => fetch(`/api/events/${event!.id}/ticket-requests`).then(r => r.json()),
+    enabled: !!event?.id && !!event?.ticketFormType && event?.ticketFormType !== "none",
+  });
   if (!event) return null;
 
   const startDate = event.startDate ? new Date(event.startDate) : null;
@@ -740,7 +774,7 @@ function EventOverviewSheet({
           )}
 
           {/* Website fields */}
-          {(event.flyerUrl || event.ticketsUrl) && (
+          {(event.flyerUrl || event.ticketsUrl || (event.ticketFormType && event.ticketFormType !== "none")) && (
             <div className="space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Website</h4>
               <div className="space-y-2">
@@ -756,7 +790,47 @@ function EventOverviewSheet({
                     <span className="truncate">Flyer image</span>
                   </a>
                 )}
+                {event.ticketFormType && event.ticketFormType !== "none" && event.signupToken && (
+                  <TicketFormLinkRow event={event} />
+                )}
               </div>
+            </div>
+          )}
+
+          {/* Ticket requests */}
+          {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Ticket className="h-3.5 w-3.5" /> Ticket Requests
+                <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
+              </h4>
+              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                {ticketRequests.map((r: any) => (
+                  <div key={r.id} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-muted/40 border border-border/40 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground">{r.contactFirstName} {r.contactLastName}</div>
+                      <div className="text-muted-foreground truncate">{r.contactEmail}</div>
+                      {r.formType === "recital" && r.studentFirstName && (
+                        <div className="text-muted-foreground">Performer: {r.studentFirstName} {r.studentLastName}{r.instrument ? ` · ${r.instrument}` : ""}</div>
+                      )}
+                      {r.formType === "general" && r.ticketCount && (
+                        <div className="text-muted-foreground">{r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}</div>
+                      )}
+                    </div>
+                    <span className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize ${
+                      r.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
+                      r.status === "cancelled" ? "bg-destructive/10 text-destructive" :
+                      "bg-amber-500/10 text-amber-600"
+                    }`}>{r.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length === 0 && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Ticket className="h-3.5 w-3.5" />
+              No ticket requests yet — share the form link with parents.
             </div>
           )}
 
@@ -883,12 +957,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "", ticketFormType: "none" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "", ticketFormType: "none" }
   });
 
   function openEdit(ev: any) {
@@ -908,6 +982,7 @@ export default function Events() {
       flyerUrl: ev.flyerUrl ?? "",
       ticketsUrl: ev.ticketsUrl ?? "",
       ctaLabel: ev.ctaLabel ?? "",
+      ticketFormType: ev.ticketFormType ?? "none",
     });
   }
 
@@ -1131,6 +1206,26 @@ export default function Events() {
                           <FormLabel className="text-xs">Flyer Image URL (ImageKit)</FormLabel>
                           <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
                           <p className="text-[10px] text-muted-foreground mt-0.5">Paste your ImageKit URL — website script reads it as the event flyer photo.</p>
+                        </FormItem>
+                      )} />
+                    </div>
+
+                    {/* Ticket form */}
+                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-2">
+                      <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                        <Ticket className="h-4 w-4 text-primary" /> Ticket Registration Form
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground">For Eventbrite events, leave this as "None" and paste the link above. For events where parents register with us directly, choose a form type.</p>
+                      <FormField control={form.control} name="ticketFormType" render={({ field }) => (
+                        <FormItem>
+                          <Select onValueChange={field.onChange} value={field.value ?? "none"}>
+                            <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">None (no internal form)</SelectItem>
+                              <SelectItem value="general">General Ticket Request (name, email, qty)</SelectItem>
+                              <SelectItem value="recital">Recital Registration (student + parent details)</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </FormItem>
                       )} />
                     </div>
@@ -1522,6 +1617,26 @@ export default function Events() {
                   <FormItem>
                     <FormLabel className="text-xs">Flyer Image URL (ImageKit)</FormLabel>
                     <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                  </FormItem>
+                )} />
+              </div>
+
+              {/* Ticket form */}
+              <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                  <Ticket className="h-4 w-4 text-primary" /> Ticket Registration Form
+                </h4>
+                <p className="text-[10px] text-muted-foreground">For Eventbrite events, leave this as "None" and paste the link above. For events where parents register with us directly, choose a form type.</p>
+                <FormField control={editForm.control} name="ticketFormType" render={({ field }) => (
+                  <FormItem>
+                    <Select onValueChange={field.onChange} value={field.value ?? "none"}>
+                      <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None (no internal form)</SelectItem>
+                        <SelectItem value="general">General Ticket Request (name, email, qty)</SelectItem>
+                        <SelectItem value="recital">Recital Registration (student + parent details)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </FormItem>
                 )} />
               </div>

@@ -19,6 +19,7 @@ import bandsRouter from "./bands";
 import packingRouter from "./packing";
 import eventTypesRouter from "./event-types";
 import eventStaffingRouter from "./event-staffing";
+import ticketsRouter from "./tickets";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(bandsRouter);
 router.use(packingRouter);
 router.use(eventTypesRouter);
 router.use(eventStaffingRouter);
+router.use(ticketsRouter);
 
 export default router;

@@ -24,6 +24,7 @@ export const eventsTable = pgTable("events", {
   flyerUrl: text("flyer_url"),
   ticketsUrl: text("tickets_url"),
   ctaLabel: text("cta_label").default("TICKETS"),
+  ticketFormType: text("ticket_form_type").default("none"), // "none" | "general" | "recital"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -43,6 +44,32 @@ export type Event = typeof eventsTable.$inferSelect;
 export const insertEventContactSchema = createInsertSchema(eventContactsTable).omit({ id: true, createdAt: true });
 export type InsertEventContact = z.infer<typeof insertEventContactSchema>;
 export type EventContact = typeof eventContactsTable.$inferSelect;
+
+// Ticket requests submitted via the public ticket form
+export const eventTicketRequestsTable = pgTable("event_ticket_requests", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull(),
+  formType: text("form_type").notNull(), // "general" | "recital"
+  // Common fields
+  contactFirstName: text("contact_first_name").notNull(),
+  contactLastName: text("contact_last_name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  ticketCount: integer("ticket_count"),
+  // Recital-only fields
+  studentFirstName: text("student_first_name"),
+  studentLastName: text("student_last_name"),
+  instrument: text("instrument"),
+  recitalSong: text("recital_song"),
+  teacher: text("teacher"),
+  specialConsiderations: text("special_considerations"),
+  // Admin
+  status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type EventTicketRequest = typeof eventTicketRequestsTable.$inferSelect;
+export type InsertEventTicketRequest = typeof eventTicketRequestsTable.$inferInsert;
 
 export const eventDebriefTable = pgTable("event_debriefs", {
   id: serial("id").primaryKey(),
