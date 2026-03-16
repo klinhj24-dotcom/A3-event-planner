@@ -14,7 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
-  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck
+  List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
+  Clock, Copy, ExternalLink, ChevronRight, Info
 } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -584,6 +585,214 @@ const eventSchema = z.object({
   ctaLabel: z.string().optional(),
 });
 
+// ─── EventOverviewSheet ───────────────────────────────────────────────────────
+type OverviewEvent = any;
+type OverviewActions = {
+  onEdit: (ev: OverviewEvent) => void;
+  onTasks: (ev: OverviewEvent) => void;
+  onDebrief: (ev: OverviewEvent) => void;
+  onLineup: (ev: OverviewEvent) => void;
+  onStaffSlots: (ev: OverviewEvent) => void;
+  onCallSheet: (ev: OverviewEvent) => void;
+  onInvite: (ev: OverviewEvent) => void;
+  onPacking: (ev: OverviewEvent) => void;
+};
+
+function EventOverviewSheet({
+  event,
+  open,
+  onClose,
+  actions,
+}: {
+  event: OverviewEvent | null;
+  open: boolean;
+  onClose: () => void;
+  actions: OverviewActions;
+}) {
+  const { toast } = useToast();
+  if (!event) return null;
+
+  const startDate = event.startDate ? new Date(event.startDate) : null;
+  const endDate = event.endDate ? new Date(event.endDate) : null;
+  const domain = window.location.host;
+  const signupUrl = event.signupToken ? `https://${domain}/signup/${event.signupToken}` : null;
+
+  function copySignupLink() {
+    if (!signupUrl) return;
+    navigator.clipboard.writeText(signupUrl).then(() => toast({ title: "Signup link copied!" }));
+  }
+
+  const ACTIONS = [
+    { label: "Edit Event", icon: <Pencil className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onEdit(event); } },
+    { label: "Comm Tasks", icon: <ClipboardList className="h-4 w-4" />, color: "text-foreground", bg: "hover:bg-muted/60", fn: () => { onClose(); actions.onTasks(event); } },
+    { label: "Post-Event Debrief", icon: <ClipboardCheck className="h-4 w-4" />, color: "text-[#00b199]", bg: "hover:bg-[#00b199]/10", fn: () => { onClose(); actions.onDebrief(event); } },
+    { label: "Band Lineup", icon: <Music className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onLineup(event); } },
+    { label: "Staff Schedule", icon: <Users2 className="h-4 w-4" />, color: "text-emerald-500", bg: "hover:bg-emerald-500/10", fn: () => { onClose(); actions.onStaffSlots(event); } },
+    { label: "Call Sheet", icon: <FileText className="h-4 w-4" />, color: "text-sky-400", bg: "hover:bg-sky-500/10", fn: () => { onClose(); actions.onCallSheet(event); } },
+    { label: "Send Invite", icon: <Mail className="h-4 w-4" />, color: "text-violet-400", bg: "hover:bg-violet-500/10", fn: () => { onClose(); actions.onInvite(event); } },
+    { label: "Packing List", icon: <Package className="h-4 w-4" />, color: "text-amber-400", bg: "hover:bg-amber-500/10", fn: () => { onClose(); actions.onPacking(event); } },
+  ];
+
+  return (
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <SheetContent className="w-full sm:w-full sm:max-w-xl overflow-y-auto flex flex-col gap-0 p-0">
+        {/* Hero image */}
+        {event.imageUrl && (
+          <div className="w-full h-48 overflow-hidden shrink-0">
+            <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        {/* Header */}
+        <div className={`p-6 border-b border-border/50 ${event.imageUrl ? "" : "pt-8"}`}>
+          <div className="flex items-start gap-3">
+            {!event.imageUrl && (
+              <div className="h-12 w-12 rounded-xl bg-muted/40 border border-border/30 shrink-0 flex items-center justify-center">
+                <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <SheetHeader className="space-y-1 text-left">
+                <SheetTitle className="font-display text-xl leading-tight">{event.title}</SheetTitle>
+              </SheetHeader>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <Badge variant="outline" className="text-xs capitalize text-muted-foreground border-border/50">{event.type}</Badge>
+                <Badge variant="outline" className={`text-xs capitalize ${getStatusColor(event.status)}`}>{event.status}</Badge>
+                {event.isPaid ? (
+                  <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-semibold tracking-wide">PAID</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          {/* Date & Time */}
+          {startDate && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date & Time</h4>
+              <div className="flex items-center gap-2 text-sm text-foreground">
+                <CalendarCheck className="h-4 w-4 text-primary/70 shrink-0" />
+                <span>{format(startDate, "EEEE, MMMM d, yyyy")}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4 shrink-0 opacity-60" />
+                <span>
+                  {format(startDate, "h:mm a")}
+                  {endDate ? ` – ${format(endDate, "h:mm a")}` : ""}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Location */}
+          {event.location && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Location</h4>
+              <div className="flex items-center gap-2 text-sm text-foreground">
+                <MapPin className="h-4 w-4 text-primary/70 shrink-0" />
+                <span>{event.location}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Financials */}
+          {(event.revenue || event.cost) && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Financials</h4>
+              <div className="flex items-center gap-4 text-sm">
+                {event.revenue && (
+                  <div className="flex items-center gap-1.5 text-emerald-500">
+                    <DollarSign className="h-4 w-4" />
+                    <span className="font-medium">+${event.revenue} revenue</span>
+                  </div>
+                )}
+                {event.cost && (
+                  <div className="flex items-center gap-1.5 text-rose-400">
+                    <DollarSign className="h-4 w-4" />
+                    <span className="font-medium">-${event.cost} cost</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Description / Notes */}
+          {event.description && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</h4>
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{event.description}</p>
+            </div>
+          )}
+
+          {event.notes && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Internal Notes</h4>
+              <div className="p-3 rounded-xl bg-muted/30 border border-border/40">
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{event.notes}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Signup link */}
+          {signupUrl && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Signup Link</h4>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border/40">
+                <p className="text-xs text-muted-foreground flex-1 truncate font-mono">{signupUrl}</p>
+                <button onClick={copySignupLink} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Website fields */}
+          {(event.flyerUrl || event.ticketsUrl) && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Website</h4>
+              <div className="space-y-2">
+                {event.ticketsUrl && (
+                  <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{event.ctaLabel || "Tickets"} link</span>
+                  </a>
+                )}
+                {event.flyerUrl && (
+                  <a href={event.flyerUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Flyer image</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Quick actions */}
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {ACTIONS.map((a) => (
+                <button
+                  key={a.label}
+                  onClick={a.fn}
+                  className={`flex items-center gap-2.5 p-3 rounded-xl border border-border/50 bg-card text-left transition-colors ${a.bg}`}
+                >
+                  <span className={a.color}>{a.icon}</span>
+                  <span className={`text-xs font-medium flex-1 ${a.color}`}>{a.label}</span>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Events() {
   const [search, setSearch] = useState("");
@@ -601,6 +810,7 @@ export default function Events() {
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [inviteEvent, setInviteEvent] = useState<{ id: number; title: string; startDate?: string | null; location?: string | null; signupToken?: string | null } | null>(null);
+  const [overviewEvent, setOverviewEvent] = useState<any | null>(null);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
 
   const { data: allEmployees } = useListEmployees();
@@ -1015,7 +1225,10 @@ export default function Events() {
                     filteredEvents?.map((event) => (
                       <TableRow key={event.id} className="hover:bg-muted/20 transition-colors">
                         <TableCell>
-                          <div className="flex items-center gap-3">
+                          <button
+                            className="flex items-center gap-3 text-left group hover:opacity-80 transition-opacity"
+                            onClick={() => setOverviewEvent(event)}
+                          >
                             {(event as any).imageUrl ? (
                               <img
                                 src={(event as any).imageUrl}
@@ -1028,10 +1241,10 @@ export default function Events() {
                               </div>
                             )}
                             <div>
-                              <div className="font-medium text-foreground text-base">{event.title}</div>
+                              <div className="font-medium text-foreground text-base group-hover:text-primary transition-colors">{event.title}</div>
                               <span className="text-xs text-muted-foreground mt-0.5 block">{event.type}</span>
                             </div>
-                          </div>
+                          </button>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1 text-sm">
@@ -1449,6 +1662,22 @@ export default function Events() {
           onClose={() => setInviteEvent(null)}
         />
       )}
+
+      <EventOverviewSheet
+        event={overviewEvent}
+        open={!!overviewEvent}
+        onClose={() => setOverviewEvent(null)}
+        actions={{
+          onEdit: (ev) => openEdit(ev),
+          onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
+          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl }),
+          onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title }),
+          onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
+          onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
+          onInvite: (ev) => setInviteEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, location: ev.location, signupToken: ev.signupToken }),
+          onPacking: (ev) => setPackingEvent({ id: ev.id, title: ev.title, type: ev.type }),
+        }}
+      />
     </AppLayout>
   );
 }
