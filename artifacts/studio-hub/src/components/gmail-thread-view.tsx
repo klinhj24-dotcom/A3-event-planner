@@ -17,7 +17,16 @@ type Contact = { id: number; name: string; email?: string | null; organization?:
 function ThreadMessages({ threadId, contact, onBack }: { threadId: string; contact: Contact; onBack: () => void }) {
   const { data, isLoading, refetch, isRefetching } = useGmailThread(threadId);
   const [replyOpen, setReplyOpen] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const lastMsg = data?.messages?.[data.messages.length - 1];
+
+  function toggleExpand(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -37,23 +46,45 @@ function ThreadMessages({ threadId, contact, onBack }: { threadId: string; conta
       {isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : (
-        <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           {data?.messages?.map((msg, i) => {
             const isOutbound = msg.from?.toLowerCase().includes("@") && 
               msg.labelIds?.includes("SENT");
+            const isExpanded = expandedIds.has(msg.id);
+            const body = msg.body?.trim() || "No content";
+            const isLong = body.length > 300 || body.split("\n").length > 4;
+
             return (
-              <div key={msg.id} className={`p-3 rounded-xl border text-xs ${isOutbound ? "bg-primary/8 border-primary/20 ml-4" : "bg-muted/30 border-border/40 mr-4"}`}>
-                <div className="flex items-center justify-between mb-2 gap-2">
+              <div
+                key={msg.id}
+                className={`rounded-xl border text-xs transition-colors ${isOutbound ? "bg-primary/8 border-primary/20 ml-4" : "bg-muted/30 border-border/40 mr-4"} ${isLong ? "cursor-pointer hover:border-primary/40" : ""}`}
+                onClick={() => isLong && toggleExpand(msg.id)}
+              >
+                <div className="flex items-center justify-between p-3 pb-2 gap-2">
                   <span className={`font-medium truncate ${isOutbound ? "text-primary" : "text-foreground"}`}>
                     {isOutbound ? "You" : msg.from?.replace(/<.*>/, "").trim() || "Unknown"}
                   </span>
-                  <span className="text-muted-foreground whitespace-nowrap shrink-0">
-                    {msg.date ? format(new Date(msg.date), "MMM d · h:mm a") : ""}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {msg.date ? format(new Date(msg.date), "MMM d · h:mm a") : ""}
+                    </span>
+                    {isLong && (
+                      isExpanded
+                        ? <ChevronUp className="h-3 w-3 text-muted-foreground" />
+                        : <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
-                  {msg.body?.trim() || "No content"}
-                </p>
+                <div className="px-3 pb-3">
+                  <p className={`text-muted-foreground leading-relaxed whitespace-pre-wrap ${isExpanded ? "" : "line-clamp-4"}`}>
+                    {body}
+                  </p>
+                  {isLong && !isExpanded && (
+                    <p className={`mt-1 text-[10px] font-medium ${isOutbound ? "text-primary/60" : "text-muted-foreground/60"}`}>
+                      Tap to read more
+                    </p>
+                  )}
+                </div>
               </div>
             );
           })}
