@@ -5,6 +5,56 @@ import { randomBytes } from "crypto";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
+const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
+
+function getAppDomain() {
+  return process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
+}
+
+function buildTicketUrl(signupToken: string) {
+  return `https://${getAppDomain()}/ticket/${signupToken}`;
+}
+
+/** Best-effort: push an event to Google Calendar using the requesting user's credentials */
+async function trySyncToCalendar(userId: number, event: typeof eventsTable.$inferSelect) {
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user?.googleAccessToken || !user?.googleRefreshToken) return;
+    const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
+    const cal = google.calendar({ version: "v3", auth });
+
+    const descParts: string[] = [];
+    if (event.location) descParts.push(`[venue] ${event.location}`);
+    if (event.ticketsUrl && event.ctaLabel?.trim() && event.ctaLabel !== "none") {
+      descParts.push(`[${event.ctaLabel.trim().toUpperCase()}] ${event.ticketsUrl}`);
+    }
+    if (event.flyerUrl?.trim()) descParts.push(event.flyerUrl.trim());
+    if (event.notes) descParts.push(event.notes);
+
+    const summary = (event.calendarTag && event.calendarTag !== "none")
+      ? `${event.title} [${event.calendarTag}]`
+      : event.title;
+
+    const calEvent = {
+      summary,
+      location: event.location ?? undefined,
+      description: descParts.join("\n") || undefined,
+      start: event.startDate ? { dateTime: event.startDate.toISOString() } : { date: new Date().toISOString().split("T")[0] },
+      end: event.endDate
+        ? { dateTime: event.endDate.toISOString() }
+        : event.startDate
+          ? { dateTime: new Date(event.startDate.getTime() + 2 * 3600000).toISOString() }
+          : { date: new Date().toISOString().split("T")[0] },
+    };
+
+    if (event.googleCalendarEventId) {
+      await cal.events.update({ calendarId: TMS_CALENDAR_ID, eventId: event.googleCalendarEventId, requestBody: calEvent });
+    }
+  } catch (err) {
+    console.warn("trySyncToCalendar (non-fatal):", err);
+  }
+}
+
 const router = Router();
 
 router.get("/events", async (req, res) => {
@@ -43,6 +93,11 @@ router.post("/events", async (req, res) => {
       return;
     }
     const signupToken = randomBytes(16).toString("hex");
+    // Auto-configure ticket URL + button label for internal forms
+    const isInternalForm = ticketFormType && ticketFormType !== "none";
+    const resolvedTicketsUrl = isInternalForm ? buildTicketUrl(signupToken) : (ticketsUrl?.trim() || null);
+    const resolvedCtaLabel = isInternalForm ? "REGISTER" : (ctaLabel?.trim() || null);
+
     const [event] = await db
       .insert(eventsTable)
       .values({
@@ -56,8 +111,8 @@ router.post("/events", async (req, res) => {
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
         imageUrl: imageUrl ?? null,
         flyerUrl: flyerUrl?.trim() || null,
-        ticketsUrl: ticketsUrl?.trim() || null,
-        ctaLabel: ctaLabel?.trim() || null,
+        ticketsUrl: resolvedTicketsUrl,
+        ctaLabel: resolvedCtaLabel,
         ticketFormType: ticketFormType ?? "none",
       })
       .returning();
@@ -95,6 +150,20 @@ router.put("/events/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType } = req.body;
+
+    // Fetch existing to get signupToken for internal form URL
+    const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
+    const signupToken = existing?.signupToken;
+
+    // Auto-configure ticket URL + button label for internal forms
+    const isInternalForm = ticketFormType && ticketFormType !== "none";
+    const resolvedTicketsUrl = isInternalForm && signupToken
+      ? buildTicketUrl(signupToken)
+      : (ticketsUrl !== undefined ? (ticketsUrl?.trim() || null) : undefined);
+    const resolvedCtaLabel = isInternalForm
+      ? "REGISTER"
+      : (ctaLabel !== undefined ? (ctaLabel?.trim() || null) : undefined);
+
     const [event] = await db
       .update(eventsTable)
       .set({
@@ -108,8 +177,8 @@ router.put("/events/:id", async (req, res) => {
         signupDeadline: signupDeadline ? new Date(signupDeadline) : null,
         imageUrl: imageUrl !== undefined ? imageUrl : undefined,
         flyerUrl: flyerUrl !== undefined ? (flyerUrl?.trim() || null) : undefined,
-        ticketsUrl: ticketsUrl !== undefined ? (ticketsUrl?.trim() || null) : undefined,
-        ctaLabel: ctaLabel !== undefined ? (ctaLabel?.trim() || null) : undefined,
+        ticketsUrl: resolvedTicketsUrl,
+        ctaLabel: resolvedCtaLabel,
         ticketFormType: ticketFormType !== undefined ? ticketFormType : undefined,
         updatedAt: new Date(),
       })
@@ -119,6 +188,13 @@ router.put("/events/:id", async (req, res) => {
       res.status(404).json({ error: "Event not found" });
       return;
     }
+
+    // Auto-sync to Google Calendar if the event is already on the calendar
+    if (event.googleCalendarEventId) {
+      const userId = (req.user as any)?.id;
+      trySyncToCalendar(userId, event); // fire-and-forget, non-fatal
+    }
+
     res.json(event);
   } catch (err) {
     console.error("updateEvent error:", err);

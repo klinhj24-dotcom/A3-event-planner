@@ -886,6 +886,8 @@ export default function Events() {
     }
   }, [searchStr, events]);
   const [createStaff, setCreateStaff] = useState<number[]>([]);
+  const [createTicketSource, setCreateTicketSource] = useState<"none" | "external" | "internal">("none");
+  const [editTicketSource, setEditTicketSource] = useState<"none" | "external" | "internal">("none");
 
   const { data: allEmployees } = useListEmployees();
 
@@ -967,6 +969,14 @@ export default function Events() {
 
   function openEdit(ev: any) {
     setEditEvent(ev);
+    // Derive ticket source from saved values
+    if (ev.ticketFormType && ev.ticketFormType !== "none") {
+      setEditTicketSource("internal");
+    } else if (ev.ticketsUrl) {
+      setEditTicketSource("external");
+    } else {
+      setEditTicketSource("none");
+    }
     editForm.reset({
       title: ev.title ?? "",
       type: ev.type ?? "Recital",
@@ -1034,7 +1044,7 @@ export default function Events() {
               Late Report
             </Button>
 
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateTicketSource("none"); }}>
               <DialogTrigger asChild>
                 <Button className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
                   <Plus className="h-4 w-4 mr-2" /> Create Event
@@ -1169,65 +1179,87 @@ export default function Events() {
                         <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                       </FormItem>
                     )} />
+                    {/* Ticketing section */}
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                       <h4 className="font-semibold text-sm flex items-center gap-1.5">
-                        <Globe className="h-4 w-4 text-secondary" /> Website Calendar Fields
+                        <Ticket className="h-4 w-4 text-primary" /> Ticketing
                       </h4>
-                      <p className="text-[10px] text-muted-foreground -mt-2">Written into the Google Calendar description — your website script reads these automatically.</p>
-                      <div className="grid grid-cols-3 gap-3">
-                        <FormField control={form.control} name="ctaLabel" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Button Label</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
-                              <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">No Button</SelectItem>
-                                <SelectItem value="TICKETS">TICKETS</SelectItem>
-                                <SelectItem value="REGISTER">REGISTER</SelectItem>
-                                <SelectItem value="SIGN UP">SIGN UP</SelectItem>
-                                <SelectItem value="RSVP">RSVP</SelectItem>
-                                <SelectItem value="INFO">INFO</SelectItem>
-                                <SelectItem value="FLYER">FLYER</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormItem>
-                        )} />
-                        <div className="col-span-2">
-                          <FormField control={form.control} name="ticketsUrl" render={({ field }) => (
+                      {/* Source toggle */}
+                      <div className="grid grid-cols-3 gap-1.5 p-1 bg-background rounded-xl border border-border/50">
+                        {([["none","No Tickets"],["external","External Link"],["internal","Registration Form"]] as const).map(([val, label]) => (
+                          <button key={val} type="button"
+                            onClick={() => {
+                              setCreateTicketSource(val);
+                              if (val === "internal") { form.setValue("ticketFormType", "general"); form.setValue("ctaLabel", "REGISTER"); form.setValue("ticketsUrl", ""); }
+                              if (val === "external") { form.setValue("ticketFormType", "none"); }
+                              if (val === "none") { form.setValue("ticketFormType", "none"); form.setValue("ctaLabel", "none"); form.setValue("ticketsUrl", ""); }
+                            }}
+                            className={`py-1.5 rounded-lg text-xs font-medium transition-all ${createTicketSource === val ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                          >{label}</button>
+                        ))}
+                      </div>
+
+                      {/* External link fields */}
+                      {createTicketSource === "external" && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-3">
+                            <FormField control={form.control} name="ctaLabel" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Button Label</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
+                                  <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="TICKETS">TICKETS</SelectItem>
+                                    <SelectItem value="REGISTER">REGISTER</SelectItem>
+                                    <SelectItem value="SIGN UP">SIGN UP</SelectItem>
+                                    <SelectItem value="RSVP">RSVP</SelectItem>
+                                    <SelectItem value="INFO">INFO</SelectItem>
+                                    <SelectItem value="FLYER">FLYER</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )} />
+                            <div className="col-span-2">
+                              <FormField control={form.control} name="ticketsUrl" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">External Link URL</FormLabel>
+                                  <FormControl><Input placeholder="https://www.eventbrite.com/e/..." className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                                </FormItem>
+                              )} />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">This link + button label will appear on the website calendar. The calendar entry is updated automatically when you save.</p>
+                        </div>
+                      )}
+
+                      {/* Internal registration form fields */}
+                      {createTicketSource === "internal" && (
+                        <div className="space-y-2">
+                          <FormField control={form.control} name="ticketFormType" render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs">Tickets / Link URL</FormLabel>
-                              <FormControl><Input placeholder="https://app.tickethive.com/e/..." className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                              <FormLabel className="text-xs">Form Type</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value ?? "general"}>
+                                <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  <SelectItem value="general">General Ticket Request (name, email, qty)</SelectItem>
+                                  <SelectItem value="recital">Recital Registration (student + parent details)</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </FormItem>
                           )} />
+                          <p className="text-[10px] text-muted-foreground">A shareable registration link will be created automatically. The website calendar will show a REGISTER button pointing to it.</p>
                         </div>
-                      </div>
-                      <FormField control={form.control} name="flyerUrl" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Flyer Image URL (ImageKit)</FormLabel>
-                          <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Paste your ImageKit URL — website script reads it as the event flyer photo.</p>
-                        </FormItem>
-                      )} />
-                    </div>
+                      )}
 
-                    {/* Ticket form */}
-                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-2">
-                      <h4 className="font-semibold text-sm flex items-center gap-1.5">
-                        <Ticket className="h-4 w-4 text-primary" /> Ticket Registration Form
-                      </h4>
-                      <p className="text-[10px] text-muted-foreground">For Eventbrite events, leave this as "None" and paste the link above. For events where parents register with us directly, choose a form type.</p>
-                      <FormField control={form.control} name="ticketFormType" render={({ field }) => (
-                        <FormItem>
-                          <Select onValueChange={field.onChange} value={field.value ?? "none"}>
-                            <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">None (no internal form)</SelectItem>
-                              <SelectItem value="general">General Ticket Request (name, email, qty)</SelectItem>
-                              <SelectItem value="recital">Recital Registration (student + parent details)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )} />
+                      {/* Flyer URL always visible */}
+                      <div className="pt-1 border-t border-border/30">
+                        <FormField control={form.control} name="flyerUrl" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Flyer Image URL (ImageKit) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                            <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          </FormItem>
+                        )} />
+                      </div>
                     </div>
 
                     {/* Staff assignment */}
@@ -1582,63 +1614,87 @@ export default function Events() {
                   <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                 </FormItem>
               )} />
+              {/* Ticketing section */}
               <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                 <h4 className="font-semibold text-sm flex items-center gap-1.5">
-                  <Globe className="h-4 w-4 text-secondary" /> Website Calendar Fields
+                  <Ticket className="h-4 w-4 text-primary" /> Ticketing
                 </h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <FormField control={editForm.control} name="ctaLabel" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Button Label</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
-                        <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">No Button</SelectItem>
-                          <SelectItem value="TICKETS">TICKETS</SelectItem>
-                          <SelectItem value="REGISTER">REGISTER</SelectItem>
-                          <SelectItem value="SIGN UP">SIGN UP</SelectItem>
-                          <SelectItem value="RSVP">RSVP</SelectItem>
-                          <SelectItem value="INFO">INFO</SelectItem>
-                          <SelectItem value="FLYER">FLYER</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )} />
-                  <div className="col-span-2">
-                    <FormField control={editForm.control} name="ticketsUrl" render={({ field }) => (
+                {/* Source toggle */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-background rounded-xl border border-border/50">
+                  {([["none","No Tickets"],["external","External Link"],["internal","Registration Form"]] as const).map(([val, label]) => (
+                    <button key={val} type="button"
+                      onClick={() => {
+                        setEditTicketSource(val);
+                        if (val === "internal") { editForm.setValue("ticketFormType", "general"); editForm.setValue("ctaLabel", "REGISTER"); editForm.setValue("ticketsUrl", ""); }
+                        if (val === "external") { editForm.setValue("ticketFormType", "none"); }
+                        if (val === "none") { editForm.setValue("ticketFormType", "none"); editForm.setValue("ctaLabel", "none"); editForm.setValue("ticketsUrl", ""); }
+                      }}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${editTicketSource === val ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >{label}</button>
+                  ))}
+                </div>
+
+                {/* External link fields */}
+                {editTicketSource === "external" && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <FormField control={editForm.control} name="ctaLabel" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Button Label</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
+                            <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="TICKETS">TICKETS</SelectItem>
+                              <SelectItem value="REGISTER">REGISTER</SelectItem>
+                              <SelectItem value="SIGN UP">SIGN UP</SelectItem>
+                              <SelectItem value="RSVP">RSVP</SelectItem>
+                              <SelectItem value="INFO">INFO</SelectItem>
+                              <SelectItem value="FLYER">FLYER</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )} />
+                      <div className="col-span-2">
+                        <FormField control={editForm.control} name="ticketsUrl" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">External Link URL</FormLabel>
+                            <FormControl><Input placeholder="https://www.eventbrite.com/e/..." className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                          </FormItem>
+                        )} />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">This link + button label will appear on the website calendar. The calendar entry is updated automatically when you save.</p>
+                  </div>
+                )}
+
+                {/* Internal registration form fields */}
+                {editTicketSource === "internal" && (
+                  <div className="space-y-2">
+                    <FormField control={editForm.control} name="ticketFormType" render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Tickets / Link URL</FormLabel>
-                        <FormControl><Input placeholder="https://app.tickethive.com/e/..." className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                        <FormLabel className="text-xs">Form Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? "general"}>
+                          <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value="general">General Ticket Request (name, email, qty)</SelectItem>
+                            <SelectItem value="recital">Recital Registration (student + parent details)</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </FormItem>
                     )} />
+                    <p className="text-[10px] text-muted-foreground">The website calendar will show a REGISTER button linking to your registration form automatically.</p>
                   </div>
-                </div>
-                <FormField control={editForm.control} name="flyerUrl" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Flyer Image URL (ImageKit)</FormLabel>
-                    <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
-                  </FormItem>
-                )} />
-              </div>
+                )}
 
-              {/* Ticket form */}
-              <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-2">
-                <h4 className="font-semibold text-sm flex items-center gap-1.5">
-                  <Ticket className="h-4 w-4 text-primary" /> Ticket Registration Form
-                </h4>
-                <p className="text-[10px] text-muted-foreground">For Eventbrite events, leave this as "None" and paste the link above. For events where parents register with us directly, choose a form type.</p>
-                <FormField control={editForm.control} name="ticketFormType" render={({ field }) => (
-                  <FormItem>
-                    <Select onValueChange={field.onChange} value={field.value ?? "none"}>
-                      <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">None (no internal form)</SelectItem>
-                        <SelectItem value="general">General Ticket Request (name, email, qty)</SelectItem>
-                        <SelectItem value="recital">Recital Registration (student + parent details)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )} />
+                {/* Flyer URL always visible */}
+                <div className="pt-1 border-t border-border/30">
+                  <FormField control={editForm.control} name="flyerUrl" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Flyer Image URL (ImageKit) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                      <FormControl><Input placeholder="https://ik.imagekit.io/... (.jpg/.png)" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                    </FormItem>
+                  )} />
+                </div>
               </div>
 
               {/* Assigned Staff */}
