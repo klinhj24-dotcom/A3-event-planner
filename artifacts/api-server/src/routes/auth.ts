@@ -176,6 +176,26 @@ router.post("/users", async (req: Request, res: Response) => {
   }
 });
 
+// ── Self: change own password ─────────────────────────────────────────────────
+router.post("/users/me/password", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: "Current and new password are required" }); return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "New password must be at least 8 characters" }); return;
+  }
+  const userId = (req.user as any).id;
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user?.passwordHash) { res.status(400).json({ error: "No password set" }); return; }
+  const match = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!match) { res.status(401).json({ error: "Current password is incorrect" }); return; }
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, userId));
+  res.json({ ok: true });
+});
+
 // ── Admin: update portal user ─────────────────────────────────────────────────
 router.patch("/users/:id", async (req: Request, res: Response) => {
   if (!req.isAuthenticated() || (req.user as any).role !== "admin") {

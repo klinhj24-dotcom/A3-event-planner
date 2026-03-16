@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Mail, Plus, Trash2, Loader2, CheckCircle2, ExternalLink, Settings as SettingsIcon, FileText, X, Users, Shield, Tag, Pencil, Check
+  Mail, Plus, Trash2, Loader2, CheckCircle2, ExternalLink, Settings as SettingsIcon, FileText, X, Users, Shield, Tag, Pencil, Check, KeyRound, Eye, EyeOff
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -278,6 +278,38 @@ export default function Settings() {
 
   const [createOpen, setCreateOpen] = useState(false);
 
+  // Change password state
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [isChangingPw, setIsChangingPw] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPw || !newPw || !confirmPw) return;
+    if (newPw !== confirmPw) { toast({ title: "Passwords don't match", variant: "destructive" }); return; }
+    if (newPw.length < 8) { toast({ title: "New password must be at least 8 characters", variant: "destructive" }); return; }
+    setIsChangingPw(true);
+    try {
+      const res = await fetch("/api/users/me/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update password");
+      }
+      toast({ title: "Password updated successfully" });
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+    } catch (e: any) {
+      toast({ title: e.message, variant: "destructive" });
+    } finally {
+      setIsChangingPw(false);
+    }
+  };
+
   const form = useForm<z.infer<typeof templateSchema>>({
     resolver: zodResolver(templateSchema),
     defaultValues: { name: "", subject: "", body: "" },
@@ -302,6 +334,42 @@ export default function Settings() {
             <SettingsIcon className="h-8 w-8 text-primary" /> Settings
           </h1>
           <p className="text-muted-foreground mt-1">Manage Gmail, email templates, and team access.</p>
+        </div>
+
+        {/* Change Password */}
+        <div className="rounded-2xl border border-border/20 bg-card p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold text-base">Change Password</h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">Current Password</label>
+              <div className="relative">
+                <Input type={showCurrentPw ? "text" : "password"} value={currentPw} onChange={e => setCurrentPw(e.target.value)} className="rounded-xl pr-10" placeholder="••••••••" />
+                <button type="button" onClick={() => setShowCurrentPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                  {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">New Password</label>
+              <div className="relative">
+                <Input type={showNewPw ? "text" : "password"} value={newPw} onChange={e => setNewPw(e.target.value)} className="rounded-xl pr-10" placeholder="Min. 8 characters" />
+                <button type="button" onClick={() => setShowNewPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">Confirm New Password</label>
+              <Input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} className="rounded-xl" placeholder="••••••••" />
+            </div>
+          </div>
+          <Button onClick={handleChangePassword} disabled={isChangingPw || !currentPw || !newPw || !confirmPw} className="rounded-xl" size="sm">
+            {isChangingPw ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
+            Update Password
+          </Button>
         </div>
 
         <Tabs defaultValue="gmail">
