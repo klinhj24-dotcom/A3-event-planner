@@ -744,7 +744,7 @@ function EventOverviewSheet({
             <div className="space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Website</h4>
               <div className="space-y-2">
-                {event.ticketsUrl && (
+                {event.ticketsUrl && event.ctaLabel !== "none" && (
                   <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
                     <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{event.ctaLabel || "Tickets"} link</span>
@@ -1106,6 +1106,7 @@ export default function Events() {
                             <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
                               <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
                               <SelectContent>
+                                <SelectItem value="none">No Button</SelectItem>
                                 <SelectItem value="TICKETS">TICKETS</SelectItem>
                                 <SelectItem value="REGISTER">REGISTER</SelectItem>
                                 <SelectItem value="SIGN UP">SIGN UP</SelectItem>
@@ -1497,6 +1498,7 @@ export default function Events() {
                       <Select onValueChange={field.onChange} value={field.value ?? "TICKETS"}>
                         <FormControl><SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
+                          <SelectItem value="none">No Button</SelectItem>
                           <SelectItem value="TICKETS">TICKETS</SelectItem>
                           <SelectItem value="REGISTER">REGISTER</SelectItem>
                           <SelectItem value="SIGN UP">SIGN UP</SelectItem>
