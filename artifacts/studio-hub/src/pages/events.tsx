@@ -832,7 +832,7 @@ function EventOverviewSheet({
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <div className={`font-medium ${r.charged ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                      <div className="font-medium text-foreground">
                         {r.contactFirstName} {r.contactLastName}
                       </div>
                       <div className="text-muted-foreground truncate">{r.contactEmail}</div>
