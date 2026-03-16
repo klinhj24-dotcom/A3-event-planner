@@ -25,12 +25,6 @@ function setSessionCookie(res: Response, sid: string) {
   });
 }
 
-// ── GET /api/auth/diag (TEMP) ─────────────────────────────────────────────────
-router.get("/auth/diag", async (_req: Request, res: Response) => {
-  const users = await db.select({ id: usersTable.id, email: usersTable.email, hasHash: usersTable.passwordHash }).from(usersTable);
-  res.json({ userCount: users.length, users: users.map(u => ({ id: u.id, email: u.email, hasHash: !!u.hasHash, hashLen: u.hasHash?.length })) });
-});
-
 // ── GET /api/auth/user ────────────────────────────────────────────────────────
 router.get("/auth/user", (req: Request, res: Response) => {
   res.json(
