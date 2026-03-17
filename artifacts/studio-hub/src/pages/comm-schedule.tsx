@@ -27,7 +27,6 @@ import {
   useCommRules, useCreateCommRule, useUpdateCommRule, useDeleteCommRule,
   type CommRule
 } from "@/hooks/use-team";
-import { useActiveEventTypes } from "@/hooks/use-event-types";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useToast } from "@/hooks/use-toast";
 
@@ -122,33 +121,34 @@ function RuleDialog({
   open,
   onClose,
   editRule,
+  defaultEventType,
 }: {
   open: boolean;
   onClose: () => void;
   editRule?: CommRule;
+  defaultEventType?: string;
 }) {
   const { toast } = useToast();
-  const { data: eventTypes = [] } = useActiveEventTypes();
   const isEdit = !!editRule;
   const { mutate: create, isPending: creating } = useCreateCommRule();
   const { mutate: update, isPending: updating } = useUpdateCommRule();
   const [form, setForm] = useState<RuleFormState>(() =>
-    editRule ? ruleToForm(editRule) : EMPTY_FORM
+    editRule ? ruleToForm(editRule) : { ...EMPTY_FORM, eventType: defaultEventType ?? EMPTY_FORM.eventType }
   );
 
   const isPending = creating || updating;
 
   useEffect(() => {
-    setForm(editRule ? ruleToForm(editRule) : EMPTY_FORM);
-  }, [editRule]);
+    setForm(editRule ? ruleToForm(editRule) : { ...EMPTY_FORM, eventType: defaultEventType ?? EMPTY_FORM.eventType });
+  }, [editRule, defaultEventType]);
 
   function set<K extends keyof RuleFormState>(key: K, val: RuleFormState[K]) {
     setForm(prev => ({ ...prev, [key]: val }));
   }
 
   function handleSubmit() {
-    if (!form.eventType || !form.commType) {
-      toast({ title: "Event type and comm type are required", variant: "destructive" });
+    if (!form.commType) {
+      toast({ title: "Comm type is required", variant: "destructive" });
       return;
     }
     const payload = {
@@ -192,18 +192,6 @@ function RuleDialog({
 
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 space-y-1.5">
-              <Label>Event Type *</Label>
-              <Select value={form.eventType} onValueChange={v => set("eventType", v)}>
-                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-64 overflow-y-auto">
-                  {eventTypes.map(t => (
-                    <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-1.5">
               <Label>Comm Type *</Label>
               <Select value={form.commType} onValueChange={v => set("commType", v)}>
@@ -309,10 +297,12 @@ export default function CommSchedule() {
 
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<CommRule | undefined>(undefined);
+  const [newRuleEventType, setNewRuleEventType] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<CommRule | null>(null);
 
-  function openCreate() {
+  function openCreate(eventType?: string) {
     setEditingRule(undefined);
+    setNewRuleEventType(eventType);
     setRuleDialogOpen(true);
   }
 
@@ -324,6 +314,7 @@ export default function CommSchedule() {
   function closeDialog() {
     setRuleDialogOpen(false);
     setEditingRule(undefined);
+    setNewRuleEventType(undefined);
   }
 
   function toggleActive(rule: CommRule) {
@@ -468,10 +459,7 @@ export default function CommSchedule() {
                         size="sm"
                         variant="ghost"
                         className="h-7 px-2 rounded-lg text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setEditingRule(undefined);
-                          setRuleDialogOpen(true);
-                        }}
+                        onClick={() => openCreate(eventType)}
                         title={`Add rule for ${eventType}`}
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -575,6 +563,7 @@ export default function CommSchedule() {
         open={ruleDialogOpen}
         onClose={closeDialog}
         editRule={editingRule}
+        defaultEventType={newRuleEventType}
       />
 
       {/* Delete confirmation */}
