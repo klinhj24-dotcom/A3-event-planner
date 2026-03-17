@@ -15,11 +15,11 @@ function buildTicketUrl(signupToken: string) {
   return `https://${getAppDomain()}/ticket/${signupToken}`;
 }
 
-/** Best-effort: push an event to Google Calendar using the requesting user's credentials */
-async function trySyncToCalendar(userId: number, event: typeof eventsTable.$inferSelect) {
+/** Push/update a confirmed event to Google Calendar. Returns the gcal event ID (new or existing). */
+async function trySyncToCalendar(userId: number, event: typeof eventsTable.$inferSelect): Promise<string | null> {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-    if (!user?.googleAccessToken || !user?.googleRefreshToken) return;
+    if (!user?.googleAccessToken || !user?.googleRefreshToken) return null;
     const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
     const cal = google.calendar({ version: "v3", auth });
 
@@ -49,9 +49,14 @@ async function trySyncToCalendar(userId: number, event: typeof eventsTable.$infe
 
     if (event.googleCalendarEventId) {
       await cal.events.update({ calendarId: TMS_CALENDAR_ID, eventId: event.googleCalendarEventId, requestBody: calEvent });
+      return event.googleCalendarEventId;
+    } else {
+      const created = await cal.events.insert({ calendarId: TMS_CALENDAR_ID, requestBody: calEvent });
+      return created.data.id ?? null;
     }
   } catch (err) {
     console.warn("trySyncToCalendar (non-fatal):", err);
+    return null;
   }
 }
 
@@ -116,6 +121,18 @@ router.post("/events", async (req, res) => {
         ticketFormType: ticketFormType ?? "none",
       })
       .returning();
+
+    // Auto-push to Google Calendar when status is confirmed
+    if (event.status === "confirmed") {
+      const userId = (req.user as any)?.id;
+      const gcalId = await trySyncToCalendar(userId, event);
+      if (gcalId && gcalId !== event.googleCalendarEventId) {
+        const [updated] = await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, event.id)).returning();
+        res.status(201).json(updated);
+        return;
+      }
+    }
+
     res.status(201).json(event);
   } catch (err) {
     console.error("createEvent error:", err);
@@ -189,10 +206,15 @@ router.put("/events/:id", async (req, res) => {
       return;
     }
 
-    // Auto-sync to Google Calendar if the event is already on the calendar
-    if (event.googleCalendarEventId) {
+    // Auto-sync to Google Calendar when status is confirmed (create or update)
+    if (event.status === "confirmed") {
       const userId = (req.user as any)?.id;
-      trySyncToCalendar(userId, event); // fire-and-forget, non-fatal
+      const gcalId = await trySyncToCalendar(userId, event);
+      if (gcalId && gcalId !== event.googleCalendarEventId) {
+        const [updated] = await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, id)).returning();
+        res.json(updated);
+        return;
+      }
     }
 
     res.json(event);

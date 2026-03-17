@@ -3,6 +3,7 @@ import app from "./app";
 import { db, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
+import { seedCommRules } from "./seeds/comm-rules";
 
 const rawPort = process.env["PORT"];
 
@@ -52,6 +53,8 @@ async function initDb() {
   } catch (err) {
     console.error("DB seed failed:", err);
   }
+
+  await seedCommRules();
 }
 
 initDb().then(() => {
