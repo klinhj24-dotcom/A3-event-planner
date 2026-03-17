@@ -4,6 +4,7 @@ import { db, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
+import { seedEventTypes } from "./seeds/event-types";
 
 const rawPort = process.env["PORT"];
 
@@ -54,6 +55,7 @@ async function initDb() {
     console.error("DB seed failed:", err);
   }
 
+  await seedEventTypes();
   await seedCommRules();
 }
 
