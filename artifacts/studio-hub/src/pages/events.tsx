@@ -815,7 +815,7 @@ function EventOverviewSheet({
             <div className="space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Website</h4>
               <div className="space-y-2">
-                {event.ticketsUrl && event.ctaLabel !== "none" && (
+                {event.ticketsUrl && event.ctaLabel !== "none" && (!event.ticketFormType || event.ticketFormType === "none") && (
                   <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
                     <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{event.ctaLabel || "Tickets"} link</span>
@@ -1111,7 +1111,8 @@ export default function Events() {
   function openEdit(ev: any) {
     setEditEvent(ev);
     // Derive ticket source from saved values
-    if (ev.ticketFormType && ev.ticketFormType !== "none") {
+    const isInternal = ev.ticketFormType && ev.ticketFormType !== "none";
+    if (isInternal) {
       setEditTicketSource("internal");
     } else if (ev.ticketsUrl) {
       setEditTicketSource("external");
@@ -1131,8 +1132,9 @@ export default function Events() {
       cost: ev.cost ? Number(ev.cost) : undefined,
       notes: ev.notes ?? "",
       flyerUrl: ev.flyerUrl ?? "",
-      ticketsUrl: ev.ticketsUrl ?? "",
-      ctaLabel: ev.ctaLabel ?? "",
+      // Clear ticketsUrl if event is using the internal form — stale external URLs cause dead links
+      ticketsUrl: isInternal ? "" : (ev.ticketsUrl ?? ""),
+      ctaLabel: isInternal ? "REGISTER" : (ev.ctaLabel ?? ""),
       ticketFormType: ev.ticketFormType ?? "none",
     });
   }

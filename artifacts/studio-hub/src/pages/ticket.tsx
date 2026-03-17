@@ -150,7 +150,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
             <FormField control={form.control} name="studentFirstName" render={({ field }) => (
               <FormItem>
                 <FormLabel>First Name <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input className="rounded-xl" placeholder="Alex" {...field} /></FormControl>
+                <FormControl><Input className="rounded-xl" placeholder="Rigby" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
