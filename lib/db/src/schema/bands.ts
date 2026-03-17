@@ -30,6 +30,7 @@ export const eventLineupTable = pgTable("event_lineup", {
   isOverlapping: boolean("is_overlapping").notNull().default(false),
   confirmed: boolean("confirmed").notNull().default(false),
   type: text("type").notNull().default("act"),       // 'act' | 'announcement' | 'break'
+  groupName: text("group_name"),                     // recital group / session name (e.g. "Morning Session", "Group A")
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

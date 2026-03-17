@@ -72,6 +72,7 @@ const LINEUP_SELECT = {
   contactEmail: bandsTable.contactEmail,
   position: eventLineupTable.position,
   label: eventLineupTable.label,
+  groupName: eventLineupTable.groupName,
   startTime: eventLineupTable.startTime,
   durationMinutes: eventLineupTable.durationMinutes,
   bufferMinutes: eventLineupTable.bufferMinutes,
@@ -102,12 +103,13 @@ router.post("/events/:id/lineup", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const eventId = parseInt(req.params.id);
-    const { bandId, label, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position } = req.body;
     const [slot] = await db.insert(eventLineupTable)
       .values({
         eventId,
         bandId: bandId ? Number(bandId) : null,
         label,
+        groupName: groupName || null,
         startTime: startTime || null,
         durationMinutes: durationMinutes ? Number(durationMinutes) : null,
         bufferMinutes: bufferMinutes !== undefined ? Number(bufferMinutes) : 15,
@@ -147,11 +149,12 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const slotId = parseInt(req.params.slotId);
-    const { bandId, label, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes } = req.body;
     const [slot] = await db.update(eventLineupTable)
       .set({
         bandId: bandId !== undefined ? (bandId ? Number(bandId) : null) : undefined,
         label,
+        groupName: groupName !== undefined ? (groupName || null) : undefined,
         startTime: startTime !== undefined ? (startTime || null) : undefined,
         durationMinutes: durationMinutes !== undefined ? (durationMinutes ? Number(durationMinutes) : null) : undefined,
         bufferMinutes: bufferMinutes !== undefined ? Number(bufferMinutes) : undefined,

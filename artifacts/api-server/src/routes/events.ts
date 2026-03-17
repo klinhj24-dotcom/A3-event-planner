@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
@@ -57,6 +58,72 @@ async function trySyncToCalendar(userId: number, event: typeof eventsTable.$infe
   } catch (err) {
     console.warn("trySyncToCalendar (non-fatal):", err);
     return null;
+  }
+}
+
+const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
+
+/** Fire-and-forget: generate comm tasks from rules and push them to the comms Google Calendar. */
+async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsTable.$inferSelect) {
+  try {
+    if (!event.startDate) return;
+    const rules = await db
+      .select()
+      .from(commScheduleRulesTable)
+      .where(and(eq(commScheduleRulesTable.isActive, true), eq(commScheduleRulesTable.eventType, event.type)));
+    if (rules.length === 0) return;
+
+    // Wipe + regenerate tasks
+    await db.delete(commTasksTable).where(eq(commTasksTable.eventId, event.id));
+    const eventDate = new Date(event.startDate);
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    const hasCalendar = !!(user?.googleAccessToken && user?.googleRefreshToken);
+    let cal: ReturnType<typeof google.calendar> | null = null;
+    if (hasCalendar) {
+      const auth = createAuthedClient(user.googleAccessToken!, user.googleRefreshToken!, user.googleTokenExpiry);
+      cal = google.calendar({ version: "v3", auth });
+    }
+
+    for (const rule of rules) {
+      const dueDate = rule.timingDays < 0
+        ? subDays(eventDate, Math.abs(rule.timingDays))
+        : addDays(eventDate, rule.timingDays);
+
+      const [task] = await db.insert(commTasksTable).values({
+        eventId: event.id,
+        ruleId: rule.id,
+        commType: rule.commType,
+        messageName: rule.messageName,
+        channel: rule.channel,
+        dueDate,
+        status: "pending",
+      }).returning();
+
+      if (cal) {
+        try {
+          const taskTitle = [event.title, rule.messageName || rule.commType, rule.channel ? `(${rule.channel})` : null].filter(Boolean).join(" — ");
+          const dueDateStr = dueDate.toISOString().split("T")[0];
+          const calResult = await cal.events.insert({
+            calendarId: TMS_COMMS_CALENDAR_ID,
+            requestBody: {
+              summary: taskTitle,
+              description: [`Event: ${event.title}`, `Comm type: ${rule.commType}`, rule.channel ? `Channel: ${rule.channel}` : null, rule.notes ? `Notes: ${rule.notes}` : null].filter(Boolean).join("\n"),
+              start: { date: dueDateStr },
+              end: { date: dueDateStr },
+            },
+          });
+          if (calResult.data.id) {
+            await db.update(commTasksTable).set({ googleCalendarEventId: calResult.data.id }).where(eq(commTasksTable.id, task.id));
+          }
+        } catch (calErr) {
+          console.warn("Comm task calendar push failed (non-fatal):", calErr);
+        }
+      }
+    }
+    console.log(`Auto-generated ${rules.length} comm tasks for event ${event.id} (${event.title})`);
+  } catch (err) {
+    console.warn("tryAutoGenerateAndPushComms (non-fatal):", err);
   }
 }
 
@@ -122,15 +189,17 @@ router.post("/events", async (req, res) => {
       })
       .returning();
 
-    // Auto-push to Google Calendar when status is confirmed
+    // Auto-push to Google Calendar + generate comm tasks when status is confirmed
     if (event.status === "confirmed") {
       const userId = (req.user as any)?.id;
       const gcalId = await trySyncToCalendar(userId, event);
-      if (gcalId && gcalId !== event.googleCalendarEventId) {
-        const [updated] = await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, event.id)).returning();
-        res.status(201).json(updated);
-        return;
-      }
+      const finalEvent = gcalId && gcalId !== event.googleCalendarEventId
+        ? (await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, event.id)).returning())[0]
+        : event;
+      // Fire-and-forget comm task generation + comms calendar push
+      tryAutoGenerateAndPushComms(userId, finalEvent);
+      res.status(201).json(finalEvent);
+      return;
     }
 
     res.status(201).json(event);
@@ -210,11 +279,16 @@ router.put("/events/:id", async (req, res) => {
     if (event.status === "confirmed") {
       const userId = (req.user as any)?.id;
       const gcalId = await trySyncToCalendar(userId, event);
-      if (gcalId && gcalId !== event.googleCalendarEventId) {
-        const [updated] = await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, id)).returning();
-        res.json(updated);
-        return;
+      const finalEvent = gcalId && gcalId !== event.googleCalendarEventId
+        ? (await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, id)).returning())[0]
+        : event;
+      // Auto-generate comm tasks when transitioning to confirmed (or re-confirming with a start date)
+      const wasConfirmed = existing?.status === "confirmed";
+      if (!wasConfirmed || !event.googleCalendarEventId) {
+        tryAutoGenerateAndPushComms(userId, finalEvent);
       }
+      res.json(finalEvent);
+      return;
     }
 
     res.json(event);

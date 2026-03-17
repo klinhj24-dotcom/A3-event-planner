@@ -694,7 +694,7 @@ function EventOverviewSheet({
     { label: "Edit Event", icon: <Pencil className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onEdit(event); } },
     { label: "Comm Tasks", icon: <ClipboardList className="h-4 w-4" />, color: "text-foreground", bg: "hover:bg-muted/60", fn: () => { onClose(); actions.onTasks(event); } },
     { label: "Post-Event Debrief", icon: <ClipboardCheck className="h-4 w-4" />, color: "text-[#00b199]", bg: "hover:bg-[#00b199]/10", fn: () => { onClose(); actions.onDebrief(event); } },
-    { label: "Band Lineup", icon: <Music className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onLineup(event); } },
+    { label: event.type === "Recital" ? "Recital Order" : "Band Lineup", icon: <Music className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onLineup(event); } },
     { label: "Staff Schedule", icon: <Users2 className="h-4 w-4" />, color: "text-emerald-500", bg: "hover:bg-emerald-500/10", fn: () => { onClose(); actions.onStaffSlots(event); } },
     { label: "Call Sheet", icon: <FileText className="h-4 w-4" />, color: "text-sky-400", bg: "hover:bg-sky-500/10", fn: () => { onClose(); actions.onCallSheet(event); } },
     { label: "Send Invite", icon: <Mail className="h-4 w-4" />, color: "text-violet-400", bg: "hover:bg-violet-500/10", fn: () => { onClose(); actions.onInvite(event); } },
@@ -997,7 +997,7 @@ export default function Events() {
   const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
-  const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string } | null>(null);
+  const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
@@ -1978,7 +1978,7 @@ export default function Events() {
           onEdit: (ev) => openEdit(ev),
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
           onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl }),
-          onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title }),
+          onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type }),
           onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
           onInvite: (ev) => setInviteEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, location: ev.location, signupToken: ev.signupToken }),

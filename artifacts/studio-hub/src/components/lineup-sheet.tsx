@@ -19,7 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
-  Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle,
+  Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -28,7 +28,8 @@ interface LineupSlot {
   id: number; eventId: number; bandId?: number | null; bandName?: string | null;
   position: number; label?: string | null; startTime?: string | null;
   durationMinutes?: number | null; bufferMinutes?: number | null;
-  isOverlapping: boolean; confirmed: boolean; type: string; notes?: string | null;
+  isOverlapping: boolean; confirmed: boolean; type: string;
+  groupName?: string | null; notes?: string | null;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -68,10 +69,10 @@ const SLOT_TYPE_META: Record<string, { label: string; icon: React.ReactNode; col
 
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
-  slot, calcTime, bands, eventId,
+  slot, calcTime, bands, eventId, isRecital,
   onUpdate, onDelete,
 }: {
-  slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number;
+  slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => void;
   onDelete: (id: number) => void;
 }) {
@@ -88,6 +89,7 @@ function SlotRow({
     isOverlapping: slot.isOverlapping,
     notes: slot.notes ?? "",
     bandId: slot.bandId ? String(slot.bandId) : "",
+    groupName: slot.groupName ?? "",
   });
 
   const displayName = slot.bandName || slot.label || (SLOT_TYPE_META[slot.type]?.label ?? slot.type);
@@ -102,6 +104,7 @@ function SlotRow({
       isOverlapping: draft.isOverlapping,
       notes: draft.notes || null,
       bandId: draft.bandId ? Number(draft.bandId) : null,
+      groupName: draft.groupName || null,
     });
   }
 
@@ -129,6 +132,9 @@ function SlotRow({
         {/* Name */}
         <div className="flex-1 min-w-0">
           <span className="font-medium text-sm truncate block">{displayName}</span>
+          {slot.groupName && (
+            <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>
+          )}
           {slot.isOverlapping && (
             <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps with previous</span>
           )}
@@ -171,7 +177,7 @@ function SlotRow({
       {/* Expanded edit panel */}
       {expanded && (
         <div className="border-t border-border/40 px-4 pb-4 pt-3 space-y-3">
-          {slot.type === "act" && (
+          {slot.type === "act" && !isRecital && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Band / Act</label>
@@ -189,6 +195,18 @@ function SlotRow({
                   <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="Act name…" />
                 </div>
               )}
+            </div>
+          )}
+          {slot.type === "act" && isRecital && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Student / Performer Name</label>
+                <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="e.g. Alex Johnson" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Group / Class</label>
+                <Input className="h-8 rounded-lg text-xs" value={draft.groupName} onChange={e => setDraft(d => ({ ...d, groupName: e.target.value }))} placeholder="e.g. Beginner Guitar" />
+              </div>
             </div>
           )}
           {slot.type !== "act" && (
@@ -241,9 +259,43 @@ function SlotRow({
   );
 }
 
+// ── Print recital order ────────────────────────────────────────────────────────
+function printRecitalOrder(title: string, slots: LineupSlot[], calcTimes: (string | null)[]) {
+  const rows = slots
+    .map((slot, i) => {
+      if (slot.type !== "act") return "";
+      const time = calcTimes[i] ? fmt12(calcTimes[i]) : "";
+      const num = i + 1;
+      const name = slot.label || slot.bandName || "—";
+      const group = slot.groupName || "";
+      const dur = slot.durationMinutes ? `${slot.durationMinutes} min` : "";
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#888;font-size:13px;">${num}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;">${name}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">${group}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;font-family:monospace;">${time}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#9ca3af;font-size:12px;">${dur}</td>
+      </tr>`;
+    }).join("");
+
+  const html = `<!DOCTYPE html><html><head><title>Recital Order — ${title}</title>
+  <style>body{font-family:'Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#111;}
+  h1{font-size:22px;margin-bottom:4px;}h2{font-size:13px;color:#666;font-weight:normal;margin-bottom:28px;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;padding:8px 12px;background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:2px solid #e5e7eb;}
+  @media print{body{padding:20px;}}</style></head>
+  <body><h1>${title}</h1><h2>Recital Order</h2>
+  <table><thead><tr>
+    <th>#</th><th>Performer</th><th>Group / Class</th><th>Time</th><th>Duration</th>
+  </tr></thead><tbody>${rows}</tbody></table></body></html>`;
+
+  const w = window.open("", "_blank");
+  if (w) { w.document.write(html); w.document.close(); w.print(); }
+}
+
 // ── Main sheet ─────────────────────────────────────────────────────────────────
 export function LineupSheet({ event, open, onClose }: {
-  event: { id: number; title: string } | null;
+  event: { id: number; title: string; type?: string } | null;
   open: boolean;
   onClose: () => void;
 }) {
@@ -319,7 +371,7 @@ export function LineupSheet({ event, open, onClose }: {
   // ── Lineup mutations ──────────────────────────────────────────────────────────
   const [addSlotOpen, setAddSlotOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
-    type: "act", bandId: "", label: "", startTime: "", duration: "", buffer: "15", isOverlapping: false,
+    type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false,
   });
 
   const { mutate: addSlot, isPending: addingSlot } = useMutation({
@@ -331,7 +383,7 @@ export function LineupSheet({ event, open, onClose }: {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
       setLocalSlots([]);
       setAddSlotOpen(false);
-      setNewSlot({ type: "act", bandId: "", label: "", startTime: "", duration: "", buffer: "15", isOverlapping: false });
+      setNewSlot({ type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false });
       toast({ title: "Slot added" });
     },
   });
@@ -380,6 +432,7 @@ export function LineupSheet({ event, open, onClose }: {
     reorderSlots(reordered.map(s => ({ id: s.id, position: s.position })));
   }
 
+  const isRecital = event?.type === "Recital";
   const calcTimes = computeTimes(slots);
 
   const handleUpdate = useCallback((id: number, data: Partial<LineupSlot>) => {
@@ -395,6 +448,7 @@ export function LineupSheet({ event, open, onClose }: {
       type: newSlot.type,
       bandId: newSlot.bandId && newSlot.bandId !== "_custom" ? Number(newSlot.bandId) : null,
       label: newSlot.label || null,
+      groupName: newSlot.groupName || null,
       startTime: newSlot.startTime || null,
       durationMinutes: newSlot.duration ? Number(newSlot.duration) : null,
       bufferMinutes: Number(newSlot.buffer) || 15,
@@ -407,14 +461,21 @@ export function LineupSheet({ event, open, onClose }: {
     <Sheet open={open} onOpenChange={o => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-full sm:max-w-5xl p-0 flex flex-col overflow-hidden">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/30 shrink-0">
-          <SheetTitle className="font-display text-xl">
-            Band Lineup — <span className="text-muted-foreground font-normal">{event?.title}</span>
-          </SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="font-display text-xl">
+              {isRecital ? "Recital Order" : "Band Lineup"} — <span className="text-muted-foreground font-normal">{event?.title}</span>
+            </SheetTitle>
+            {isRecital && slots.length > 0 && (
+              <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5 shrink-0" onClick={() => printRecitalOrder(event?.title ?? "Recital", slots, calcTimes)}>
+                <Printer className="h-3.5 w-3.5" /> Print Order
+              </Button>
+            )}
+          </div>
         </SheetHeader>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* ── Left: Bands panel ─────────────────────────────────────────────── */}
-          <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
+          {/* ── Left: Bands panel (hidden for recitals) ───────────────────────── */}
+          {!isRecital && <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/20">
               <span className="text-sm font-semibold">Band Roster</span>
               <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg gap-1" onClick={() => setAddBandOpen(true)}>
@@ -466,25 +527,25 @@ export function LineupSheet({ event, open, onClose }: {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* ── Right: Lineup panel ───────────────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <p className="text-sm font-semibold">Show Order</p>
+                <p className="text-sm font-semibold">{isRecital ? "Performance Order" : "Show Order"}</p>
                 <p className="text-xs text-muted-foreground">Drag to reorder · Times auto-calculate from duration + buffer</p>
               </div>
               <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => setAddSlotOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> Add Slot
+                <Plus className="h-3.5 w-3.5" /> {isRecital ? "Add Performer" : "Add Slot"}
               </Button>
             </div>
 
             {slots.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-border/50 text-center">
                 <Music className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">No acts added yet</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Click "Add Slot" to start building the lineup</p>
+                <p className="text-sm font-medium text-muted-foreground">{isRecital ? "No performers added yet" : "No acts added yet"}</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Click "{isRecital ? "Add Performer" : "Add Slot"}" to start building the {isRecital ? "recital order" : "lineup"}</p>
               </div>
             )}
 
@@ -498,6 +559,7 @@ export function LineupSheet({ event, open, onClose }: {
                       calcTime={calcTimes[i]}
                       bands={rawBands}
                       eventId={eventId!}
+                      isRecital={isRecital}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
                     />
@@ -605,7 +667,7 @@ export function LineupSheet({ event, open, onClose }: {
       {/* Add Slot Dialog */}
       <Dialog open={addSlotOpen} onOpenChange={setAddSlotOpen}>
         <DialogContent className="sm:max-w-[440px] rounded-2xl">
-          <DialogHeader><DialogTitle className="font-display text-xl">Add Lineup Slot</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display text-xl">{isRecital ? "Add Performer" : "Add Lineup Slot"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Slot Type</label>
@@ -613,13 +675,13 @@ export function LineupSheet({ event, open, onClose }: {
                 {(["act", "announcement", "break"] as const).map(t => (
                   <button key={t} onClick={() => setNewSlot(s => ({ ...s, type: t }))}
                     className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium border transition-all ${newSlot.type === t ? "bg-primary text-primary-foreground border-primary" : "border-border/50 text-muted-foreground hover:border-primary/50"}`}>
-                    {SLOT_TYPE_META[t].icon}{SLOT_TYPE_META[t].label}
+                    {SLOT_TYPE_META[t].icon}{t === "act" && isRecital ? "Performer" : SLOT_TYPE_META[t].label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {newSlot.type === "act" && (
+            {newSlot.type === "act" && !isRecital && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 col-span-2">
                   <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Band / Act</label>
@@ -637,6 +699,18 @@ export function LineupSheet({ event, open, onClose }: {
                     <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder="Act name…" />
                   </div>
                 )}
+              </div>
+            )}
+            {newSlot.type === "act" && isRecital && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Student Name</label>
+                  <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder="e.g. Alex Johnson" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Group / Class</label>
+                  <Input className="rounded-xl" value={newSlot.groupName} onChange={e => setNewSlot(s => ({ ...s, groupName: e.target.value }))} placeholder="e.g. Beginner Guitar" />
+                </div>
               </div>
             )}
             {newSlot.type !== "act" && (
