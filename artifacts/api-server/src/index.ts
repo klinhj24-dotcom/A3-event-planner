@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
 import { seedEventTypes } from "./seeds/event-types";
+import { startStaffReminderCron } from "./lib/staff-reminders";
 
 const rawPort = process.env["PORT"];
 
@@ -62,5 +63,6 @@ async function initDb() {
 initDb().then(() => {
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
+    startStaffReminderCron();
   });
 });

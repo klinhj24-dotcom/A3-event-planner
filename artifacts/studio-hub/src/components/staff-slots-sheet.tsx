@@ -29,6 +29,7 @@ interface StaffSlot {
   roleTypeId: number; roleName: string; roleColor?: string | null;
   assignedEmployeeId?: number | null; assignedEmployeeName?: string | null; assignedEmployeeRole?: string | null;
   startTime?: string | null; endTime?: string | null; notes?: string | null;
+  confirmed?: boolean | null;
 }
 interface EventMeta {
   id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null;
@@ -161,9 +162,16 @@ function SlotCard({
         <UserRound className="h-3.5 w-3.5" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium truncate ${filled ? "text-foreground" : "text-muted-foreground/50 italic"}`}>
-          {filled ? slot.assignedEmployeeName : "Unassigned"}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className={`text-sm font-medium truncate ${filled ? "text-foreground" : "text-muted-foreground/50 italic"}`}>
+            {filled ? slot.assignedEmployeeName : "Unassigned"}
+          </p>
+          {filled && (
+            slot.confirmed
+              ? <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"><Check className="h-2.5 w-2.5" />Confirmed</span>
+              : <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Pending</span>
+          )}
+        </div>
         <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">

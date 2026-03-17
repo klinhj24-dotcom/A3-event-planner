@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { eventsTable } from "./events";
 import { employeesTable } from "./employees";
 
@@ -22,6 +22,12 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   startTime: timestamp("start_time", { withTimezone: true }),
   endTime: timestamp("end_time", { withTimezone: true }),
   notes: text("notes"),
+  // Confirmation
+  confirmed: boolean("confirmed").notNull().default(false),
+  confirmationToken: text("confirmation_token").unique(),
+  // Reminder tracking
+  weekReminderSent: boolean("week_reminder_sent").notNull().default(false),
+  dayReminderSent: boolean("day_reminder_sent").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
