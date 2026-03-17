@@ -196,4 +196,59 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
   }
 });
 
+// POST /api/events/:id/ticket-requests/remind — send reminder emails to all ticket/recital registrants
+router.post("/events/:id/ticket-requests/remind", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const eventId = parseInt(req.params.id);
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
+    const requests = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.eventId, eventId));
+    const withEmail = requests.filter(r => r.contactEmail && r.status !== "cancelled");
+    if (withEmail.length === 0) { res.json({ sent: 0, message: "No registrants with email addresses" }); return; }
+
+    const users = await db.select().from(usersTable);
+    const gmailUser = users.find(u => u.googleAccessToken && u.googleRefreshToken);
+    if (!gmailUser) { res.status(400).json({ error: "No Gmail account connected" }); return; }
+
+    const auth = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
+    const gmail = google.gmail({ version: "v1", auth });
+    const eventDate = event.startDate
+      ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(event.startDate))
+      : "TBD";
+
+    let sent = 0;
+    for (const r of withEmail) {
+      try {
+        const isRecital = r.formType === "recital";
+        const firstName = r.contactFirstName;
+        const subject = `Reminder: ${event.title} is coming up!`;
+        let body = `Hi ${firstName},\n\nJust a friendly reminder that <strong>${event.title}</strong> is coming up!\n\n`;
+        body += `<strong>Date:</strong> ${eventDate}\n`;
+        if (event.location) body += `<strong>Location:</strong> ${event.location}\n`;
+        if (isRecital && r.studentFirstName) {
+          body += `<strong>Performer:</strong> ${r.studentFirstName} ${r.studentLastName ?? ""}\n`;
+          if (r.instrument) body += `<strong>Instrument:</strong> ${r.instrument}\n`;
+          if (r.recitalSong) body += `<strong>Song:</strong> ${r.recitalSong}\n`;
+        } else if (r.ticketCount) {
+          body += `<strong>Tickets:</strong> ${r.ticketCount}\n`;
+        }
+        body += `\nIf anything has changed or you have questions, just reply to this email.\n\nSee you there!\nThe Music Space Team`;
+        const html = buildHtmlEmail({ recipientName: firstName, body });
+        const raw = makeHtmlEmail({ to: r.contactEmail!, from: gmailUser.email || "", subject, html });
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        sent++;
+      } catch (err) {
+        console.error(`Reminder to ${r.contactEmail} failed:`, err);
+      }
+    }
+
+    res.json({ sent, total: withEmail.length });
+  } catch (err) {
+    console.error("ticketReminders error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

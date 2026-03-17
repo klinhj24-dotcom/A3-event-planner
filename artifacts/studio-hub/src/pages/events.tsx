@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, CheckCircle2, Trash2
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, CheckCircle2, Trash2, Send, Users
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -658,6 +658,21 @@ function EventOverviewSheet({
     queryFn: () => fetch(`/api/events/${event!.id}/ticket-requests`).then(r => r.json()),
     enabled: !!event?.id && !!event?.ticketFormType && event?.ticketFormType !== "none",
   });
+  const { data: eventSignups = [] } = useQuery<any[]>({
+    queryKey: [`/api/events/${event?.id}/signups`],
+    queryFn: () => fetch(`/api/events/${event!.id}/signups`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!event?.id,
+  });
+  const { mutate: remindSignups, isPending: remindingSignups } = useMutation({
+    mutationFn: () => fetch(`/api/events/${event!.id}/signups/remind`, { method: "POST", credentials: "include" }).then(r => r.json()),
+    onSuccess: (d) => toast({ title: d.sent > 0 ? `Sent ${d.sent} reminder${d.sent !== 1 ? "s" : ""}` : "No signups with email addresses" }),
+    onError: () => toast({ title: "Failed to send reminders", variant: "destructive" }),
+  });
+  const { mutate: remindTickets, isPending: remindingTickets } = useMutation({
+    mutationFn: () => fetch(`/api/events/${event!.id}/ticket-requests/remind`, { method: "POST", credentials: "include" }).then(r => r.json()),
+    onSuccess: (d) => toast({ title: d.sent > 0 ? `Sent ${d.sent} reminder${d.sent !== 1 ? "s" : ""}` : "No registrants with email addresses" }),
+    onError: () => toast({ title: "Failed to send reminders", variant: "destructive" }),
+  });
 
   const { mutate: toggleCharged } = useMutation({
     mutationFn: async ({ requestId, charged }: { requestId: number; charged: boolean }) => {
@@ -869,6 +884,50 @@ function EventOverviewSheet({
             <div className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Ticket className="h-3.5 w-3.5" />
               No ticket requests yet — share the form link with parents.
+            </div>
+          )}
+          {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (
+            <button
+              onClick={() => remindTickets()}
+              disabled={remindingTickets}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {remindingTickets ? "Sending reminders…" : "Send reminders to all registrants"}
+            </button>
+          )}
+
+          {/* Band / group signups */}
+          {eventSignups.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" /> Signups
+                <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{eventSignups.length}</span>
+              </h4>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {eventSignups.map((s: any) => (
+                  <div key={s.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/40 bg-muted/40 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground">{s.name}</div>
+                      {s.email && <div className="text-muted-foreground truncate">{s.email}</div>}
+                      {s.role && <div className="text-muted-foreground">{s.role}</div>}
+                    </div>
+                    <span className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize ${
+                      s.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
+                      s.status === "cancelled" ? "bg-destructive/10 text-destructive" :
+                      "bg-amber-500/10 text-amber-600"
+                    }`}>{s.status}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => remindSignups()}
+                disabled={remindingSignups}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {remindingSignups ? "Sending reminders…" : "Send reminders to all signups"}
+              </button>
             </div>
           )}
 
