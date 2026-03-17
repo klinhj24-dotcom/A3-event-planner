@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,8 +88,6 @@ function TimingBadge({ days }: { days: number }) {
 
 interface RuleFormState {
   eventType: string;
-  eventTagGroup: string;
-  eventTag: string;
   commType: string;
   messageName: string;
   timingDays: number;
@@ -100,8 +98,6 @@ interface RuleFormState {
 
 const EMPTY_FORM: RuleFormState = {
   eventType: "Recital",
-  eventTagGroup: "",
-  eventTag: "",
   commType: "Email",
   messageName: "",
   timingDays: -14,
@@ -113,8 +109,6 @@ const EMPTY_FORM: RuleFormState = {
 function ruleToForm(rule: CommRule): RuleFormState {
   return {
     eventType: rule.eventType,
-    eventTagGroup: rule.eventTagGroup ?? "",
-    eventTag: rule.eventTag ?? "",
     commType: rule.commType,
     messageName: rule.messageName ?? "",
     timingDays: rule.timingDays,
@@ -144,6 +138,10 @@ function RuleDialog({
 
   const isPending = creating || updating;
 
+  useEffect(() => {
+    setForm(editRule ? ruleToForm(editRule) : EMPTY_FORM);
+  }, [editRule]);
+
   function set<K extends keyof RuleFormState>(key: K, val: RuleFormState[K]) {
     setForm(prev => ({ ...prev, [key]: val }));
   }
@@ -155,8 +153,8 @@ function RuleDialog({
     }
     const payload = {
       eventType: form.eventType,
-      eventTagGroup: form.eventTagGroup || null,
-      eventTag: form.eventTag || null,
+      eventTagGroup: isEdit ? (editRule!.eventTagGroup ?? null) : null,
+      eventTag: isEdit ? (editRule!.eventTag ?? null) : null,
       commType: form.commType,
       messageName: form.messageName || null,
       timingDays: form.timingDays,
@@ -271,27 +269,6 @@ function RuleDialog({
               value={form.notes}
               onChange={e => set("notes", e.target.value)}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Tag Group</Label>
-              <Input
-                placeholder="e.g. MSH"
-                className="rounded-xl"
-                value={form.eventTagGroup}
-                onChange={e => set("eventTagGroup", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Event Tag</Label>
-              <Input
-                placeholder="e.g. RECITAL"
-                className="rounded-xl"
-                value={form.eventTag}
-                onChange={e => set("eventTag", e.target.value)}
-              />
-            </div>
           </div>
 
           {isEdit && (
