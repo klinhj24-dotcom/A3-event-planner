@@ -3,14 +3,41 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Calendar, MapPin, Music, CheckCircle2, Loader2, CreditCard, Ticket } from "lucide-react";
+import { Calendar, MapPin, CheckCircle2, Loader2, CreditCard, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
+
+const TEACHERS = [
+  "Brandon Gouin",
+  "Charlie Ballantine",
+  "Derek Wiegmann",
+  "Grey Rayadurg",
+  "Griffin Quinnan",
+  "Hannah Piasecki",
+  "Ida Dierker",
+  "Jeffrey Roden",
+  "Johanna McGuire",
+  "Justin Levy",
+  "Kit Benz",
+  "Max Phelps",
+  "Nathan Hillman",
+  "Nick Komosa",
+  "Noah Stuehler",
+  "Rachel McNear",
+  "Ralph Bernabe",
+  "Roxanne Wehking",
+  "Sean Oliver",
+  "Tsveta Dabova",
+  "Victoria Bee",
+  "Violet Palm",
+];
 
 const generalSchema = z.object({
   contactFirstName: z.string().min(1, "First name is required"),
@@ -179,7 +206,16 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
           <FormField control={form.control} name="teacher" render={({ field }) => (
             <FormItem>
               <FormLabel>Teacher <span className="text-destructive">*</span></FormLabel>
-              <FormControl><Input className="rounded-xl" placeholder="e.g. Ms. Johnson" {...field} /></FormControl>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Select your teacher…" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {TEACHERS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )} />
@@ -250,11 +286,8 @@ export default function TicketForm() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center py-8 px-4">
       {/* Logo / Brand */}
-      <div className="mb-6 flex items-center gap-2">
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-          <Music className="h-4 w-4 text-primary-foreground" />
-        </div>
-        <span className="font-display font-bold text-foreground text-lg tracking-tight">The Music Space</span>
+      <div className="mb-6">
+        <img src={tmsLogoWhite} alt="The Music Space" className="h-16 w-auto object-contain" />
       </div>
 
       <div className="w-full max-w-lg">
