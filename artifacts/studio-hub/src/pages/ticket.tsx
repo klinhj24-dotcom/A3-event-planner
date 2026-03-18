@@ -140,7 +140,7 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
         <FormField control={form.control} name="contactEmail" render={({ field }) => (
           <FormItem>
             <FormLabel>Email Address <span className="text-destructive">*</span></FormLabel>
-            <FormControl><Input className="rounded-xl" type="email" placeholder="rigby@example.com" {...field} /></FormControl>
+            <FormControl><Input className="rounded-xl" type="email" placeholder="rigby@themusicspace.com" {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
