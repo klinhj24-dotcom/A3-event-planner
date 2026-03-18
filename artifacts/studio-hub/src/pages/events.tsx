@@ -674,6 +674,7 @@ const eventSchema = z.object({
   ctaLabel: z.string().optional(),
   ticketFormType: z.string().optional(),
   ticketPrice: z.coerce.number().min(0).optional(),
+  hasBandLineup: z.boolean().default(false),
   allowGuestList: z.boolean().default(false),
   guestListPolicy: z.string().optional(),
 });
@@ -1610,12 +1611,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", allowGuestList: false, guestListPolicy: "students_only" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, allowGuestList: false, guestListPolicy: "students_only" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", allowGuestList: false, guestListPolicy: "students_only" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, allowGuestList: false, guestListPolicy: "students_only" }
   });
 
   function openEdit(ev: any) {
@@ -1650,6 +1651,7 @@ export default function Events() {
       ctaLabel: isInternal ? "REGISTER" : (ev.ctaLabel ?? ""),
       ticketFormType: ev.ticketFormType ?? "none",
       ticketPrice: ev.ticketPrice ? Number(ev.ticketPrice) : undefined,
+      hasBandLineup: ev.hasBandLineup ?? false,
       allowGuestList: ev.allowGuestList ?? false,
       guestListPolicy: ev.guestListPolicy ?? "students_only",
     });
@@ -1886,6 +1888,17 @@ export default function Events() {
                         <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                       </FormItem>
                     )} />
+                    {/* Band lineup toggle */}
+                    <FormField control={form.control} name="hasBandLineup" render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-medium flex items-center gap-1.5"><Music className="h-3.5 w-3.5 text-primary" /> Band Lineup</FormLabel>
+                          <p className="text-[10px] text-muted-foreground">Enable the band lineup builder for this event</p>
+                        </div>
+                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                      </FormItem>
+                    )} />
+
                     {/* Ticketing section */}
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                       <h4 className="font-semibold text-sm flex items-center gap-1.5">
@@ -2206,15 +2219,17 @@ export default function Events() {
                               <ClipboardCheck className="h-3.5 w-3.5" />
                             </Button>
                             {/* Band lineup */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title="Band lineup builder"
-                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
-                              onClick={() => setLineupEvent({ id: event.id, title: event.title })}
-                            >
-                              <Music className="h-3.5 w-3.5" />
-                            </Button>
+                            {event.hasBandLineup && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Band lineup builder"
+                                className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                onClick={() => setLineupEvent({ id: event.id, title: event.title })}
+                              >
+                                <Music className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                             {/* Staff schedule */}
                             <Button
                               size="sm"
@@ -2424,6 +2439,17 @@ export default function Events() {
                   <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                 </FormItem>
               )} />
+              {/* Band lineup toggle */}
+              <FormField control={editForm.control} name="hasBandLineup" render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium flex items-center gap-1.5"><Music className="h-3.5 w-3.5 text-primary" /> Band Lineup</FormLabel>
+                    <p className="text-[10px] text-muted-foreground">Enable the band lineup builder for this event</p>
+                  </div>
+                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                </FormItem>
+              )} />
+
               {/* Ticketing section */}
               <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                 <h4 className="font-semibold text-sm flex items-center gap-1.5">
