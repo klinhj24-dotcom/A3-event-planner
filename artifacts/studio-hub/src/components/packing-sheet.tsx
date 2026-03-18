@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle, Layers, X
+  Plus, Trash2, Package, Wand2, RotateCcw, ChevronDown, ChevronUp, Pencil, Check, AlertTriangle, Layers, X, GripVertical
 } from "lucide-react";
 
 // ── Preset types ──────────────────────────────────────────────────────────────
@@ -273,6 +273,27 @@ export function PackingSheet({ event, open, onClose }: {
   unknownCats.forEach(cat => { grouped[cat] = items.filter(i => i.category === cat); });
   const allCats = [...CATEGORIES, ...unknownCats].filter(cat => grouped[cat]?.length > 0);
 
+  // ── Drag-and-drop ─────────────────────────────────────────────────────────────
+  const [dragState, setDragState] = useState<
+    | { type: "group"; preset: PackingPreset }
+    | { type: "item"; name: string; category: string }
+    | null
+  >(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!dragState || !eventId) return;
+    if (dragState.type === "group") {
+      setAddingPreset(dragState.preset.id);
+      addFromPreset(dragState.preset);
+    } else {
+      addItem({ name: dragState.name, category: dragState.category });
+    }
+    setDragState(null);
+  }
+
   // ── Group templates by category for left panel ────────────────────────────────
   const [templatesOpen, setTemplatesOpen] = useState(true);
   const templatesByCat = templates.reduce<Record<string, PackingTemplate[]>>((acc, t) => {
@@ -349,8 +370,15 @@ export function PackingSheet({ event, open, onClose }: {
                   const isAdding = addingPreset === preset.id;
                   const isEditingName = editingGroupId === preset.id;
                   return (
-                    <div key={preset.id} className="rounded-lg border border-border/20 bg-muted/10 overflow-hidden">
+                    <div
+                      key={preset.id}
+                      className={`rounded-lg border border-border/20 bg-muted/10 overflow-hidden transition-all ${!editingPresets ? "cursor-grab active:cursor-grabbing hover:border-primary/30" : ""}`}
+                      draggable={!editingPresets}
+                      onDragStart={() => !editingPresets && setDragState({ type: "group", preset })}
+                      onDragEnd={() => setDragState(null)}
+                    >
                       <div className="flex items-center gap-1.5 px-2.5 py-2">
+                        {!editingPresets && <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />}
                         {isEditingName ? (
                           <div className="flex-1 flex items-center gap-1">
                             <Input
@@ -392,7 +420,14 @@ export function PackingSheet({ event, open, onClose }: {
                       {isExpanded && (
                         <div className="px-2.5 pb-2 space-y-0.5">
                           {preset.items.map((item) => (
-                            <div key={item.id} className="flex items-center gap-1.5 group/item">
+                            <div
+                              key={item.id}
+                              className={`flex items-center gap-1.5 group/item rounded px-1 -mx-1 transition-colors ${!editingPresets ? "cursor-grab active:cursor-grabbing hover:bg-primary/5" : ""}`}
+                              draggable={!editingPresets}
+                              onDragStart={(e) => { e.stopPropagation(); if (!editingPresets) setDragState({ type: "item", name: item.name, category: item.category }); }}
+                              onDragEnd={() => setDragState(null)}
+                            >
+                              {!editingPresets && <GripVertical className="h-3 w-3 text-muted-foreground/20 shrink-0 group-hover/item:text-muted-foreground/50" />}
                               <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
                               <p className="text-[11px] text-muted-foreground flex-1">{item.name}</p>
                               {editingPresets && (
@@ -467,7 +502,14 @@ export function PackingSheet({ event, open, onClose }: {
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 mb-1.5">{cat}</p>
                     <div className="space-y-1">
                       {catTemplates.map(t => (
-                        <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted/20 border border-border/20 px-2.5 py-2 group">
+                        <div
+                          key={t.id}
+                          className="flex items-center gap-2 rounded-lg bg-muted/20 border border-border/20 px-2 py-2 group cursor-grab active:cursor-grabbing hover:border-primary/30 transition-all"
+                          draggable
+                          onDragStart={() => setDragState({ type: "item", name: t.name, category: t.category })}
+                          onDragEnd={() => setDragState(null)}
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-medium truncate">{t.name}</p>
                             {t.appliesToEventType && (
@@ -494,14 +536,25 @@ export function PackingSheet({ event, open, onClose }: {
           </div>
 
           {/* ── Right: Event packing list ──────────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div
+            className={`flex-1 overflow-y-auto p-6 space-y-5 transition-all duration-150 ${isDragOver ? "bg-primary/5 ring-2 ring-inset ring-primary/30" : ""}`}
+            onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+            onDrop={handleDrop}
+          >
             {loadingItems && <p className="text-sm text-muted-foreground">Loading…</p>}
 
             {!loadingItems && total === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-border/50 text-center">
-                <Package className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">No items yet</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Click "Load from templates" or add custom items below</p>
+              <div className={`flex flex-col items-center justify-center py-16 rounded-2xl border-2 border-dashed text-center transition-all ${isDragOver ? "border-primary/50 scale-[1.01]" : "border-border/50"}`}>
+                <Package className={`h-10 w-10 mb-3 transition-colors ${isDragOver ? "text-primary/50" : "text-muted-foreground/20"}`} />
+                {isDragOver ? (
+                  <p className="text-sm font-medium text-primary">Drop to add to list</p>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-muted-foreground">No items yet</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Drag groups or items from the left, or click "Load from templates"</p>
+                  </>
+                )}
               </div>
             )}
 
