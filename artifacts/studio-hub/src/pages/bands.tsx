@@ -33,9 +33,17 @@ interface BandContact {
 }
 interface BandMember {
   id: number; bandId: number; name: string; role: string | null;
+  instruments: string[] | null; isBandLeader: boolean;
   email: string | null; phone: string | null; notes: string | null;
   contacts: BandContact[];
 }
+
+const INSTRUMENT_OPTIONS = [
+  "Vocals", "Guitar", "Bass Guitar", "Drums", "Piano", "Keyboard",
+  "Violin", "Viola", "Cello", "Double Bass", "Trumpet", "Trombone",
+  "French Horn", "Tuba", "Saxophone", "Flute", "Clarinet", "Oboe",
+  "Ukulele", "Banjo", "Mandolin", "Harp", "Percussion", "DJ / Producer", "Other",
+];
 interface Band {
   id: number; name: string; genre: string | null; members: number | null;
   contactName: string | null; contactEmail: string | null; contactPhone: string | null;
@@ -175,7 +183,7 @@ function MemberFormDialog({
   open, bandId, member, onClose, onSaved,
 }: { open: boolean; bandId: number; member: BandMember | null; onClose: () => void; onSaved: () => void }) {
   const emptyContact = { name: "", relationship: "", email: "", phone: "" };
-  const [memberForm, setMemberForm] = useState({ name: "", role: "", notes: "" });
+  const [memberForm, setMemberForm] = useState({ name: "", instruments: [] as string[], isBandLeader: false, notes: "" });
   const [primary, setPrimary] = useState(emptyContact);
   const [secondary, setSecondary] = useState(emptyContact);
   const [showSecondary, setShowSecondary] = useState(false);
@@ -187,13 +195,26 @@ function MemberFormDialog({
 
   React.useEffect(() => {
     if (!open) return;
-    setMemberForm({ name: member?.name ?? "", role: member?.role ?? "", notes: member?.notes ?? "" });
+    setMemberForm({
+      name: member?.name ?? "",
+      instruments: member?.instruments ?? [],
+      isBandLeader: member?.isBandLeader ?? false,
+      notes: member?.notes ?? "",
+    });
     const pc = member?.contacts.find(c => c.isPrimary);
     const sc = member?.contacts.find(c => !c.isPrimary);
     setPrimary(pc ? { name: pc.name, relationship: pc.relationship ?? "", email: pc.email ?? "", phone: pc.phone ?? "" } : emptyContact);
     setSecondary(sc ? { name: sc.name, relationship: sc.relationship ?? "", email: sc.email ?? "", phone: sc.phone ?? "" } : emptyContact);
     setShowSecondary(!!sc);
   }, [open, member]);
+
+  const toggleInstrument = (inst: string) =>
+    setMemberForm(p => ({
+      ...p,
+      instruments: p.instruments.includes(inst)
+        ? p.instruments.filter(i => i !== inst)
+        : [...p.instruments, inst],
+    }));
 
   const mf = (k: keyof typeof memberForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -207,7 +228,7 @@ function MemberFormDialog({
     if (!memberForm.name.trim()) return;
     setSaving(true);
     try {
-      // 1. Save member
+      // 1. Save member (with instruments array + isBandLeader)
       const savedMember: BandMember = await api(
         member ? `/api/bands/members/${member.id}` : `/api/bands/${bandId}/members`,
         { method: member ? "PUT" : "POST", body: JSON.stringify(memberForm) }
@@ -263,16 +284,54 @@ function MemberFormDialog({
           {/* Student info */}
           <div className="rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Student</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label className="text-xs mb-1.5 block">Full Name *</Label>
-                <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
-              </div>
-              <div className="col-span-2">
-                <Label className="text-xs mb-1.5 block">Instrument / Role</Label>
-                <Input value={memberForm.role} onChange={mf("role")} placeholder="e.g. Lead Guitar, Drums, Vocals…" />
+            <div>
+              <Label className="text-xs mb-1.5 block">Full Name *</Label>
+              <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
+            </div>
+
+            {/* Instrument multi-select */}
+            <div>
+              <Label className="text-xs mb-2 block">
+                Instruments / Role
+                {memberForm.instruments.length > 0 && (
+                  <span className="ml-2 text-primary font-normal">({memberForm.instruments.length} selected)</span>
+                )}
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {INSTRUMENT_OPTIONS.map(inst => {
+                  const selected = memberForm.instruments.includes(inst);
+                  return (
+                    <button
+                      key={inst}
+                      type="button"
+                      onClick={() => toggleInstrument(inst)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                        selected
+                          ? "bg-primary text-primary-foreground border-primary font-medium"
+                          : "bg-transparent text-muted-foreground border-border/40 hover:border-border hover:text-foreground"
+                      }`}
+                    >
+                      {inst}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Band Leader toggle */}
+            <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors cursor-pointer ${memberForm.isBandLeader ? "bg-primary/10 border-primary/30" : "bg-transparent border-border/30 hover:border-border/50"}`}
+              onClick={() => setMemberForm(p => ({ ...p, isBandLeader: !p.isBandLeader }))}>
+              <Switch
+                checked={memberForm.isBandLeader}
+                onCheckedChange={v => setMemberForm(p => ({ ...p, isBandLeader: v }))}
+                onClick={e => e.stopPropagation()}
+              />
+              <div>
+                <p className="text-xs font-semibold">Band Leader</p>
+                <p className="text-[11px] text-muted-foreground">This student is also a staff band leader at TMS</p>
+              </div>
+            </div>
+
             <div>
               <Label className="text-xs mb-1.5 block">Notes</Label>
               <Textarea value={memberForm.notes} onChange={mf("notes")} rows={2} placeholder="Any notes about this student…" />
@@ -710,13 +769,31 @@ function ExpandedBand({
             <div key={member.id} className="rounded-xl border border-border/20 bg-background/60 overflow-hidden">
               {/* Member header */}
               <div className="flex items-start justify-between gap-2 px-3 py-2.5 bg-muted/10">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <User className="h-3.5 w-3.5 text-primary" />
+                <div className="flex items-start gap-2 min-w-0">
+                  <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${member.isBandLeader ? "bg-primary/20" : "bg-muted/50"}`}>
+                    <User className={`h-3.5 w-3.5 ${member.isBandLeader ? "text-primary" : "text-muted-foreground"}`} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-tight">{member.name}</p>
-                    {member.role && <p className="text-[11px] text-muted-foreground">{member.role}</p>}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-semibold leading-tight">{member.name}</p>
+                      {member.isBandLeader && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                          Band Leader
+                        </span>
+                      )}
+                    </div>
+                    {member.instruments && member.instruments.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {member.instruments.map(inst => (
+                          <span key={inst} className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/30">
+                            {inst}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {(!member.instruments || member.instruments.length === 0) && member.role && (
+                      <p className="text-[11px] text-muted-foreground">{member.role}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
