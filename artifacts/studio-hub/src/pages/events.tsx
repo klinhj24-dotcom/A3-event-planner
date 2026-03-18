@@ -1123,7 +1123,7 @@ function EventOverviewSheet({
           {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Ticket className="h-3.5 w-3.5" /> Ticket Requests
+                <Ticket className="h-3.5 w-3.5" /> {event.ticketFormType === "recital" ? "Recital Signups" : "Ticket Requests"}
                 <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
               </h4>
               <div className="space-y-1.5 max-h-64 overflow-y-auto">
@@ -1144,12 +1144,16 @@ function EventOverviewSheet({
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground">
-                        {r.contactFirstName} {r.contactLastName}
-                      </div>
-                      <div className="text-muted-foreground truncate">{r.contactEmail}</div>
-                      {r.formType === "recital" && r.studentFirstName && (
-                        <div className="text-muted-foreground">Performer: {r.studentFirstName} {r.studentLastName}{r.instrument ? ` · ${r.instrument}` : ""}</div>
+                      {r.formType === "recital" && r.studentFirstName ? (
+                        <>
+                          <div className="font-medium text-foreground">{r.studentFirstName} {r.studentLastName}{r.instrument ? ` · ${r.instrument}` : ""}</div>
+                          <div className="text-muted-foreground truncate">Contact: {r.contactFirstName} {r.contactLastName} · {r.contactEmail}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="font-medium text-foreground">{r.contactFirstName} {r.contactLastName}</div>
+                          <div className="text-muted-foreground truncate">{r.contactEmail}</div>
+                        </>
                       )}
                       {r.formType === "general" && r.ticketCount && (
                         <div className="text-muted-foreground">
@@ -1192,12 +1196,15 @@ function EventOverviewSheet({
           )}
           {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (
             <button
-              onClick={() => remindTickets()}
+              onClick={() => {
+                const eligible = ticketRequests.filter((r: any) => r.contactEmail && r.status !== "cancelled").length;
+                if (window.confirm(`This will send a reminder email to ${eligible} ${event.ticketFormType === "recital" ? "recital registrant" : "registrant"}${eligible !== 1 ? "s" : ""}. Continue?`)) remindTickets();
+              }}
               disabled={remindingTickets}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" />
-              {remindingTickets ? "Sending reminders…" : "Send reminders to all registrants"}
+              {remindingTickets ? "Sending reminders…" : `Send reminders to all ${event.ticketFormType === "recital" ? "registrants" : "registrants"}`}
             </button>
           )}
 

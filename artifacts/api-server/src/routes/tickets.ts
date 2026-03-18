@@ -125,21 +125,21 @@ router.post("/ticket/:token/submit", async (req, res) => {
           ? `Recital Registration Confirmed — ${event.title}`
           : `Ticket Request Received — ${event.title}`;
 
-        let bodyText = `Hi ${contactFirstName},\n\nThank you for your ${isRecital ? "recital registration" : "ticket request"} for <strong>${event.title}</strong>.\n\n`;
-        bodyText += `<strong>Date:</strong> ${eventDate}\n`;
-        if (event.location) bodyText += `<strong>Location:</strong> ${event.location}\n`;
+        let bodyText = `Hi ${contactFirstName},\n\nThank you for your ${isRecital ? "recital registration" : "ticket request"} for ${event.title}.\n\n`;
+        bodyText += `Date: ${eventDate}\n`;
+        if (event.location) bodyText += `Location: ${event.location}\n`;
         bodyText += `\n`;
 
         if (isRecital) {
           const recitalFee = 30;
-          bodyText += `<strong>Performer:</strong> ${studentFirstName} ${studentLastName}\n`;
-          if (instrument) bodyText += `<strong>Instrument:</strong> ${instrument}\n`;
-          if (recitalSong) bodyText += `<strong>Song:</strong> ${recitalSong}\n`;
-          if (teacher) bodyText += `<strong>Teacher:</strong> ${teacher}\n`;
-          if (specialConsiderations) bodyText += `<strong>Special Considerations:</strong> ${specialConsiderations}\n`;
-          bodyText += `\n<strong>Recital fee:</strong> $${recitalFee} per performer — this nonrefundable fee will be charged to the card on file on the next open business day.\n`;
+          bodyText += `Performer: ${studentFirstName} ${studentLastName}\n`;
+          if (instrument) bodyText += `Instrument: ${instrument}\n`;
+          if (recitalSong) bodyText += `Song: ${recitalSong}\n`;
+          if (teacher) bodyText += `Teacher: ${teacher}\n`;
+          if (specialConsiderations) bodyText += `Special Considerations: ${specialConsiderations}\n`;
+          bodyText += `\nRecital fee: $${recitalFee} per performer — this nonrefundable fee will be charged to the card on file on the next open business day.\n`;
         } else {
-          bodyText += `<strong>Tickets Requested:</strong> ${ticketCount}\n`;
+          bodyText += `Tickets Requested: ${ticketCount}\n`;
           bodyText += `\nYour card on file will be charged on the next open business day.\n`;
         }
 
@@ -242,15 +242,15 @@ router.post("/events/:id/ticket-requests/remind", async (req, res) => {
         const isRecital = r.formType === "recital";
         const firstName = r.contactFirstName;
         const subject = `Reminder: ${event.title} is coming up!`;
-        let body = `Hi ${firstName},\n\nJust a friendly reminder that <strong>${event.title}</strong> is coming up!\n\n`;
-        body += `<strong>Date:</strong> ${eventDate}\n`;
-        if (event.location) body += `<strong>Location:</strong> ${event.location}\n`;
+        let body = `Hi ${firstName},\n\nJust a friendly reminder that ${event.title} is coming up!\n\n`;
+        body += `Date: ${eventDate}\n`;
+        if (event.location) body += `Location: ${event.location}\n`;
         if (isRecital && r.studentFirstName) {
-          body += `<strong>Performer:</strong> ${r.studentFirstName} ${r.studentLastName ?? ""}\n`;
-          if (r.instrument) body += `<strong>Instrument:</strong> ${r.instrument}\n`;
-          if (r.recitalSong) body += `<strong>Song:</strong> ${r.recitalSong}\n`;
+          body += `Performer: ${r.studentFirstName} ${r.studentLastName ?? ""}\n`;
+          if (r.instrument) body += `Instrument: ${r.instrument}\n`;
+          if (r.recitalSong) body += `Song: ${r.recitalSong}\n`;
         } else if (r.ticketCount) {
-          body += `<strong>Tickets:</strong> ${r.ticketCount}\n`;
+          body += `Tickets: ${r.ticketCount}\n`;
         }
         body += `\nIf anything has changed or you have questions, just reply to this email.\n\nSee you there!\nThe Music Space Team`;
         const html = buildHtmlEmail({ recipientName: firstName, body });
