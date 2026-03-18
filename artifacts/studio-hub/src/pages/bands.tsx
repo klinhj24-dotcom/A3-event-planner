@@ -2,8 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Music2, Plus, Search, ChevronDown, ChevronUp, Mail, Phone, Globe, Instagram,
-  Users, Send, Trash2, Pencil, UserPlus, Star, StarOff, CheckCircle2, XCircle,
-  Clock, ExternalLink, MailCheck, Megaphone, X, Info, Loader2, User,
+  Users, Send, Trash2, Pencil, UserPlus, MailCheck, Megaphone, X, Info, Loader2, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -171,46 +170,195 @@ function BandFormDialog({
   );
 }
 
-// Add/Edit Member
+// Add/Edit Member — student-focused with inline Primary + Secondary contacts
 function MemberFormDialog({
   open, bandId, member, onClose, onSaved,
 }: { open: boolean; bandId: number; member: BandMember | null; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: "", role: "", email: "", phone: "", notes: "" });
+  const emptyContact = { name: "", relationship: "", email: "", phone: "" };
+  const [memberForm, setMemberForm] = useState({ name: "", role: "", notes: "" });
+  const [primary, setPrimary] = useState(emptyContact);
+  const [secondary, setSecondary] = useState(emptyContact);
+  const [showSecondary, setShowSecondary] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Existing contact IDs when editing
+  const existingPrimaryId = member?.contacts.find(c => c.isPrimary)?.id;
+  const existingSecondaryId = member?.contacts.find(c => !c.isPrimary)?.id;
 
   React.useEffect(() => {
-    if (open) setForm({ name: member?.name ?? "", role: member?.role ?? "", email: member?.email ?? "", phone: member?.phone ?? "", notes: member?.notes ?? "" });
+    if (!open) return;
+    setMemberForm({ name: member?.name ?? "", role: member?.role ?? "", notes: member?.notes ?? "" });
+    const pc = member?.contacts.find(c => c.isPrimary);
+    const sc = member?.contacts.find(c => !c.isPrimary);
+    setPrimary(pc ? { name: pc.name, relationship: pc.relationship ?? "", email: pc.email ?? "", phone: pc.phone ?? "" } : emptyContact);
+    setSecondary(sc ? { name: sc.name, relationship: sc.relationship ?? "", email: sc.email ?? "", phone: sc.phone ?? "" } : emptyContact);
+    setShowSecondary(!!sc);
   }, [open, member]);
 
-  const mut = useMutation({
-    mutationFn: (data: typeof form) =>
-      api(member ? `/api/bands/members/${member.id}` : `/api/bands/${bandId}/members`, {
-        method: member ? "PUT" : "POST",
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => { onSaved(); onClose(); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
+  const mf = (k: keyof typeof memberForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setMemberForm(p => ({ ...p, [k]: e.target.value }));
 
-  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [k]: e.target.value }));
+  const cf = (setter: React.Dispatch<React.SetStateAction<typeof emptyContact>>, k: keyof typeof emptyContact) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setter(p => ({ ...p, [k]: e.target.value }));
+
+  const handleSave = async () => {
+    if (!memberForm.name.trim()) return;
+    setSaving(true);
+    try {
+      // 1. Save member
+      const savedMember: BandMember = await api(
+        member ? `/api/bands/members/${member.id}` : `/api/bands/${bandId}/members`,
+        { method: member ? "PUT" : "POST", body: JSON.stringify(memberForm) }
+      );
+      const memberId = savedMember.id;
+
+      // 2. Save primary contact (if name filled)
+      if (primary.name.trim()) {
+        if (existingPrimaryId) {
+          await api(`/api/bands/contacts/${existingPrimaryId}`, {
+            method: "PUT", body: JSON.stringify({ ...primary, isPrimary: true }),
+          });
+        } else {
+          await api(`/api/bands/members/${memberId}/contacts`, {
+            method: "POST", body: JSON.stringify({ ...primary, isPrimary: true }),
+          });
+        }
+      }
+
+      // 3. Save secondary contact (if shown and name filled)
+      if (showSecondary && secondary.name.trim()) {
+        if (existingSecondaryId) {
+          await api(`/api/bands/contacts/${existingSecondaryId}`, {
+            method: "PUT", body: JSON.stringify({ ...secondary, isPrimary: false }),
+          });
+        } else {
+          await api(`/api/bands/members/${memberId}/contacts`, {
+            method: "POST", body: JSON.stringify({ ...secondary, isPrimary: false }),
+          });
+        }
+      }
+
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Error saving member", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>{member ? "Edit Member" : "Add Member"}</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-1">
-          <div><Label className="text-xs mb-1.5 block">Name *</Label><Input value={form.name} onChange={f("name")} placeholder="Alex Rivera" /></div>
-          <div><Label className="text-xs mb-1.5 block">Role / Instrument</Label><Input value={form.role} onChange={f("role")} placeholder="Lead Vocals, Guitar…" /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><Label className="text-xs mb-1.5 block">Email</Label><Input value={form.email} onChange={f("email")} type="email" placeholder="alex@…" /></div>
-            <div><Label className="text-xs mb-1.5 block">Phone</Label><Input value={form.phone} onChange={f("phone")} placeholder="(555) 000-0000" /></div>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{member ? "Edit Member" : "Add Band Member"}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Enter the student's info, then add their parent or guardian contacts.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Student info */}
+          <div className="rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Student</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-xs mb-1.5 block">Full Name *</Label>
+                <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs mb-1.5 block">Instrument / Role</Label>
+                <Input value={memberForm.role} onChange={mf("role")} placeholder="e.g. Lead Guitar, Drums, Vocals…" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs mb-1.5 block">Notes</Label>
+              <Textarea value={memberForm.notes} onChange={mf("notes")} rows={2} placeholder="Any notes about this student…" />
+            </div>
           </div>
-          <div><Label className="text-xs mb-1.5 block">Notes</Label><Textarea value={form.notes} onChange={f("notes")} rows={2} /></div>
+
+          {/* Primary Contact */}
+          <div className="rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-bold text-primary">1</span>
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Primary Contact</p>
+              <span className="text-[10px] text-muted-foreground ml-auto">(receives invites & updates)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-xs mb-1.5 block">Contact Name</Label>
+                <Input value={primary.name} onChange={cf(setPrimary, "name")} placeholder="e.g. Sarah Riefler" />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs mb-1.5 block">Relationship</Label>
+                <Input value={primary.relationship} onChange={cf(setPrimary, "relationship")} placeholder="e.g. Mother, Father, Guardian…" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Email</Label>
+                <Input value={primary.email} onChange={cf(setPrimary, "email")} type="email" placeholder="parent@email.com" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Phone</Label>
+                <Input value={primary.phone} onChange={cf(setPrimary, "phone")} placeholder="(555) 000-0000" />
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary Contact */}
+          {showSecondary ? (
+            <div className="rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <span className="text-[10px] font-bold text-muted-foreground">2</span>
+                  </div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Secondary Contact</p>
+                </div>
+                <button
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                  onClick={() => { setShowSecondary(false); setSecondary(emptyContact); }}
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-xs mb-1.5 block">Contact Name</Label>
+                  <Input value={secondary.name} onChange={cf(setSecondary, "name")} placeholder="e.g. David Riefler" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs mb-1.5 block">Relationship</Label>
+                  <Input value={secondary.relationship} onChange={cf(setSecondary, "relationship")} placeholder="e.g. Father, Stepparent…" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Email</Label>
+                  <Input value={secondary.email} onChange={cf(setSecondary, "email")} type="email" placeholder="parent2@email.com" />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1.5 block">Phone</Label>
+                  <Input value={secondary.phone} onChange={cf(setSecondary, "phone")} placeholder="(555) 000-0000" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground w-full rounded-xl border border-dashed border-border/40 px-3 py-2.5 hover:border-border/70 transition-colors"
+              onClick={() => setShowSecondary(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add secondary contact (second parent or guardian)
+            </button>
+          )}
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={!form.name.trim() || mut.isPending} onClick={() => mut.mutate(form)}>
-            {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : (member ? "Save" : "Add")}
+          <Button disabled={!memberForm.name.trim() || saving} onClick={handleSave}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (member ? "Save Changes" : "Add Member")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -593,29 +741,42 @@ function ExpandedBand({
 
               {/* Contacts */}
               <div className="divide-y divide-border/10">
-                {member.contacts.map(c => (
-                  <div key={c.id} className="flex items-center gap-2 px-3 py-2 text-xs">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-medium">{c.name}</span>
-                        {c.isPrimary && <Star className="h-3 w-3 text-yellow-400 fill-yellow-400 shrink-0" />}
-                        {c.relationship && <span className="text-muted-foreground">({c.relationship})</span>}
+                {member.contacts.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground italic">No contacts added yet.</div>
+                ) : (
+                  member.contacts
+                    .slice()
+                    .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+                    .map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 px-3 py-2 text-xs">
+                        {/* Primary / Secondary badge */}
+                        <div className={`mt-0.5 shrink-0 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${c.isPrimary ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                          {c.isPrimary ? "1" : "2"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium">{c.name}</span>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${c.isPrimary ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                              {c.isPrimary ? "Primary" : "Secondary"}
+                            </span>
+                            {c.relationship && <span className="text-muted-foreground">· {c.relationship}</span>}
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 text-muted-foreground flex-wrap">
+                            {c.email && <a href={`mailto:${c.email}`} className="flex items-center gap-1 hover:text-foreground"><Mail className="h-3 w-3" />{c.email}</a>}
+                            {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground" onClick={() => setContactDlg({ member, contact: c })}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete({ type: "contact", id: c.id, name: c.name })}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5 text-muted-foreground flex-wrap">
-                        {c.email && <a href={`mailto:${c.email}`} className="flex items-center gap-1 hover:text-foreground"><Mail className="h-3 w-3" />{c.email}</a>}
-                        {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground" onClick={() => setContactDlg({ member, contact: c })}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete({ type: "contact", id: c.id, name: c.name })}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                    ))
+                )}
                 <div className="px-3 py-1.5">
                   <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1.5" onClick={() => setContactDlg({ member, contact: null })}>
                     <Plus className="h-3 w-3" /> Add Contact
