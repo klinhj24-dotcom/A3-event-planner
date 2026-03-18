@@ -168,7 +168,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, isTwoDay, day1EndTime, day2StartTime } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -186,6 +186,9 @@ router.post("/events", async (req, res) => {
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         googleCalendarEventId, calendarTag, isPaid: isPaid ?? false,
+        isTwoDay: isTwoDay ?? false,
+        day1EndTime: day1EndTime?.trim() || null,
+        day2StartTime: day2StartTime?.trim() || null,
         cost: cost?.toString() ?? null,
         revenue: revenue?.toString() ?? null,
         notes, signupToken,
@@ -244,7 +247,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, isTwoDay, day1EndTime, day2StartTime } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -266,6 +269,9 @@ router.put("/events/:id", async (req, res) => {
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         googleCalendarEventId, calendarTag, isPaid,
+        isTwoDay: isTwoDay !== undefined ? isTwoDay : undefined,
+        day1EndTime: day1EndTime !== undefined ? (day1EndTime?.trim() || null) : undefined,
+        day2StartTime: day2StartTime !== undefined ? (day2StartTime?.trim() || null) : undefined,
         cost: cost?.toString() ?? null,
         revenue: revenue?.toString() ?? null,
         notes,

@@ -3,7 +3,7 @@ import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths
 } from "date-fns";
-import { ChevronLeft, ChevronRight, MapPin, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Clock, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -20,6 +20,9 @@ type Event = {
   revenue?: string | null;
   cost?: string | null;
   calendarTag?: string | null;
+  isTwoDay?: boolean | null;
+  day1EndTime?: string | null;
+  day2StartTime?: string | null;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -36,30 +39,81 @@ const STATUS_DOT: Record<string, string> = {
   cancelled: "bg-red-400",
 };
 
-function EventPill({ event }: { event: Event }) {
+function fmt12(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
+function EventPill({ event, dayLabel }: { event: Event; dayLabel?: string }) {
+  const isDay1 = !dayLabel || dayLabel === "day1";
+  const startDate = event.startDate ? new Date(event.startDate) : null;
+  const endDate = event.endDate ? new Date(event.endDate) : null;
+
+  const day1Start = startDate ? format(startDate, "h:mm a") : null;
+  const day1End = event.day1EndTime ? fmt12(event.day1EndTime) : (isDay1 && endDate && !event.isTwoDay ? format(endDate, "h:mm a") : null);
+  const day2Start = event.day2StartTime ? fmt12(event.day2StartTime) : null;
+  const day2End = endDate ? format(endDate, "h:mm a") : null;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           className={`w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded font-medium truncate border transition-opacity hover:opacity-80 ${STATUS_COLORS[event.status] ?? "bg-muted text-muted-foreground border-border"}`}
         >
-          {event.title}
+          {event.isTwoDay && dayLabel === "day2" ? `${event.title} (Day 2)` : event.title}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0 rounded-xl shadow-xl border-border/50" side="top" align="start">
+      <PopoverContent className="w-72 p-0 rounded-xl shadow-xl border-border/50" side="top" align="start">
         <div className="p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <h4 className="font-semibold text-sm leading-tight">{event.title}</h4>
-            <Badge variant="outline" className={`text-[10px] shrink-0 capitalize ${STATUS_COLORS[event.status]}`}>
-              {event.status}
-            </Badge>
-          </div>
-          {event.startDate && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              {format(new Date(event.startDate), "MMM d, yyyy · h:mm a")}
+            <div className="flex items-center gap-1 shrink-0">
+              {event.isTwoDay && (
+                <Badge variant="outline" className="text-[9px] px-1.5 bg-primary/10 text-primary border-primary/20">2-Day</Badge>
+              )}
+              <Badge variant="outline" className={`text-[10px] capitalize ${STATUS_COLORS[event.status]}`}>
+                {event.status}
+              </Badge>
             </div>
+          </div>
+
+          {event.isTwoDay ? (
+            <div className="space-y-2">
+              {/* Day 1 */}
+              {startDate && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2 space-y-0.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 1 · {format(startDate, "EEE, MMM d")}</p>
+                  {day1Start && (
+                    <p className="text-xs text-foreground flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 opacity-60" />
+                      {day1Start}{day1End ? ` – ${day1End}` : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+              {/* Day 2 */}
+              {endDate && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2 space-y-0.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2 · {format(endDate, "EEE, MMM d")}</p>
+                  {(day2Start || day2End) && (
+                    <p className="text-xs text-foreground flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 opacity-60" />
+                      {day2Start ?? "?"}{day2End ? ` – ${day2End}` : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            startDate && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                {format(startDate, "MMM d, yyyy · h:mm a")}
+                {endDate ? ` – ${format(endDate, "h:mm a")}` : ""}
+              </div>
+            )
           )}
+
           {event.location && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
@@ -93,13 +147,33 @@ export function EventsCalendar({ events }: { events: Event[] }) {
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
-  const eventsOnDay = (day: Date) =>
-    events.filter(e => e.startDate && isSameDay(new Date(e.startDate), day));
+  // Returns events for a day with a label so we know which day of the event it is
+  const eventsOnDay = (day: Date): { event: Event; dayLabel: string }[] => {
+    const result: { event: Event; dayLabel: string }[] = [];
+    for (const e of events) {
+      if (e.startDate && isSameDay(new Date(e.startDate), day)) {
+        result.push({ event: e, dayLabel: e.isTwoDay ? "day1" : "" });
+      } else if (e.isTwoDay && e.endDate && isSameDay(new Date(e.endDate), day)) {
+        result.push({ event: e, dayLabel: "day2" });
+      }
+    }
+    return result;
+  };
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // Status counts for the month
-  const monthEvents = events.filter(e => e.startDate && isSameMonth(new Date(e.startDate), currentDate));
+  // Status counts — deduplicate two-day events by ID (count once)
+  const seenIds = new Set<number>();
+  const monthEvents: Event[] = [];
+  for (const e of events) {
+    if (seenIds.has(e.id)) continue;
+    const start = e.startDate ? new Date(e.startDate) : null;
+    const end = e.endDate ? new Date(e.endDate) : null;
+    if ((start && isSameMonth(start, currentDate)) || (e.isTwoDay && end && isSameMonth(end, currentDate))) {
+      seenIds.add(e.id);
+      monthEvents.push(e);
+    }
+  }
   const counts = monthEvents.reduce<Record<string, number>>((acc, e) => {
     acc[e.status] = (acc[e.status] ?? 0) + 1;
     return acc;
@@ -162,7 +236,7 @@ export function EventsCalendar({ events }: { events: Event[] }) {
         {/* Day cells */}
         <div className="grid grid-cols-7">
           {days.map((day, i) => {
-            const dayEvents = eventsOnDay(day);
+            const dayItems = eventsOnDay(day);
             const inMonth = isSameMonth(day, currentDate);
             const today = isToday(day);
             const isLastRow = i >= days.length - 7;
@@ -197,12 +271,12 @@ export function EventsCalendar({ events }: { events: Event[] }) {
 
                 {/* Event pills */}
                 <div className="flex flex-col gap-0.5 overflow-hidden">
-                  {dayEvents.slice(0, 3).map(event => (
-                    <EventPill key={event.id} event={event} />
+                  {dayItems.slice(0, 3).map(({ event, dayLabel }) => (
+                    <EventPill key={`${event.id}-${dayLabel}`} event={event} dayLabel={dayLabel} />
                   ))}
-                  {dayEvents.length > 3 && (
+                  {dayItems.length > 3 && (
                     <span className="text-[10px] text-muted-foreground pl-1">
-                      +{dayEvents.length - 3} more
+                      +{dayItems.length - 3} more
                     </span>
                   )}
                 </div>
@@ -220,6 +294,9 @@ export function EventsCalendar({ events }: { events: Event[] }) {
             {status}
           </span>
         ))}
+        <span className="flex items-center gap-1.5 ml-auto text-muted-foreground/60">
+          <CalendarDays className="h-3 w-3" /> Two-day events appear on both days
+        </span>
       </div>
     </div>
   );

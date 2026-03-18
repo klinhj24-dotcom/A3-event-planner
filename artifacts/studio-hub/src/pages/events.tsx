@@ -636,6 +636,11 @@ function tagStyle(tagValue: string | null | undefined): CSSProperties {
   };
 }
 
+function fmt12(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
 function toDatetimeLocal(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -656,6 +661,9 @@ const eventSchema = z.object({
   location: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  isTwoDay: z.boolean().default(false),
+  day1EndTime: z.string().optional(),
+  day2StartTime: z.string().optional(),
   calendarTag: z.string().optional(),
   isPaid: z.boolean().default(false),
   revenue: z.coerce.number().optional(),
@@ -825,18 +833,50 @@ function EventOverviewSheet({
           {/* Date & Time */}
           {startDate && (
             <div className="space-y-1.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date & Time</h4>
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <CalendarCheck className="h-4 w-4 text-primary/70 shrink-0" />
-                <span>{format(startDate, "EEEE, MMMM d, yyyy")}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4 shrink-0 opacity-60" />
-                <span>
-                  {format(startDate, "h:mm a")}
-                  {endDate ? ` – ${format(endDate, "h:mm a")}` : ""}
-                </span>
-              </div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                Date & Time
+                {event.isTwoDay && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 normal-case">2-Day Event</span>}
+              </h4>
+              {event.isTwoDay ? (
+                <div className="space-y-2">
+                  <div className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 1 · {format(startDate, "EEE, MMMM d, yyyy")}</p>
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <Clock className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                      <span>
+                        {format(startDate, "h:mm a")}
+                        {event.day1EndTime ? ` – ${fmt12(event.day1EndTime)}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                  {endDate && (
+                    <div className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2 · {format(endDate, "EEE, MMMM d, yyyy")}</p>
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        <Clock className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                        <span>
+                          {event.day2StartTime ? fmt12(event.day2StartTime) : "?"}
+                          {` – ${format(endDate, "h:mm a")}`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                    <CalendarCheck className="h-4 w-4 text-primary/70 shrink-0" />
+                    <span>{format(startDate, "EEEE, MMMM d, yyyy")}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4 shrink-0 opacity-60" />
+                    <span>
+                      {format(startDate, "h:mm a")}
+                      {endDate ? ` – ${format(endDate, "h:mm a")}` : ""}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1179,12 +1219,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "", ticketFormType: "none" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, ctaLabel: "", ticketFormType: "none" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none" }
   });
 
   function openEdit(ev: any) {
@@ -1205,6 +1245,9 @@ export default function Events() {
       location: ev.location ?? "",
       startDate: ev.startDate ? toDatetimeLocal(new Date(ev.startDate)) : "",
       endDate: ev.endDate ? toDatetimeLocal(new Date(ev.endDate)) : "",
+      isTwoDay: ev.isTwoDay ?? false,
+      day1EndTime: ev.day1EndTime ?? "",
+      day2StartTime: ev.day2StartTime ?? "",
       calendarTag: ev.calendarTag ?? "",
       isPaid: ev.isPaid ?? false,
       revenue: ev.revenue ? Number(ev.revenue) : undefined,
@@ -1336,20 +1379,68 @@ export default function Events() {
                         </FormItem>
                       )} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField control={form.control} name="startDate" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Start Date & Time</FormLabel>
-                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
-                        </FormItem>
-                      )} />
-                      <FormField control={form.control} name="endDate" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>End Date & Time</FormLabel>
-                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
-                        </FormItem>
-                      )} />
-                    </div>
+                    <FormField control={form.control} name="isTwoDay" render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-xl border border-border/50 px-3 py-2.5 bg-card">
+                        <div>
+                          <FormLabel className="text-sm font-medium cursor-pointer">Two-day event</FormLabel>
+                          <p className="text-[10px] text-muted-foreground">Appears on both days in the events calendar</p>
+                        </div>
+                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                      </FormItem>
+                    )} />
+                    {form.watch("isTwoDay") ? (
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 1</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField control={form.control} name="startDate" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
+                                <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="day1EndTime" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Day 1 End Time</FormLabel>
+                                <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                              </FormItem>
+                            )} />
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField control={form.control} name="day2StartTime" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
+                                <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="endDate" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
+                                <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                              </FormItem>
+                            )} />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField control={form.control} name="startDate" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Start Date & Time</FormLabel>
+                            <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="endDate" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>End Date & Time</FormLabel>
+                            <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                          </FormItem>
+                        )} />
+                      </div>
+                    )}
                     <FormField control={form.control} name="location" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Location / Venue</FormLabel>
@@ -1622,6 +1713,9 @@ export default function Events() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {event.isTwoDay && (
+                              <Badge variant="outline" className="text-[10px] font-semibold mr-1 border border-primary/30 bg-primary/10 text-primary">2-Day</Badge>
+                            )}
                             {event.calendarTag && event.calendarTag !== "none" && (
                               <Badge variant="outline" className="text-[10px] font-semibold mr-1 border" style={tagStyle(event.calendarTag)}>
                                 {CALENDAR_TAGS.find(t => t.value === event.calendarTag)?.label ?? event.calendarTag}
@@ -1772,20 +1866,68 @@ export default function Events() {
                   </FormItem>
                 )} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={editForm.control} name="startDate" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Date & Time</FormLabel>
-                    <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
-                  </FormItem>
-                )} />
-                <FormField control={editForm.control} name="endDate" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End Date & Time</FormLabel>
-                    <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
-                  </FormItem>
-                )} />
-              </div>
+              <FormField control={editForm.control} name="isTwoDay" render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-xl border border-border/50 px-3 py-2.5 bg-card">
+                  <div>
+                    <FormLabel className="text-sm font-medium cursor-pointer">Two-day event</FormLabel>
+                    <p className="text-[10px] text-muted-foreground">Appears on both days in the events calendar</p>
+                  </div>
+                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                </FormItem>
+              )} />
+              {editForm.watch("isTwoDay") ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 1</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField control={editForm.control} name="startDate" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
+                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                        </FormItem>
+                      )} />
+                      <FormField control={editForm.control} name="day1EndTime" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Day 1 End Time</FormLabel>
+                          <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                        </FormItem>
+                      )} />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField control={editForm.control} name="day2StartTime" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
+                          <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                        </FormItem>
+                      )} />
+                      <FormField control={editForm.control} name="endDate" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
+                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                        </FormItem>
+                      )} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={editForm.control} name="startDate" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date & Time</FormLabel>
+                      <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="endDate" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date & Time</FormLabel>
+                      <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                    </FormItem>
+                  )} />
+                </div>
+              )}
               <FormField control={editForm.control} name="location" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Location / Venue</FormLabel>
