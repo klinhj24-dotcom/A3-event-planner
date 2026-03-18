@@ -27,6 +27,7 @@ export const eventEmployeesTable = pgTable("event_employees", {
   notes: text("notes"),
   minutesBefore: integer("minutes_before"),
   minutesAfter: integer("minutes_after"),
+  googleCalendarEventId: text("google_calendar_event_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

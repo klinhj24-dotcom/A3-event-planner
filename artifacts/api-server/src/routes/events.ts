@@ -4,7 +4,8 @@ import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
-import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
+import { createAuthedClient, makeHtmlEmail, makeRawEmail, buildHtmlEmail } from "../lib/google";
+import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
 
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
 
@@ -460,12 +461,84 @@ router.post("/events/:id/employees", async (req, res) => {
       .values({ eventId, employeeId, role, pay: pay?.toString() ?? null, notes, minutesBefore: minutesBefore ?? null, minutesAfter: minutesAfter ?? null })
       .returning();
     const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
     res.status(201).json({ ...assignment, employeeName: emp?.name, employeeRole: emp?.role });
+
+    // Fire-and-forget: calendar push + email notification
+    if (event && emp) {
+      sendEmployeeAssignmentEmail(assignment.id, emp, event, role ?? null, (req.user as any)).catch(() => {});
+    }
   } catch (err) {
     console.error("addEventEmployee error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+async function sendEmployeeAssignmentEmail(
+  assignmentId: number,
+  emp: { name: string; email: string | null },
+  event: typeof eventsTable.$inferSelect,
+  role: string | null,
+  requestUser: any,
+) {
+  try {
+    if (!emp.email) return;
+
+    // Get sender with Google tokens
+    const users = await db.select().from(usersTable);
+    const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken);
+    if (!sender) return;
+
+    const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, sender.id));
+      }
+    });
+
+    const eventDate = event.startDate
+      ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+      : "";
+    const from = sender.googleEmail ?? sender.email ?? "";
+    const subject = `[TMS] You've been scheduled: ${event.title}${eventDate ? ` — ${eventDate}` : ""}`;
+    const body =
+      `Hi ${emp.name},\n\n` +
+      `You've been assigned to the following event:\n\n` +
+      `  Event: ${event.title}${eventDate ? ` — ${eventDate}` : ""}\n` +
+      `  Location: ${event.location ?? "TBD"}\n` +
+      (role ? `  Role: ${role}\n` : "") +
+      `\nYou can view your schedule in the TMS portal at any time.\n\n` +
+      `If you have any questions, reply to this email or contact your manager.\n\n` +
+      `Thanks,\nThe Music Space`;
+
+    const gmail = google.gmail({ version: "v1", auth });
+    const raw = makeRawEmail({ to: emp.email, from, subject, body });
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+    console.log(`[employee-assign] Sent notification to ${emp.email}`);
+
+    // Calendar push
+    const calEventId = await pushToEmployeeCalendar({
+      eventTitle: event.title,
+      eventLocation: event.location,
+      eventStartDate: event.startDate,
+      eventEndDate: event.endDate,
+      employeeName: emp.name,
+      role,
+    });
+    if (calEventId) {
+      await db.update(eventEmployeesTable)
+        .set({ googleCalendarEventId: calEventId })
+        .where(eq(eventEmployeesTable.id, assignmentId));
+      console.log(`[employee-assign] Pushed to employee calendar: ${calEventId}`);
+    }
+  } catch (err) {
+    console.error("[employee-assign] Notification/calendar push failed:", err);
+  }
+}
 
 router.patch("/events/:id/employees/:assignmentId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -495,8 +568,13 @@ router.delete("/events/:id/employees/:assignmentId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const assignmentId = parseInt(req.params.assignmentId);
+    const [assignment] = await db.select().from(eventEmployeesTable).where(eq(eventEmployeesTable.id, assignmentId));
     await db.delete(eventEmployeesTable).where(eq(eventEmployeesTable.id, assignmentId));
     res.status(204).send();
+    // Fire-and-forget: remove from employee calendar
+    if (assignment?.googleCalendarEventId) {
+      removeFromEmployeeCalendar(assignment.googleCalendarEventId).catch(() => {});
+    }
   } catch (err) {
     console.error("removeEventEmployee error:", err);
     res.status(500).json({ error: "Internal server error" });

@@ -28,6 +28,7 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   // Reminder tracking
   weekReminderSent: boolean("week_reminder_sent").notNull().default(false),
   dayReminderSent: boolean("day_reminder_sent").notNull().default(false),
+  googleCalendarEventId: text("google_calendar_event_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

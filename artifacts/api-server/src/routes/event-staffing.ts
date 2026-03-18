@@ -4,6 +4,7 @@ import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTa
 import { eq, asc } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeRawEmail } from "../lib/google";
+import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
 
 const router = Router();
 
@@ -25,7 +26,7 @@ const DEFAULT_ROLES = [
   { name: "Photographer",   color: "#3b82f6", sortOrder: 4 },
 ];
 
-// ── Email helper ──────────────────────────────────────────────────────────────
+// ── Email + calendar helper ───────────────────────────────────────────────────
 async function sendStaffNotificationEmail(
   senderUserId: number,
   slotId: number,
@@ -34,6 +35,7 @@ async function sendStaffNotificationEmail(
   roleTypeId: number,
   startTime: Date | null | undefined,
   endTime: Date | null | undefined,
+  existingCalEventId?: string | null,
 ) {
   try {
     const [senderUser] = await db.select().from(usersTable).where(eq(usersTable.id, senderUserId));
@@ -91,6 +93,25 @@ async function sendStaffNotificationEmail(
     const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
     console.log(`[staffing] Sent assignment notification to ${recipientEmail}`);
+
+    // Push to employee calendar
+    const calEventId = await pushToEmployeeCalendar({
+      eventTitle: event?.title ?? "Event",
+      eventLocation: event?.location,
+      eventStartDate: event?.startDate,
+      eventEndDate: event?.endDate,
+      employeeName: employee.name,
+      role: roleType?.name,
+      shiftStart: startTime ?? undefined,
+      shiftEnd: endTime ?? undefined,
+      existingCalEventId,
+    });
+    if (calEventId) {
+      await db.update(eventStaffSlotsTable)
+        .set({ googleCalendarEventId: calEventId })
+        .where(eq(eventStaffSlotsTable.id, slotId));
+      console.log(`[staffing] Pushed to employee calendar: ${calEventId}`);
+    }
   } catch (err) {
     console.error("Staff slot assignment notification failed:", err);
   }
@@ -329,7 +350,12 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         userId, slotId, newAssigneeId, prev.eventId,
         roleTypeId !== undefined ? Number(roleTypeId) : prev.roleTypeId,
         full.startTime, full.endTime,
+        null, // new assignee — start fresh calendar event
       );
+    }
+    // If employee was removed, clean up calendar event
+    if (assigneeChanged && newAssigneeId == null && prev.googleCalendarEventId) {
+      removeFromEmployeeCalendar(prev.googleCalendarEventId).catch(() => {});
     }
 
     res.json(full);
@@ -342,8 +368,13 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
 router.delete("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
-    await db.delete(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, parseInt(req.params.slotId)));
+    const slotId = parseInt(req.params.slotId);
+    const [slot] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
+    await db.delete(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
     res.status(204).send();
+    if (slot?.googleCalendarEventId) {
+      removeFromEmployeeCalendar(slot.googleCalendarEventId).catch(() => {});
+    }
   } catch (err) {
     console.error("deleteEventStaffSlot error:", err);
     res.status(500).json({ error: "Internal server error" });
