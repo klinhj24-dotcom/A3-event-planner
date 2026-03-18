@@ -61,8 +61,23 @@ const recitalSchema = z.object({
 type GeneralForm = z.infer<typeof generalSchema>;
 type RecitalForm = z.infer<typeof recitalSchema>;
 
+function AlreadySubmittedCard() {
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center text-center gap-4 py-8">
+      <div className="h-16 w-16 rounded-full bg-blue-500/10 flex items-center justify-center">
+        <CheckCircle2 className="h-8 w-8 text-blue-400" />
+      </div>
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">You're Already Registered!</h2>
+        <p className="text-muted-foreground mt-1 text-sm">We already have a registration on file for this email address. If you need to make changes, please contact us at <a href="mailto:info@themusicspace.com" className="underline">info@themusicspace.com</a>.</p>
+      </div>
+    </motion.div>
+  );
+}
+
 function GeneralTicketForm({ event, token }: { event: any; token: string }) {
   const [submitted, setSubmitted] = useState(false);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const form = useForm<GeneralForm>({ resolver: zodResolver(generalSchema) });
   const ticketCount = parseInt(form.watch("ticketCount") as any) || 0;
   const ticketPrice = event?.ticketPrice ? parseFloat(event.ticketPrice) : null;
@@ -78,8 +93,13 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
       if (!res.ok) throw new Error("Submission failed");
       return res.json();
     },
-    onSuccess: () => setSubmitted(true),
+    onSuccess: (data) => {
+      if (data?.alreadySubmitted) setAlreadySubmitted(true);
+      else setSubmitted(true);
+    },
   });
+
+  if (alreadySubmitted) return <AlreadySubmittedCard />;
 
   if (submitted) {
     return (
@@ -151,6 +171,7 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
 
 function RecitalRegistrationForm({ event, token }: { event: any; token: string }) {
   const [submitted, setSubmitted] = useState(false);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const form = useForm<RecitalForm>({ resolver: zodResolver(recitalSchema) });
 
   const { mutate: submit, isPending } = useMutation({
@@ -163,8 +184,13 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
       if (!res.ok) throw new Error("Submission failed");
       return res.json();
     },
-    onSuccess: () => setSubmitted(true),
+    onSuccess: (data) => {
+      if (data?.alreadySubmitted) setAlreadySubmitted(true);
+      else setSubmitted(true);
+    },
   });
+
+  if (alreadySubmitted) return <AlreadySubmittedCard />;
 
   if (submitted) {
     return (

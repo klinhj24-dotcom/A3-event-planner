@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, eventsTable, eventTicketRequestsTable, usersTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, ne } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
@@ -71,6 +71,24 @@ router.post("/ticket/:token/submit", async (req, res) => {
     }
     if (event.ticketFormType === "recital" && (!studentFirstName || !studentLastName || !instrument || !teacher)) {
       res.status(400).json({ error: "Student name, instrument, and teacher are required" });
+      return;
+    }
+
+    // Check for an existing non-cancelled submission from this email
+    const [existing] = await db
+      .select({ id: eventTicketRequestsTable.id })
+      .from(eventTicketRequestsTable)
+      .where(
+        and(
+          eq(eventTicketRequestsTable.eventId, event.id),
+          eq(eventTicketRequestsTable.contactEmail, contactEmail.toLowerCase().trim()),
+          ne(eventTicketRequestsTable.status, "cancelled"),
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      res.json({ alreadySubmitted: true, eventTitle: event.title });
       return;
     }
 
