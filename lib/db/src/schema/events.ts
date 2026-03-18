@@ -35,6 +35,9 @@ export const eventsTable = pgTable("events", {
   hasPackingList: boolean("has_packing_list").default(false),
   allowGuestList: boolean("allow_guest_list").default(false),
   guestListPolicy: text("guest_list_policy").default("students_only"), // "students_only" | "plus_one" | "plus_two"
+  pocName: text("poc_name"),
+  pocEmail: text("poc_email"),
+  pocPhone: text("poc_phone"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

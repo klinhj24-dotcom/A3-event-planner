@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -680,6 +680,10 @@ const eventSchema = z.object({
   hasPackingList: z.boolean().default(false),
   allowGuestList: z.boolean().default(false),
   guestListPolicy: z.string().optional(),
+  hasPoc: z.boolean().default(false),
+  pocName: z.string().optional(),
+  pocEmail: z.string().optional(),
+  pocPhone: z.string().optional(),
 });
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -1073,6 +1077,33 @@ function EventOverviewSheet({
               <div className="flex items-center gap-2 text-sm text-foreground">
                 <MapPin className="h-4 w-4 text-primary/70 shrink-0" />
                 <span>{event.location}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Point of Contact */}
+          {(event.pocName || event.pocEmail || event.pocPhone) && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Point of Contact</h4>
+              <div className="space-y-1">
+                {event.pocName && (
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                    <UserRound className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                    <span>{event.pocName}</span>
+                  </div>
+                )}
+                {event.pocEmail && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                    <a href={`mailto:${event.pocEmail}`} className="text-primary hover:underline">{event.pocEmail}</a>
+                  </div>
+                )}
+                {event.pocPhone && (
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                    <Phone className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                    <a href={`tel:${event.pocPhone}`} className="hover:underline">{event.pocPhone}</a>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1614,12 +1645,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
   });
 
   function openEdit(ev: any) {
@@ -1660,6 +1691,10 @@ export default function Events() {
       hasPackingList: ev.hasPackingList ?? false,
       allowGuestList: ev.allowGuestList ?? false,
       guestListPolicy: ev.guestListPolicy ?? "students_only",
+      hasPoc: !!(ev.pocName || ev.pocEmail || ev.pocPhone),
+      pocName: ev.pocName ?? "",
+      pocEmail: ev.pocEmail ?? "",
+      pocPhone: ev.pocPhone ?? "",
     });
   }
 
@@ -1903,6 +1938,26 @@ export default function Events() {
                         <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                       </FormItem>
                     )} />
+                    {/* Point of Contact */}
+                    <FormField control={form.control} name="hasPoc" render={({ field }) => (
+                      <FormItem className="flex flex-row items-center gap-3 rounded-xl border border-border/40 px-3 py-2.5 bg-card">
+                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        <FormLabel className="text-sm font-medium flex items-center gap-1.5 cursor-pointer mb-0"><UserRound className="h-3.5 w-3.5 text-muted-foreground" /> Add Point of Contact</FormLabel>
+                      </FormItem>
+                    )} />
+                    {form.watch("hasPoc") && (
+                      <div className="pl-1 space-y-2 border-l-2 border-primary/20 ml-1">
+                        <FormField control={form.control} name="pocName" render={({ field }) => (
+                          <FormItem><FormControl><Input placeholder="Contact name" className="rounded-xl" {...field} value={field.value || ''} /></FormControl></FormItem>
+                        )} />
+                        <FormField control={form.control} name="pocEmail" render={({ field }) => (
+                          <FormItem><FormControl><Input type="email" placeholder="Email address" className="rounded-xl" {...field} value={field.value || ''} /></FormControl></FormItem>
+                        )} />
+                        <FormField control={form.control} name="pocPhone" render={({ field }) => (
+                          <FormItem><FormControl><Input type="tel" placeholder="Phone number" className="rounded-xl" {...field} value={field.value || ''} /></FormControl></FormItem>
+                        )} />
+                      </div>
+                    )}
                     {/* Features section */}
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-3">
                       <h4 className="font-semibold text-sm flex items-center gap-1.5"><List className="h-4 w-4 text-primary" /> Features</h4>
@@ -2471,6 +2526,26 @@ export default function Events() {
                   <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                 </FormItem>
               )} />
+              {/* Point of Contact */}
+              <FormField control={editForm.control} name="hasPoc" render={({ field }) => (
+                <FormItem className="flex flex-row items-center gap-3 rounded-xl border border-border/40 px-3 py-2.5 bg-card">
+                  <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <FormLabel className="text-sm font-medium flex items-center gap-1.5 cursor-pointer mb-0"><UserRound className="h-3.5 w-3.5 text-muted-foreground" /> Add Point of Contact</FormLabel>
+                </FormItem>
+              )} />
+              {editForm.watch("hasPoc") && (
+                <div className="pl-1 space-y-2 border-l-2 border-primary/20 ml-1">
+                  <FormField control={editForm.control} name="pocName" render={({ field }) => (
+                    <FormItem><FormControl><Input placeholder="Contact name" className="rounded-xl" {...field} value={field.value || ''} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="pocEmail" render={({ field }) => (
+                    <FormItem><FormControl><Input type="email" placeholder="Email address" className="rounded-xl" {...field} value={field.value || ''} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="pocPhone" render={({ field }) => (
+                    <FormItem><FormControl><Input type="tel" placeholder="Phone number" className="rounded-xl" {...field} value={field.value || ''} /></FormControl></FormItem>
+                  )} />
+                </div>
+              )}
               {/* Features section */}
               <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-3">
                 <h4 className="font-semibold text-sm flex items-center gap-1.5"><List className="h-4 w-4 text-primary" /> Features</h4>
