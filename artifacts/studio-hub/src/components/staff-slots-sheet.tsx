@@ -26,10 +26,10 @@ interface Employee {
 }
 interface StaffSlot {
   id: number; eventId: number;
-  roleTypeId: number; roleName: string; roleColor?: string | null;
+  roleTypeId?: number | null; roleName?: string | null; roleColor?: string | null;
   assignedEmployeeId?: number | null; assignedEmployeeName?: string | null; assignedEmployeeRole?: string | null;
   startTime?: string | null; endTime?: string | null; notes?: string | null;
-  confirmed?: boolean | null;
+  confirmed?: boolean | null; isAutoCreated?: boolean | null;
 }
 interface EventMeta {
   id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null;
@@ -286,6 +286,9 @@ export function StaffSlotsSheet({
     }))
     .filter(g => g.slots.length > 0);
 
+  // Slots without a role (auto-created from employee assignment)
+  const unroledSlots = slots.filter(s => !s.roleTypeId);
+
   // Roles that have no slots yet (for empty state)
   const allRolesWithSlots = new Set(slots.map(s => s.roleTypeId));
 
@@ -333,39 +336,66 @@ export function StaffSlotsSheet({
                 <p className="text-xs text-muted-foreground/60 mt-1">Click "Add Slot" to start scheduling staff for this event</p>
               </div>
             ) : (
-              grouped.map(({ roleType, slots: roleSlots }) => (
-                <div key={roleType.id}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: roleType.color ?? "#7250ef" }}
-                      />
-                      <span className="text-sm font-semibold">{roleType.name}</span>
+              <>
+                {/* Auto-created slots (no role) from simple employee assignment */}
+                {unroledSlots.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-muted-foreground/40" />
+                      <span className="text-sm font-semibold">Assigned Staff</span>
                       <span className="text-xs text-muted-foreground">
-                        {roleSlots.filter(s => s.assignedEmployeeId).length}/{roleSlots.length} filled
+                        {unroledSlots.filter(s => s.assignedEmployeeId).length}/{unroledSlots.length} filled
                       </span>
+                      <span className="text-[10px] text-muted-foreground/50 italic ml-1">auto-scheduled</span>
                     </div>
-                    <button
-                      className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
-                      onClick={() => openAddDialog(String(roleType.id))}
-                    >
-                      <Plus className="h-3 w-3" /> slot
-                    </button>
+                    <div className="space-y-2">
+                      {unroledSlots.map(slot => (
+                        <SlotCard
+                          key={slot.id}
+                          slot={slot}
+                          employees={employees}
+                          onUpdate={(id, data) => updateSlot({ id, data })}
+                          onDelete={deleteSlot}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {roleSlots.map(slot => (
-                      <SlotCard
-                        key={slot.id}
-                        slot={slot}
-                        employees={employees}
-                        onUpdate={(id, data) => updateSlot({ id, data })}
-                        onDelete={deleteSlot}
-                      />
-                    ))}
+                )}
+                {/* Role-grouped slots */}
+                {grouped.map(({ roleType, slots: roleSlots }) => (
+                  <div key={roleType.id}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-block w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: roleType.color ?? "#7250ef" }}
+                        />
+                        <span className="text-sm font-semibold">{roleType.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {roleSlots.filter(s => s.assignedEmployeeId).length}/{roleSlots.length} filled
+                        </span>
+                      </div>
+                      <button
+                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                        onClick={() => openAddDialog(String(roleType.id))}
+                      >
+                        <Plus className="h-3 w-3" /> slot
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {roleSlots.map(slot => (
+                        <SlotCard
+                          key={slot.id}
+                          slot={slot}
+                          employees={employees}
+                          onUpdate={(id, data) => updateSlot({ id, data })}
+                          onDelete={deleteSlot}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </>
             )}
           </div>
         </SheetContent>

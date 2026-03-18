@@ -32,7 +32,7 @@ async function sendStaffNotificationEmail(
   slotId: number,
   employeeId: number,
   eventId: number,
-  roleTypeId: number,
+  roleTypeId: number | null | undefined,
   startTime: Date | null | undefined,
   endTime: Date | null | undefined,
   existingCalEventId?: string | null,
@@ -46,7 +46,9 @@ async function sendStaffNotificationEmail(
     if (!recipientEmail) return;
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
-    const [roleType] = await db.select().from(staffRoleTypesTable).where(eq(staffRoleTypesTable.id, roleTypeId));
+    const [roleType] = roleTypeId
+      ? await db.select().from(staffRoleTypesTable).where(eq(staffRoleTypesTable.id, roleTypeId))
+      : [undefined];
 
     // Generate confirmation token
     const token = randomUUID();
@@ -67,12 +69,13 @@ async function sendStaffNotificationEmail(
     const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
     const from = senderUser.googleEmail ?? senderUser.email ?? "";
-    const subject = `[TMS] You've been scheduled: ${roleType?.name} — ${event?.title ?? ""}`;
+    const rolePart = roleType?.name ? `${roleType.name} — ` : "";
+    const subject = `[TMS] You've been scheduled: ${rolePart}${event?.title ?? ""}`;
     const body =
       `Hi ${employee.name},\n\n` +
       `You've been assigned to the following event:\n\n` +
       `  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n` +
-      `  Role:  ${roleType?.name ?? ""}\n` +
+      (roleType?.name ? `  Role:  ${roleType.name}\n` : "") +
       `${shiftLine}\n` +
       `Please confirm your participation by clicking the link below:\n` +
       `  ${confirmLink}\n\n` +
@@ -247,6 +250,7 @@ const SLOT_SELECT = {
   endTime: eventStaffSlotsTable.endTime,
   notes: eventStaffSlotsTable.notes,
   confirmed: eventStaffSlotsTable.confirmed,
+  isAutoCreated: eventStaffSlotsTable.isAutoCreated,
   createdAt: eventStaffSlotsTable.createdAt,
 };
 
@@ -257,10 +261,10 @@ router.get("/events/:id/staff-slots", async (req, res) => {
     const slots = await db
       .select(SLOT_SELECT)
       .from(eventStaffSlotsTable)
-      .innerJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
+      .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
       .where(eq(eventStaffSlotsTable.eventId, eventId))
-      .orderBy(asc(staffRoleTypesTable.sortOrder), asc(eventStaffSlotsTable.startTime), asc(eventStaffSlotsTable.createdAt));
+      .orderBy(asc(eventStaffSlotsTable.startTime), asc(eventStaffSlotsTable.createdAt));
     res.json(slots);
   } catch (err) {
     console.error("getEventStaffSlots error:", err);
@@ -272,23 +276,23 @@ router.post("/events/:id/staff-slots", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes } = req.body;
-    if (!roleTypeId) { res.status(400).json({ error: "roleTypeId is required" }); return; }
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated } = req.body;
 
     const [slot] = await db.insert(eventStaffSlotsTable)
       .values({
         eventId,
-        roleTypeId: Number(roleTypeId),
+        roleTypeId: roleTypeId ? Number(roleTypeId) : null,
         assignedEmployeeId: assignedEmployeeId ? Number(assignedEmployeeId) : null,
         startTime: startTime ? new Date(startTime) : null,
         endTime: endTime ? new Date(endTime) : null,
         notes: notes || null,
+        isAutoCreated: isAutoCreated ?? false,
       })
       .returning();
 
     const [full] = await db.select(SLOT_SELECT)
       .from(eventStaffSlotsTable)
-      .innerJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
+      .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
       .where(eq(eventStaffSlotsTable.id, slot.id));
 
@@ -297,7 +301,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
       const userId = (req.user as any).id;
       sendStaffNotificationEmail(
         userId, slot.id, Number(assignedEmployeeId), eventId,
-        Number(roleTypeId),
+        roleTypeId ? Number(roleTypeId) : null,
         slot.startTime, slot.endTime,
       );
     }
@@ -339,7 +343,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
 
     const [full] = await db.select(SLOT_SELECT)
       .from(eventStaffSlotsTable)
-      .innerJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
+      .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
       .where(eq(eventStaffSlotsTable.id, slotId));
 
@@ -348,7 +352,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
       const userId = (req.user as any).id;
       sendStaffNotificationEmail(
         userId, slotId, newAssigneeId, prev.eventId,
-        roleTypeId !== undefined ? Number(roleTypeId) : prev.roleTypeId,
+        roleTypeId !== undefined ? (roleTypeId ? Number(roleTypeId) : null) : prev.roleTypeId,
         full.startTime, full.endTime,
         null, // new assignee — start fresh calendar event
       );

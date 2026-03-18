@@ -17,7 +17,7 @@ export type InsertStaffRoleType = typeof staffRoleTypesTable.$inferInsert;
 export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull(),
-  roleTypeId: integer("role_type_id").references(() => staffRoleTypesTable.id, { onDelete: "restrict" }).notNull(),
+  roleTypeId: integer("role_type_id").references(() => staffRoleTypesTable.id, { onDelete: "set null" }),
   assignedEmployeeId: integer("assigned_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   startTime: timestamp("start_time", { withTimezone: true }),
   endTime: timestamp("end_time", { withTimezone: true }),
@@ -29,6 +29,7 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   weekReminderSent: boolean("week_reminder_sent").notNull().default(false),
   dayReminderSent: boolean("day_reminder_sent").notNull().default(false),
   googleCalendarEventId: text("google_calendar_event_id"),
+  isAutoCreated: boolean("is_auto_created").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

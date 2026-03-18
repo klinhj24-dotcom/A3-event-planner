@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable, eventStaffSlotsTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { addDays, subDays } from "date-fns";
@@ -464,6 +464,19 @@ router.post("/events/:id/employees", async (req, res) => {
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
     res.status(201).json({ ...assignment, employeeName: emp?.name, employeeRole: emp?.role });
 
+    // Auto-create a Staff Schedule slot so the employee appears in the schedule
+    db.insert(eventStaffSlotsTable)
+      .values({
+        eventId,
+        roleTypeId: null,
+        assignedEmployeeId: employeeId,
+        startTime: event?.startDate ?? null,
+        endTime: event?.endDate ?? null,
+        notes: role ? `Role: ${role}` : null,
+        isAutoCreated: true,
+      })
+      .catch((err: unknown) => console.error("[employee-assign] Auto-slot creation failed:", err));
+
     // Fire-and-forget: calendar push + email notification
     if (event && emp) {
       sendEmployeeAssignmentEmail(assignment.id, emp, event, role ?? null, (req.user as any)).catch(() => {});
@@ -568,12 +581,23 @@ router.delete("/events/:id/employees/:assignmentId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const assignmentId = parseInt(req.params.assignmentId);
+    const eventId = parseInt(req.params.id);
     const [assignment] = await db.select().from(eventEmployeesTable).where(eq(eventEmployeesTable.id, assignmentId));
     await db.delete(eventEmployeesTable).where(eq(eventEmployeesTable.id, assignmentId));
     res.status(204).send();
     // Fire-and-forget: remove from employee calendar
     if (assignment?.googleCalendarEventId) {
       removeFromEmployeeCalendar(assignment.googleCalendarEventId).catch(() => {});
+    }
+    // Clean up any auto-created Staff Schedule slot for this employee
+    if (assignment?.employeeId) {
+      db.delete(eventStaffSlotsTable)
+        .where(and(
+          eq(eventStaffSlotsTable.eventId, eventId),
+          eq(eventStaffSlotsTable.assignedEmployeeId, assignment.employeeId),
+          eq(eventStaffSlotsTable.isAutoCreated, true),
+        ))
+        .catch((err: unknown) => console.error("[employee-remove] Auto-slot cleanup failed:", err));
     }
   } catch (err) {
     console.error("removeEventEmployee error:", err);
