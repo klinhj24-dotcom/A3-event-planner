@@ -15,28 +15,30 @@ import { motion } from "framer-motion";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
 
 const TEACHERS = [
-  "Brandon Gouin",
   "Charlie Ballantine",
-  "Derek Wiegmann",
-  "Grey Rayadurg",
-  "Griffin Quinnan",
-  "Hannah Piasecki",
-  "Ida Dierker",
-  "Jeffrey Roden",
-  "Johanna McGuire",
-  "Justin Levy",
+  "Victoria Bee",
   "Kit Benz",
-  "Max Phelps",
+  "Ralph Bernabe",
+  "Tsveta Dabova",
+  "Ida Dierker",
+  "Stephen Filer",
+  "Brandon Gouin",
   "Nathan Hillman",
   "Nick Komosa",
-  "Noah Stuehler",
+  "Justin Levy",
+  "Johanna McGuire",
   "Rachel McNear",
-  "Ralph Bernabe",
-  "Roxanne Wehking",
+  "Covenant Olaleye",
   "Sean Oliver",
-  "Tsveta Dabova",
-  "Victoria Bee",
   "Violet Palm",
+  "Max Phelps",
+  "Hannah Piasecki",
+  "Griffin Quinnan",
+  "Grey Rayadurg",
+  "Jeffrey Roden",
+  "Noah Stuehler",
+  "Roxanne Wehking",
+  "Derek Wiegmann",
 ];
 
 const generalSchema = z.object({
@@ -250,7 +252,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
                     <SelectValue placeholder="Select your teacher…" />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                <SelectContent className="max-h-64 overflow-y-auto">
                   {TEACHERS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
