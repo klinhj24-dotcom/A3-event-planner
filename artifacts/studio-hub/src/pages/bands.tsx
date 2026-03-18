@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Music2, Plus, Search, ChevronDown, ChevronUp, Mail, Phone, Globe, Instagram,
-  Users, Send, Trash2, Pencil, UserPlus, MailCheck, Megaphone, X, Info, Loader2, User,
+  Users, Send, Trash2, Pencil, UserPlus, MailCheck, Megaphone, X, Info, Loader2, User, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -963,6 +963,12 @@ export default function Bands() {
       <div className="border-b border-border/20 px-6 py-5 bg-background/80">
         <div className="flex items-start justify-between gap-4">
           <div>
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-2 transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3" /> Back
+            </button>
             <h1 className="text-xl font-semibold flex items-center gap-2">
               <Music2 className="h-5 w-5 text-primary" /> Bands
             </h1>

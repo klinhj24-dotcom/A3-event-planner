@@ -1842,13 +1842,13 @@ export default function Events() {
                             <FormField control={form.control} name="startDate" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
-                                <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                                <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                               </FormItem>
                             )} />
                             <FormField control={form.control} name="day1EndTime" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 1 End Time</FormLabel>
-                                <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                                <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
                               </FormItem>
                             )} />
                           </div>
@@ -1859,13 +1859,13 @@ export default function Events() {
                             <FormField control={form.control} name="day2StartTime" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
-                                <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                                <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
                               </FormItem>
                             )} />
                             <FormField control={form.control} name="endDate" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
-                                <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                                <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                               </FormItem>
                             )} />
                           </div>
@@ -1876,13 +1876,13 @@ export default function Events() {
                         <FormField control={form.control} name="startDate" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Start Date & Time</FormLabel>
-                            <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                            <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="endDate" render={({ field }) => (
                           <FormItem>
                             <FormLabel>End Date & Time</FormLabel>
-                            <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                            <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                           </FormItem>
                         )} />
                       </div>
@@ -2431,13 +2431,13 @@ export default function Events() {
                       <FormField control={editForm.control} name="startDate" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
-                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                          <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                         </FormItem>
                       )} />
                       <FormField control={editForm.control} name="day1EndTime" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 1 End Time</FormLabel>
-                          <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                          <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
                         </FormItem>
                       )} />
                     </div>
@@ -2448,13 +2448,13 @@ export default function Events() {
                       <FormField control={editForm.control} name="day2StartTime" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
-                          <FormControl><Input type="time" className="rounded-xl" {...field} /></FormControl>
+                          <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
                         </FormItem>
                       )} />
                       <FormField control={editForm.control} name="endDate" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
-                          <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                          <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                         </FormItem>
                       )} />
                     </div>
@@ -2465,13 +2465,13 @@ export default function Events() {
                   <FormField control={editForm.control} name="startDate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Start Date & Time</FormLabel>
-                      <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                      <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                     </FormItem>
                   )} />
                   <FormField control={editForm.control} name="endDate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>End Date & Time</FormLabel>
-                      <FormControl><Input type="datetime-local" className="rounded-xl" {...field} /></FormControl>
+                      <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
                     </FormItem>
                   )} />
                 </div>
