@@ -61,8 +61,13 @@ router.put("/event-types/:id", async (req, res) => {
     const [existing] = await db.select().from(eventTypesTable).where(eq(eventTypesTable.id, id));
     if (!existing) { res.status(404).json({ error: "Event type not found" }); return; }
 
+    const { defaultHasBandLineup, defaultHasStaffSchedule, defaultHasCallSheet, defaultHasPackingList } = req.body;
     const updates: Partial<typeof eventTypesTable.$inferInsert> = {};
     if (isActive !== undefined) updates.isActive = isActive;
+    if (defaultHasBandLineup !== undefined) updates.defaultHasBandLineup = defaultHasBandLineup;
+    if (defaultHasStaffSchedule !== undefined) updates.defaultHasStaffSchedule = defaultHasStaffSchedule;
+    if (defaultHasCallSheet !== undefined) updates.defaultHasCallSheet = defaultHasCallSheet;
+    if (defaultHasPackingList !== undefined) updates.defaultHasPackingList = defaultHasPackingList;
 
     // If renaming, cascade to events and comm_schedule_rules
     if (name?.trim() && name.trim() !== existing.name) {

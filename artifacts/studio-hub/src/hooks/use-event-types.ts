@@ -9,7 +9,11 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export type EventType = { id: number; name: string; sortOrder: number; isActive: boolean };
+export type EventType = {
+  id: number; name: string; sortOrder: number; isActive: boolean;
+  defaultHasBandLineup: boolean; defaultHasStaffSchedule: boolean;
+  defaultHasCallSheet: boolean; defaultHasPackingList: boolean;
+};
 
 export function useEventTypes() {
   return useQuery({
@@ -44,11 +48,15 @@ export function useCreateEventType() {
 export function useUpdateEventType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, name, isActive }: { id: number; name?: string; isActive?: boolean }) =>
+    mutationFn: ({ id, name, isActive, defaultHasBandLineup, defaultHasStaffSchedule, defaultHasCallSheet, defaultHasPackingList }: {
+      id: number; name?: string; isActive?: boolean;
+      defaultHasBandLineup?: boolean; defaultHasStaffSchedule?: boolean;
+      defaultHasCallSheet?: boolean; defaultHasPackingList?: boolean;
+    }) =>
       apiFetch<EventType>(`/api/event-types/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, isActive }),
+        body: JSON.stringify({ name, isActive, defaultHasBandLineup, defaultHasStaffSchedule, defaultHasCallSheet, defaultHasPackingList }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/event-types"] });

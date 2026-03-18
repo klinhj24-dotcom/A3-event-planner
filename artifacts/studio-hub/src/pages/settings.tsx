@@ -35,6 +35,13 @@ import { useTeamMembers, useUpdateUserRole, type TeamMember } from "@/hooks/use-
 import { useEventTypes, useCreateEventType, useUpdateEventType, useDeleteEventType, type EventType } from "@/hooks/use-event-types";
 import { useStaffRoleTypes, useCreateStaffRoleType, useUpdateStaffRoleType, useDeleteStaffRoleType, type StaffRoleType } from "@/hooks/use-staff-roles";
 
+const EVENT_TYPE_FEATURES: { key: "defaultHasBandLineup" | "defaultHasStaffSchedule" | "defaultHasCallSheet" | "defaultHasPackingList"; label: string; onClass: string; offClass: string }[] = [
+  { key: "defaultHasBandLineup", label: "Band Lineup", onClass: "text-primary bg-primary/10 border-primary/20", offClass: "text-muted-foreground/40 border-border/30 hover:text-muted-foreground hover:border-border/60" },
+  { key: "defaultHasStaffSchedule", label: "Staff Schedule", onClass: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20", offClass: "text-muted-foreground/40 border-border/30 hover:text-muted-foreground hover:border-border/60" },
+  { key: "defaultHasCallSheet", label: "Call Sheet", onClass: "text-sky-500 bg-sky-500/10 border-sky-500/20", offClass: "text-muted-foreground/40 border-border/30 hover:text-muted-foreground hover:border-border/60" },
+  { key: "defaultHasPackingList", label: "Packing List", onClass: "text-amber-500 bg-amber-500/10 border-amber-500/20", offClass: "text-muted-foreground/40 border-border/30 hover:text-muted-foreground hover:border-border/60" },
+];
+
 function EventTypeRow({ et }: { et: EventType }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(et.name);
@@ -50,36 +57,63 @@ function EventTypeRow({ et }: { et: EventType }) {
     });
   };
 
+  const toggleFeature = (key: typeof EVENT_TYPE_FEATURES[number]["key"]) => {
+    update({ id: et.id, [key]: !et[key] }, {
+      onError: (e: any) => toast({ title: e.message ?? "Update failed", variant: "destructive" }),
+    });
+  };
+
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 last:border-0 group">
-      <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      {editing ? (
-        <>
-          <input
-            autoFocus
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setDraft(et.name); } }}
-            className="flex-1 bg-transparent text-sm border-b border-primary outline-none py-0.5"
-          />
-          <button onClick={save} disabled={saving} className="text-primary hover:text-primary/80">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          </button>
-          <button onClick={() => { setEditing(false); setDraft(et.name); }} className="text-muted-foreground hover:text-foreground">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </>
-      ) : (
-        <>
-          <span className="flex-1 text-sm text-foreground">{et.name}</span>
-          <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => del(et.id, { onError: (e: any) => toast({ title: e.message ?? "Delete failed", variant: "destructive" }) })} disabled={deleting} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
-            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-          </button>
-        </>
-      )}
+    <div className="border-b border-border/40 last:border-0 group">
+      {/* Name row */}
+      <div className="flex items-center gap-2 px-4 py-2.5">
+        <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        {editing ? (
+          <>
+            <input
+              autoFocus
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setDraft(et.name); } }}
+              className="flex-1 bg-transparent text-sm border-b border-primary outline-none py-0.5"
+            />
+            <button onClick={save} disabled={saving} className="text-primary hover:text-primary/80">
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            </button>
+            <button onClick={() => { setEditing(false); setDraft(et.name); }} className="text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="flex-1 text-sm font-medium text-foreground">{et.name}</span>
+            <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => del(et.id, { onError: (e: any) => toast({ title: e.message ?? "Delete failed", variant: "destructive" }) })} disabled={deleting} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </button>
+          </>
+        )}
+      </div>
+      {/* Feature defaults row */}
+      <div className="flex items-center gap-1 px-4 pb-2.5 flex-wrap">
+        {EVENT_TYPE_FEATURES.map(({ key, label, onClass, offClass }) => {
+          const enabled = et[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleFeature(key)}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${enabled ? onClass : offClass}`}
+              title={enabled ? `${label}: on by default — click to turn off` : `${label}: off by default — click to turn on`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${enabled ? "bg-current" : "bg-muted-foreground/30"}`} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

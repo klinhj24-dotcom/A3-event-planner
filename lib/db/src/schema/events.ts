@@ -30,6 +30,9 @@ export const eventsTable = pgTable("events", {
   ticketFormType: text("ticket_form_type").default("none"), // "none" | "general" | "recital"
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }),
   hasBandLineup: boolean("has_band_lineup").default(false),
+  hasStaffSchedule: boolean("has_staff_schedule").default(false),
+  hasCallSheet: boolean("has_call_sheet").default(false),
+  hasPackingList: boolean("has_packing_list").default(false),
   allowGuestList: boolean("allow_guest_list").default(false),
   guestListPolicy: text("guest_list_policy").default("students_only"), // "students_only" | "plus_one" | "plus_two"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

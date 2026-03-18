@@ -675,6 +675,9 @@ const eventSchema = z.object({
   ticketFormType: z.string().optional(),
   ticketPrice: z.coerce.number().min(0).optional(),
   hasBandLineup: z.boolean().default(false),
+  hasStaffSchedule: z.boolean().default(false),
+  hasCallSheet: z.boolean().default(false),
+  hasPackingList: z.boolean().default(false),
   allowGuestList: z.boolean().default(false),
   guestListPolicy: z.string().optional(),
 });
@@ -1611,12 +1614,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, allowGuestList: false, guestListPolicy: "students_only" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, allowGuestList: false, guestListPolicy: "students_only" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only" }
   });
 
   function openEdit(ev: any) {
@@ -1652,6 +1655,9 @@ export default function Events() {
       ticketFormType: ev.ticketFormType ?? "none",
       ticketPrice: ev.ticketPrice ? Number(ev.ticketPrice) : undefined,
       hasBandLineup: ev.hasBandLineup ?? false,
+      hasStaffSchedule: ev.hasStaffSchedule ?? false,
+      hasCallSheet: ev.hasCallSheet ?? false,
+      hasPackingList: ev.hasPackingList ?? false,
       allowGuestList: ev.allowGuestList ?? false,
       guestListPolicy: ev.guestListPolicy ?? "students_only",
     });
@@ -1750,7 +1756,16 @@ export default function Events() {
                       <FormField control={form.control} name="type" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Type *</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={(val) => {
+                            field.onChange(val);
+                            const et = eventTypeList.find(t => t.name === val);
+                            if (et) {
+                              form.setValue("hasBandLineup", et.defaultHasBandLineup ?? false);
+                              form.setValue("hasStaffSchedule", et.defaultHasStaffSchedule ?? false);
+                              form.setValue("hasCallSheet", et.defaultHasCallSheet ?? false);
+                              form.setValue("hasPackingList", et.defaultHasPackingList ?? false);
+                            }
+                          }} defaultValue={field.value}>
                             <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
                             <SelectContent className="max-h-72 overflow-y-auto">
                               {eventTypeList.map(t => (
@@ -1888,16 +1903,27 @@ export default function Events() {
                         <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                       </FormItem>
                     )} />
-                    {/* Band lineup toggle */}
-                    <FormField control={form.control} name="hasBandLineup" render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium flex items-center gap-1.5"><Music className="h-3.5 w-3.5 text-primary" /> Band Lineup</FormLabel>
-                          <p className="text-[10px] text-muted-foreground">Enable the band lineup builder for this event</p>
-                        </div>
-                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                      </FormItem>
-                    )} />
+                    {/* Features section */}
+                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-3">
+                      <h4 className="font-semibold text-sm flex items-center gap-1.5"><List className="h-4 w-4 text-primary" /> Features</h4>
+                      <p className="text-[11px] text-muted-foreground -mt-1">Auto-set from event type. Toggle individually to override.</p>
+                      {([
+                        { name: "hasBandLineup" as const, icon: <Music className="h-3.5 w-3.5 text-primary" />, label: "Band Lineup", desc: "Band lineup builder" },
+                        { name: "hasStaffSchedule" as const, icon: <Users2 className="h-3.5 w-3.5 text-emerald-500" />, label: "Staff Schedule", desc: "Assign staff to this event" },
+                        { name: "hasCallSheet" as const, icon: <FileText className="h-3.5 w-3.5 text-sky-500" />, label: "Call Sheet", desc: "Generate a call sheet" },
+                        { name: "hasPackingList" as const, icon: <Package className="h-3.5 w-3.5 text-amber-500" />, label: "Packing List", desc: "Equipment packing list" },
+                      ]).map(({ name, icon, label, desc }) => (
+                        <FormField key={name} control={form.control} name={name} render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 px-3 py-2 bg-card">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-sm font-medium flex items-center gap-1.5">{icon} {label}</FormLabel>
+                              <p className="text-[10px] text-muted-foreground">{desc}</p>
+                            </div>
+                            <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          </FormItem>
+                        )} />
+                      ))}
+                    </div>
 
                     {/* Ticketing section */}
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
@@ -2231,25 +2257,29 @@ export default function Events() {
                               </Button>
                             )}
                             {/* Staff schedule */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title="Staff schedule"
-                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10"
-                              onClick={() => setStaffSlotsEvent({ id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate, location: event.location })}
-                            >
-                              <Users2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {event.hasStaffSchedule && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Staff schedule"
+                                className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10"
+                                onClick={() => setStaffSlotsEvent({ id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate, location: event.location })}
+                              >
+                                <Users2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                             {/* Call sheet */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title="Call sheet"
-                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-sky-500 hover:bg-sky-500/10"
-                              onClick={() => setCallSheetEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate, endDate: event.endDate, location: event.location })}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                            </Button>
+                            {event.hasCallSheet && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Call sheet"
+                                className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-sky-500 hover:bg-sky-500/10"
+                                onClick={() => setCallSheetEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate, endDate: event.endDate, location: event.location })}
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                             {/* Send invite email */}
                             <Button
                               size="sm"
@@ -2261,15 +2291,17 @@ export default function Events() {
                               <Mail className="h-3.5 w-3.5" />
                             </Button>
                             {/* Packing list */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title="Packing list"
-                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
-                              onClick={() => setPackingEvent({ id: event.id, title: event.title, type: event.type })}
-                            >
-                              <Package className="h-3.5 w-3.5" />
-                            </Button>
+                            {event.hasPackingList && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Packing list"
+                                className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                onClick={() => setPackingEvent({ id: event.id, title: event.title, type: event.type })}
+                              >
+                                <Package className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2439,16 +2471,26 @@ export default function Events() {
                   <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
                 </FormItem>
               )} />
-              {/* Band lineup toggle */}
-              <FormField control={editForm.control} name="hasBandLineup" render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-sm font-medium flex items-center gap-1.5"><Music className="h-3.5 w-3.5 text-primary" /> Band Lineup</FormLabel>
-                    <p className="text-[10px] text-muted-foreground">Enable the band lineup builder for this event</p>
-                  </div>
-                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                </FormItem>
-              )} />
+              {/* Features section */}
+              <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-3">
+                <h4 className="font-semibold text-sm flex items-center gap-1.5"><List className="h-4 w-4 text-primary" /> Features</h4>
+                {([
+                  { name: "hasBandLineup" as const, icon: <Music className="h-3.5 w-3.5 text-primary" />, label: "Band Lineup", desc: "Band lineup builder" },
+                  { name: "hasStaffSchedule" as const, icon: <Users2 className="h-3.5 w-3.5 text-emerald-500" />, label: "Staff Schedule", desc: "Assign staff to this event" },
+                  { name: "hasCallSheet" as const, icon: <FileText className="h-3.5 w-3.5 text-sky-500" />, label: "Call Sheet", desc: "Generate a call sheet" },
+                  { name: "hasPackingList" as const, icon: <Package className="h-3.5 w-3.5 text-amber-500" />, label: "Packing List", desc: "Equipment packing list" },
+                ]).map(({ name, icon, label, desc }) => (
+                  <FormField key={name} control={editForm.control} name={name} render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 px-3 py-2 bg-card">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium flex items-center gap-1.5">{icon} {label}</FormLabel>
+                        <p className="text-[10px] text-muted-foreground">{desc}</p>
+                      </div>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    </FormItem>
+                  )} />
+                ))}
+              </div>
 
               {/* Ticketing section */}
               <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
