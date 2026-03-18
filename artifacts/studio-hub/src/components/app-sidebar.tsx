@@ -9,6 +9,7 @@ import {
   Shield,
   DollarSign,
   CalendarDays,
+  Music2,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -33,6 +34,7 @@ const adminNavItems = [
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Events", url: "/events", icon: Calendar },
   { title: "Comm Schedule", url: "/comm-schedule", icon: Radio },
+  { title: "Bands", url: "/bands", icon: Music2 },
   { title: "Employees", url: "/employees", icon: UserSquare2 },
   { title: "Payroll", url: "/payroll", icon: DollarSign },
   { title: "Settings", url: "/settings", icon: Settings },

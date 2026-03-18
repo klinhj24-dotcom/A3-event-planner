@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable } from "@workspace/db";
-import { eq, asc, and } from "drizzle-orm";
+import { google } from "googleapis";
+import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable } from "@workspace/db";
+import { eq, asc, and, inArray, sql } from "drizzle-orm";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
 const router = Router();
 
@@ -14,7 +16,23 @@ function requireAuth(req: any, res: any): boolean {
 router.get("/bands", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
-    const bands = await db.select().from(bandsTable).orderBy(asc(bandsTable.name));
+    const bands = await db.select({
+      id: bandsTable.id,
+      name: bandsTable.name,
+      genre: bandsTable.genre,
+      members: bandsTable.members,
+      contactName: bandsTable.contactName,
+      contactEmail: bandsTable.contactEmail,
+      contactPhone: bandsTable.contactPhone,
+      notes: bandsTable.notes,
+      website: bandsTable.website,
+      instagram: bandsTable.instagram,
+      createdAt: bandsTable.createdAt,
+      updatedAt: bandsTable.updatedAt,
+      contactEmailCount: sql<number>`(SELECT COUNT(*)::int FROM band_contacts WHERE band_contacts.band_id = ${bandsTable.id} AND band_contacts.email IS NOT NULL)`,
+      contactTotalCount: sql<number>`(SELECT COUNT(*)::int FROM band_contacts WHERE band_contacts.band_id = ${bandsTable.id})`,
+      memberCount: sql<number>`(SELECT COUNT(*)::int FROM band_members WHERE band_members.band_id = ${bandsTable.id})`,
+    }).from(bandsTable).orderBy(asc(bandsTable.name));
     res.json(bands);
   } catch (err) {
     console.error("listBands error:", err);
@@ -372,6 +390,78 @@ router.delete("/events/:id/lineup/:slotId", async (req, res) => {
   } catch (err) {
     console.error("deleteLineupSlot error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Band Broadcast (BCC email to all/selected band contacts) ──────────────────
+
+const TMS_CC = "info@themusicspace.com";
+
+async function getSenderUser() {
+  const users = await db.select().from(usersTable);
+  return users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+}
+
+router.post("/bands/broadcast", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const { subject, body, bandIds } = req.body;
+    if (!subject?.trim()) { res.status(400).json({ error: "subject is required" }); return; }
+    if (!body?.trim()) { res.status(400).json({ error: "body is required" }); return; }
+
+    const sender = await getSenderUser();
+    if (!sender) {
+      res.status(400).json({ error: "No Gmail-connected user found. Connect Gmail first." });
+      return;
+    }
+
+    // Collect contacts
+    let contacts;
+    if (bandIds && Array.isArray(bandIds) && bandIds.length > 0) {
+      contacts = await db.select().from(bandContactsTable)
+        .where(inArray(bandContactsTable.bandId, bandIds.map(Number)));
+    } else {
+      contacts = await db.select().from(bandContactsTable);
+    }
+
+    const emailTargets = contacts.filter(c => c.email).map(c => c.email as string);
+    const uniqueEmails = [...new Set(emailTargets)];
+
+    if (uniqueEmails.length === 0) {
+      res.status(400).json({ error: "No band contacts with email addresses found." });
+      return;
+    }
+
+    const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, sender.id));
+      }
+    });
+
+    const gmail = google.gmail({ version: "v1", auth });
+    const from = sender.googleEmail ?? sender.email ?? "";
+
+    const html = buildHtmlEmail({ body });
+    const raw = makeHtmlEmail({
+      from,
+      to: from, // sender sees themselves as To
+      cc: [TMS_CC],
+      bcc: uniqueEmails,
+      subject,
+      html,
+    });
+
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+
+    res.json({ ok: true, sent: uniqueEmails.length, recipients: uniqueEmails });
+  } catch (err: any) {
+    console.error("bandBroadcast error:", err);
+    res.status(500).json({ error: err.message ?? "Internal server error" });
   }
 });
 
