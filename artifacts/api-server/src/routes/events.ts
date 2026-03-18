@@ -85,10 +85,16 @@ async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsT
       cal = google.calendar({ version: "v3", auth });
     }
 
+    const now = new Date();
+    let generated = 0, alreadyLate = 0;
+
     for (const rule of rules) {
       const dueDate = rule.timingDays < 0
         ? subDays(eventDate, Math.abs(rule.timingDays))
         : addDays(eventDate, rule.timingDays);
+
+      const isPast = dueDate < now;
+      const initialStatus = isPast ? "late" : "pending";
 
       const [task] = await db.insert(commTasksTable).values({
         eventId: event.id,
@@ -97,8 +103,11 @@ async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsT
         messageName: rule.messageName,
         channel: rule.channel,
         dueDate,
-        status: "pending",
+        status: initialStatus,
       }).returning();
+
+      generated++;
+      if (isPast) { alreadyLate++; continue; } // Skip calendar for already-overdue tasks
 
       if (cal) {
         try {
@@ -121,7 +130,7 @@ async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsT
         }
       }
     }
-    console.log(`Auto-generated ${rules.length} comm tasks for event ${event.id} (${event.title})`);
+    console.log(`Auto-generated ${generated} comm tasks for event ${event.id} (${event.title})${alreadyLate > 0 ? ` — ${alreadyLate} already overdue at creation` : ""}`);
   } catch (err) {
     console.warn("tryAutoGenerateAndPushComms (non-fatal):", err);
   }
