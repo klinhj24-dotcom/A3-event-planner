@@ -660,6 +660,13 @@ export function LineupSheet({ event, open, onClose }: {
     enabled: open && !!eventId,
   });
 
+  const isRecitalSheet = event?.type === "Recital";
+  const { data: ticketRequests = [] } = useQuery<any[]>({
+    queryKey: [`/api/events/${eventId}/ticket-requests`],
+    queryFn: async () => { const r = await fetch(`/api/events/${eventId}/ticket-requests`, { credentials: "include" }); return r.json(); },
+    enabled: open && !!eventId && isRecitalSheet,
+  });
+
   const [localSlots, setLocalSlots] = useState<LineupSlot[] | null>(null);
   const slots = localSlots ?? rawSlots;
   useEffect(() => { setLocalSlots(null); }, [rawSlots, eventId]);
@@ -699,6 +706,47 @@ export function LineupSheet({ event, open, onClose }: {
     mutationFn: async (id: number) => { await fetch(`/api/bands/${id}`, { method: "DELETE", credentials: "include" }); },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/bands"] }),
   });
+
+  // ── Sync registrations to lineup (recital only) ────────────────────────────
+  const [syncing, setSyncing] = useState(false);
+  async function syncRegistrationsToLineup() {
+    if (!eventId || !ticketRequests.length) return;
+    setSyncing(true);
+    try {
+      const existingLabels = new Set(rawSlots.map(s => s.label?.toLowerCase().trim()));
+      const missing = ticketRequests.filter((r: any) =>
+        r.studentFirstName && r.status !== "cancelled" &&
+        !existingLabels.has(`${r.studentFirstName} ${r.studentLastName ?? ""}`.toLowerCase().trim())
+      );
+      let added = 0;
+      for (const r of missing) {
+        const notesParts = [r.instrument, r.recitalSong].filter(Boolean);
+        await fetch(`/api/events/${eventId}/lineup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            type: "act",
+            label: `${r.studentFirstName} ${r.studentLastName ?? ""}`.trim(),
+            groupName: r.teacher ?? null,
+            notes: notesParts.length ? notesParts.join(" · ") : null,
+            durationMinutes: 5,
+            bufferMinutes: 2,
+            position: rawSlots.length + added + 1,
+          }),
+        });
+        added++;
+      }
+      await queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+      setLocalSlots([]);
+      if (added > 0) toast({ title: `${added} performer${added !== 1 ? "s" : ""} added to the order` });
+      else toast({ title: "All registrants are already in the order" });
+    } catch {
+      toast({ title: "Sync failed", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   // ── Lineup mutations ───────────────────────────────────────────────────────
   const [addSlotOpen, setAddSlotOpen] = useState(false);
@@ -926,9 +974,16 @@ export function LineupSheet({ event, open, onClose }: {
                 <p className="text-sm font-semibold">{isRecital ? "Performance Order" : "Show Order"}</p>
                 <p className="text-xs text-muted-foreground">Drag to reorder · Times auto-calculate from duration + buffer</p>
               </div>
-              <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => setAddSlotOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> {isRecital ? "Add Performer" : "Add Slot"}
-              </Button>
+              <div className="flex items-center gap-2">
+                {isRecital && ticketRequests.length > 0 && (
+                  <Button size="sm" variant="outline" className="rounded-xl gap-1.5 text-xs" onClick={syncRegistrationsToLineup} disabled={syncing}>
+                    {syncing ? <><RefreshCw className="h-3 w-3 animate-spin" /> Syncing…</> : <><RefreshCw className="h-3 w-3" /> Sync from Registrations</>}
+                  </Button>
+                )}
+                <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => setAddSlotOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> {isRecital ? "Add Performer" : "Add Slot"}
+                </Button>
+              </div>
             </div>
 
             {slots.length === 0 && (

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, eventsTable, eventTicketRequestsTable, usersTable } from "@workspace/db";
-import { eq, desc, and, ne } from "drizzle-orm";
+import { db, eventsTable, eventTicketRequestsTable, eventLineupTable, usersTable } from "@workspace/db";
+import { eq, desc, and, ne, count } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
@@ -110,6 +110,31 @@ router.post("/ticket/:token/submit", async (req, res) => {
         status: "pending",
       })
       .returning();
+
+    // For recital events: auto-add to the Recital Order (lineup) so the performer appears immediately
+    if (event.ticketFormType === "recital" && studentFirstName) {
+      try {
+        const [{ total }] = await db.select({ total: count() }).from(eventLineupTable).where(eq(eventLineupTable.eventId, event.id));
+        const notesParts = [instrument, recitalSong].filter(Boolean);
+        await db.insert(eventLineupTable).values({
+          eventId: event.id,
+          type: "act",
+          label: `${studentFirstName} ${studentLastName ?? ""}`.trim(),
+          groupName: teacher ?? null,
+          notes: notesParts.length ? notesParts.join(" · ") : null,
+          durationMinutes: 5,
+          bufferMinutes: 2,
+          position: Number(total) + 1,
+          inviteStatus: "not_sent",
+          isOverlapping: false,
+          confirmed: false,
+          confirmationSent: false,
+          reminderSent: false,
+        });
+      } catch (lineupErr) {
+        console.error("Auto-lineup slot creation failed (non-fatal):", lineupErr);
+      }
+    }
 
     // Send confirmation email — find first user with Gmail connected
     try {
