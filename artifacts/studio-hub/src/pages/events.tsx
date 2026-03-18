@@ -820,6 +820,22 @@ function EventOverviewSheet({
     onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
   });
 
+  const { mutate: deleteTicketRequest } = useMutation({
+    mutationFn: async (requestId: number) => {
+      const res = await fetch(`/api/events/${event!.id}/ticket-requests/${requestId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchTickets();
+      toast({ title: "Registration removed" });
+    },
+    onError: () => toast({ title: "Failed to remove registration", variant: "destructive" }),
+  });
+
   // ── Guest list ────────────────────────────────────────────────────────────────
   const { data: guestListEntries = [], refetch: refetchGuestList } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/guest-list`],
@@ -1192,8 +1208,8 @@ function EventOverviewSheet({
                       )}
                     </div>
 
-                    {/* Status selector */}
-                    <div className="shrink-0 flex flex-col items-end gap-1">
+                    {/* Status selector + delete */}
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
                       <select
                         value={r.status}
                         onChange={e => updateTicketStatus({ requestId: r.id, status: e.target.value })}
@@ -1207,6 +1223,20 @@ function EventOverviewSheet({
                         <option value="confirmed">confirmed</option>
                         <option value="cancelled">cancelled</option>
                       </select>
+                      <button
+                        onClick={() => {
+                          const name = isRecitalEntry
+                            ? `${r.studentFirstName} ${r.studentLastName ?? ""}`.trim()
+                            : `${r.contactFirstName} ${r.contactLastName ?? ""}`.trim();
+                          if (window.confirm(`Remove ${name}'s registration? This will also remove them from the performance order if present.`)) {
+                            deleteTicketRequest(r.id);
+                          }
+                        }}
+                        title="Delete registration"
+                        className="text-muted-foreground/40 hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
                     </div>
                   </div>
                   );

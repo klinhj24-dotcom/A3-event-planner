@@ -211,6 +211,30 @@ router.get("/events/:id/ticket-requests", async (req, res) => {
   }
 });
 
+// ── Admin: delete ticket request (+ matching lineup slot) ────────────────────
+router.delete("/events/:id/ticket-requests/:requestId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const requestId = parseInt(req.params.requestId);
+    const eventId = parseInt(req.params.id);
+
+    const [request] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+    if (!request) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Remove from lineup if a slot exists with the same student name
+    if (request.studentFirstName) {
+      const label = `${request.studentFirstName} ${request.studentLastName ?? ""}`.trim();
+      await db.delete(eventLineupTable).where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.label, label)));
+    }
+
+    await db.delete(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("deleteTicketRequest error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Admin: update ticket request status ──────────────────────────────────────
 router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
   if (!req.isAuthenticated()) {
