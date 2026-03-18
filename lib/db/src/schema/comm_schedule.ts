@@ -28,6 +28,8 @@ export const commTasksTable = pgTable("comm_tasks", {
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
   assignedToEmployeeId: integer("assigned_to_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
+  completedByEmployeeId: integer("completed_by_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

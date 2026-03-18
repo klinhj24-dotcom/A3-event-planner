@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, CheckCircle2, Trash2, Send, Users
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -69,6 +69,8 @@ function CommTasksSheet({
 }) {
   const { data: tasks = [], isLoading } = useCommTasks(event?.id ?? null);
   const { mutate: updateTask } = useUpdateCommTask();
+  const [pendingCompleteId, setPendingCompleteId] = useState<number | null>(null);
+  const [pendingCompletedBy, setPendingCompletedBy] = useState<string>("");
   const { mutate: pushComms, isPending: pushing } = useMutation({
     mutationFn: () =>
       fetch(`/api/calendar/push-comms/${event!.id}`, { method: "POST", credentials: "include" }).then(r => r.json()),
@@ -96,6 +98,9 @@ function CommTasksSheet({
 
   if (!event) return null;
 
+  // Exclude interns from the "who completed this?" dropdown
+  const eligibleEmployees = employees.filter((e: any) => e.role?.toLowerCase() !== "intern");
+
   const sorted = [...tasks].sort((a, b) => {
     if (!a.dueDate) return 1;
     if (!b.dueDate) return -1;
@@ -108,12 +113,32 @@ function CommTasksSheet({
   const progressPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
 
   function toggle(task: CommTask) {
-    const newStatus = task.status === "done" ? "pending" : "done";
-    // note: "late" → checking = "done", unchecking a "done" late = "pending" (auto-re-marks late on reload)
+    if (task.status === "done") {
+      // Unchecking: immediately revert to pending, clear completion info
+      updateTask(
+        { id: task.id, eventId: event!.id, status: "pending" },
+        { onError: () => toast({ title: "Failed to update task", variant: "destructive" }) }
+      );
+      if (pendingCompleteId === task.id) setPendingCompleteId(null);
+    } else {
+      // Checking: open inline "who completed this?" panel
+      setPendingCompleteId(task.id);
+      setPendingCompletedBy("");
+    }
+  }
+
+  function confirmComplete(task: CommTask) {
+    if (!pendingCompletedBy) return;
     updateTask(
-      { id: task.id, eventId: event!.id, status: newStatus },
       {
-        onError: () => toast({ title: "Failed to update task", variant: "destructive" }),
+        id: task.id,
+        eventId: event!.id,
+        status: "done",
+        completedByEmployeeId: parseInt(pendingCompletedBy),
+      },
+      {
+        onSuccess: () => { setPendingCompleteId(null); setPendingCompletedBy(""); },
+        onError: () => toast({ title: "Failed to mark task done", variant: "destructive" }),
       }
     );
   }
@@ -224,66 +249,80 @@ function CommTasksSheet({
             sorted.map(task => {
               const isDone = task.status === "done";
               const isLate = task.status === "late";
+              const isPendingComplete = pendingCompleteId === task.id;
               const dateInfo = dueDateLabel(task.dueDate);
               return (
                 <div
                   key={task.id}
-                  onClick={() => toggle(task)}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none
+                  className={`rounded-xl border transition-all
                     ${isDone
-                      ? "bg-muted/20 border-border/30 opacity-60"
+                      ? "bg-muted/20 border-border/30"
                       : isLate
-                      ? "bg-amber-500/5 border-amber-500/40 hover:border-amber-400/60"
-                      : "bg-card border-border/50 hover:border-primary/30 hover:bg-primary/5"
+                      ? "bg-amber-500/5 border-amber-500/40"
+                      : isPendingComplete
+                      ? "bg-primary/5 border-primary/40"
+                      : "bg-card border-border/50"
                     }`}
                 >
-                  <Checkbox
-                    checked={isDone}
-                    onCheckedChange={() => toggle(task)}
-                    onClick={e => e.stopPropagation()}
-                    className="mt-0.5 shrink-0 rounded-md"
-                  />
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <p className={`text-sm font-medium leading-snug ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                      {task.messageName || task.commType}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {isLate && (
-                        <Badge className="text-[10px] rounded-md px-1.5 bg-amber-500/20 text-amber-400 border-amber-500/30">
-                          ⚠️ LATE
-                        </Badge>
+                  <div
+                    onClick={() => !isPendingComplete && toggle(task)}
+                    className={`flex items-start gap-3 p-3 select-none ${!isPendingComplete ? "cursor-pointer" : ""}`}
+                  >
+                    <Checkbox
+                      checked={isDone || isPendingComplete}
+                      onCheckedChange={() => toggle(task)}
+                      onClick={e => e.stopPropagation()}
+                      className="mt-0.5 shrink-0 rounded-md"
+                    />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <p className={`text-sm font-medium leading-snug ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        {task.messageName || task.commType}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isLate && (
+                          <Badge className="text-[10px] rounded-md px-1.5 bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            ⚠️ LATE
+                          </Badge>
+                        )}
+                        {task.commType && (
+                          <Badge variant="outline" className={`text-[10px] rounded-md px-1.5 ${COMM_TYPE_COLORS[task.commType] || "bg-muted/40 text-muted-foreground"}`}>
+                            {task.commType}
+                          </Badge>
+                        )}
+                        {task.channel && (
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            {CHANNEL_ICONS[task.channel]}
+                            {task.channel}
+                          </span>
+                        )}
+                      </div>
+                      {/* Completed by badge */}
+                      {isDone && task.completedByEmployeeName && (
+                        <div className="flex items-center gap-1 text-[11px] text-emerald-400">
+                          <Check className="h-3 w-3" />
+                          <span>Completed by <strong>{task.completedByEmployeeName}</strong></span>
+                        </div>
                       )}
-                      {task.commType && (
-                        <Badge variant="outline" className={`text-[10px] rounded-md px-1.5 ${COMM_TYPE_COLORS[task.commType] || "bg-muted/40 text-muted-foreground"}`}>
-                          {task.commType}
-                        </Badge>
-                      )}
-                      {task.channel && (
-                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                          {CHANNEL_ICONS[task.channel]}
-                          {task.channel}
-                        </span>
+                      {/* Assignment dropdown (only when not in pending-complete mode) */}
+                      {!isPendingComplete && eligibleEmployees.length > 0 && (
+                        <div onClick={e => e.stopPropagation()} className="pt-1">
+                          <Select
+                            value={task.assignedToEmployeeId ? String(task.assignedToEmployeeId) : "unassigned"}
+                            onValueChange={(val) => updateTask({ id: task.id, eventId: event!.id, assignedToEmployeeId: val === "unassigned" ? null : parseInt(val) })}
+                          >
+                            <SelectTrigger className="h-6 rounded-lg text-[11px] w-auto min-w-[120px] border-dashed border-border/60 bg-transparent px-2 gap-1">
+                              <SelectValue placeholder="Assign to…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassigned" className="text-xs text-muted-foreground">Unassigned</SelectItem>
+                              {eligibleEmployees.map((emp: any) => (
+                                <SelectItem key={emp.id} value={String(emp.id)} className="text-xs">{emp.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       )}
                     </div>
-                    {employees.length > 0 && (
-                      <div onClick={e => e.stopPropagation()} className="pt-1">
-                        <Select
-                          value={task.assignedToEmployeeId ? String(task.assignedToEmployeeId) : "unassigned"}
-                          onValueChange={(val) => updateTask({ id: task.id, eventId: event!.id, assignedToEmployeeId: val === "unassigned" ? null : parseInt(val) })}
-                        >
-                          <SelectTrigger className="h-6 rounded-lg text-[11px] w-auto min-w-[120px] border-dashed border-border/60 bg-transparent px-2 gap-1">
-                            <SelectValue placeholder="Assign to…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned" className="text-xs text-muted-foreground">Unassigned</SelectItem>
-                            {employees.map((emp: any) => (
-                              <SelectItem key={emp.id} value={String(emp.id)} className="text-xs">{emp.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
                   {dateInfo && !isLate && (
                     <div className={`shrink-0 text-[11px] font-medium flex items-center gap-1 ${dateInfo.cls}`}>
                       {dateInfo.cls === "text-destructive" && <AlertCircle className="h-3 w-3" />}
@@ -293,6 +332,36 @@ function CommTasksSheet({
                   {isLate && task.dueDate && (
                     <div className="shrink-0 text-[11px] font-medium text-amber-400">
                       Due {format(new Date(task.dueDate), "MMM d")}
+                    </div>
+                  )}
+                  </div>
+                  {/* Inline "who completed this?" panel */}
+                  {isPendingComplete && (
+                    <div className="px-3 pb-3 pt-0 flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                      <span className="text-[12px] text-muted-foreground">Who completed this?</span>
+                      <Select value={pendingCompletedBy} onValueChange={setPendingCompletedBy}>
+                        <SelectTrigger className="h-7 rounded-lg text-xs w-auto min-w-[140px] border-border/60 bg-card px-2">
+                          <SelectValue placeholder="Select person…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleEmployees.map((emp: any) => (
+                            <SelectItem key={emp.id} value={String(emp.id)} className="text-xs">{emp.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <button
+                        onClick={() => confirmComplete(task)}
+                        disabled={!pendingCompletedBy}
+                        className="h-7 px-3 rounded-lg text-xs bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                      >
+                        Mark Done
+                      </button>
+                      <button
+                        onClick={() => { setPendingCompleteId(null); setPendingCompletedBy(""); }}
+                        className="h-7 px-2 rounded-lg text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   )}
                 </div>

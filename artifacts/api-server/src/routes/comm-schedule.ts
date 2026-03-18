@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { db } from "@workspace/db";
 import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable, employeesTable } from "@workspace/db";
 import { eq, desc, and, lt, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { addDays, subDays } from "date-fns";
 import { createAuthedClient, makeRawEmail } from "../lib/google";
 
@@ -208,6 +209,7 @@ router.get("/comm-schedule/tasks", async (req, res) => {
       })();
     }
 
+    const completedByEmp = alias(employeesTable, "completed_by_emp");
     const tasks = await db
       .select({
         id: commTasksTable.id,
@@ -222,11 +224,15 @@ router.get("/comm-schedule/tasks", async (req, res) => {
         notes: commTasksTable.notes,
         assignedToEmployeeId: commTasksTable.assignedToEmployeeId,
         assignedToEmployeeName: employeesTable.name,
+        completedByEmployeeId: commTasksTable.completedByEmployeeId,
+        completedByEmployeeName: completedByEmp.name,
+        completedAt: commTasksTable.completedAt,
         createdAt: commTasksTable.createdAt,
         updatedAt: commTasksTable.updatedAt,
       })
       .from(commTasksTable)
       .leftJoin(employeesTable, eq(commTasksTable.assignedToEmployeeId, employeesTable.id))
+      .leftJoin(completedByEmp, eq(commTasksTable.completedByEmployeeId, completedByEmp.id))
       .where(eq(commTasksTable.eventId, eid))
       .orderBy(commTasksTable.dueDate);
 
@@ -465,7 +471,10 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { status, notes, googleCalendarEventId, assignedToEmployeeId } = req.body;
+    const { status, notes, googleCalendarEventId, assignedToEmployeeId, completedByEmployeeId } = req.body;
+
+    const becomingDone    = status === "done";
+    const becomingUndone  = status !== undefined && status !== "done";
 
     const [task] = await db
       .update(commTasksTable)
@@ -474,6 +483,10 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
         ...(notes !== undefined ? { notes } : {}),
         ...(googleCalendarEventId !== undefined ? { googleCalendarEventId } : {}),
         ...(assignedToEmployeeId !== undefined ? { assignedToEmployeeId: assignedToEmployeeId === null ? null : parseInt(assignedToEmployeeId) } : {}),
+        // Completion tracking
+        ...(completedByEmployeeId !== undefined ? { completedByEmployeeId: completedByEmployeeId === null ? null : parseInt(completedByEmployeeId) } : {}),
+        ...(becomingDone    ? { completedAt: new Date() } : {}),
+        ...(becomingUndone  ? { completedByEmployeeId: null, completedAt: null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(commTasksTable.id, id))

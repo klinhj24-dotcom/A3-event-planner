@@ -201,6 +201,9 @@ export interface CommTask {
   notes: string | null;
   assignedToEmployeeId: number | null;
   assignedToEmployeeName: string | null;
+  completedByEmployeeId: number | null;
+  completedByEmployeeName: string | null;
+  completedAt: string | null;
 }
 
 export function useCommTasks(eventId: number | null) {
@@ -258,12 +261,12 @@ export function useSendLateReport() {
 export function useUpdateCommTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, eventId, status, notes, assignedToEmployeeId }: { id: number; eventId: number; status?: string; notes?: string; assignedToEmployeeId?: number | null }) => {
+    mutationFn: async ({ id, eventId, status, notes, assignedToEmployeeId, completedByEmployeeId }: { id: number; eventId: number; status?: string; notes?: string; assignedToEmployeeId?: number | null; completedByEmployeeId?: number | null }) => {
       const res = await fetch(`${BASE}/comm-schedule/tasks/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status, notes, assignedToEmployeeId }),
+        body: JSON.stringify({ status, notes, assignedToEmployeeId, completedByEmployeeId }),
       });
       if (!res.ok) throw new Error("Failed to update task");
       return res.json();
