@@ -1,9 +1,9 @@
 import { AppLayout } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
+import { useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { format, isPast, isToday, startOfDay } from "date-fns";
 import { Calendar, MapPin, CalendarDays, Info, ClipboardList, AlertCircle } from "lucide-react";
 
@@ -19,6 +19,19 @@ const TASK_STATUS_STYLES: Record<string, string> = {
   late: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   pending: "bg-muted text-muted-foreground border-border/50",
 };
+
+const CALENDAR_TAG_META: Record<string, { label: string; color: string }> = {
+  TW:  { label: "Teachers in the Wild",        color: "#ff4329" },
+  MSH: { label: "Music Space Hosted Event",     color: "#00b199" },
+  MSS: { label: "Music Space Sponsored Event",  color: "#cddb29" },
+  CF:  { label: "Community Friends Event",      color: "#94a3b8" },
+  CAL: { label: "Music Space Calendar Event",   color: "#7250ef" },
+};
+function calTagStyle(tag: string): CSSProperties {
+  const color = CALENDAR_TAG_META[tag]?.color;
+  if (!color) return {};
+  return { backgroundColor: `${color}22`, color, borderColor: `${color}55` };
+}
 
 export default function MySchedule() {
   const [taskStatusFilter, setTaskStatusFilter] = useState<"all" | "late" | "pending">("all");
@@ -307,7 +320,9 @@ function EventCard({ event }: { event: any }) {
             <h3 className="font-semibold text-foreground">
               {event.title}
               {event.calendarTag && event.calendarTag !== "none" && (
-                <span className="ml-2 text-muted-foreground font-normal text-sm">[{event.calendarTag}]</span>
+                <Badge variant="outline" className="text-[10px] font-semibold border ml-1" style={calTagStyle(event.calendarTag)}>
+                  {CALENDAR_TAG_META[event.calendarTag]?.label ?? event.calendarTag}
+                </Badge>
               )}
             </h3>
           </div>

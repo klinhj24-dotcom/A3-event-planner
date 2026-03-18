@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { useSearch } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useListEmployees } from "@workspace/api-client-react";
@@ -549,13 +549,23 @@ function CommsPushButton({ eventId, eventTitle, onPushed }: { eventId: number; e
 
 // ─── Event schema ─────────────────────────────────────────────────────────────
 const CALENDAR_TAGS = [
-  { value: "none", label: "No Tag — Keep off public calendar" },
-  { value: "TW",  label: "Teachers in the Wild" },
-  { value: "MSH", label: "Music Space Hosted Event" },
-  { value: "MSS", label: "Music Space Sponsored Event" },
-  { value: "CF",  label: "Community Friends Event" },
-  { value: "CAL", label: "Music Space Calendar Event" },
+  { value: "none", label: "No Tag — Keep off public calendar", color: null },
+  { value: "TW",  label: "Teachers in the Wild",              color: "#ff4329" },
+  { value: "MSH", label: "Music Space Hosted Event",          color: "#00b199" },
+  { value: "MSS", label: "Music Space Sponsored Event",       color: "#cddb29" },
+  { value: "CF",  label: "Community Friends Event",           color: "#94a3b8" },
+  { value: "CAL", label: "Music Space Calendar Event",        color: "#7250ef" },
 ];
+
+function tagStyle(tagValue: string | null | undefined): CSSProperties {
+  const color = CALENDAR_TAGS.find(t => t.value === tagValue)?.color;
+  if (!color) return {};
+  return {
+    backgroundColor: `${color}22`,
+    color,
+    borderColor: `${color}55`,
+  };
+}
 
 function toDatetimeLocal(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -1544,7 +1554,7 @@ export default function Events() {
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {event.calendarTag && event.calendarTag !== "none" && (
-                              <Badge variant="secondary" className="text-[10px] bg-secondary border border-border/50 mr-1">
+                              <Badge variant="outline" className="text-[10px] font-semibold mr-1 border" style={tagStyle(event.calendarTag)}>
                                 {CALENDAR_TAGS.find(t => t.value === event.calendarTag)?.label ?? event.calendarTag}
                               </Badge>
                             )}
