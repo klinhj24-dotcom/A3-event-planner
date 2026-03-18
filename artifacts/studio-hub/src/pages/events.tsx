@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearch } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useListEmployees } from "@workspace/api-client-react";
@@ -644,6 +644,32 @@ function fmt12(t: string): string {
 function toDatetimeLocal(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Split date + time picker — time snaps to 15-min intervals properly
+function DateTimeSplit({ value, onChange, onBlur }: { value?: string; onChange: (v: string) => void; onBlur?: () => void }) {
+  const datePart = value ? value.split("T")[0] : "";
+  const timePart = value ? (value.split("T")[1] ?? "").slice(0, 5) : "";
+  const combine = (d: string, t: string) => d ? `${d}T${t || "00:00"}` : "";
+  return (
+    <div className="flex gap-2">
+      <Input
+        type="date"
+        value={datePart}
+        onChange={e => onChange(combine(e.target.value, timePart))}
+        onBlur={onBlur}
+        className="rounded-xl flex-1"
+      />
+      <Input
+        type="time"
+        step="900"
+        value={timePart}
+        onChange={e => onChange(combine(datePart, e.target.value))}
+        onBlur={onBlur}
+        className="rounded-xl w-[110px]"
+      />
+    </div>
+  );
 }
 
 function localsToUtc(data: Record<string, any>) {
@@ -1653,6 +1679,42 @@ export default function Events() {
     defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
   });
 
+  // Auto-fill end date when start date changes (create form)
+  const prevCreateStart = useRef("");
+  const watchCreateStart = form.watch("startDate");
+  useEffect(() => {
+    if (!watchCreateStart) return;
+    const newDatePart = watchCreateStart.split("T")[0];
+    const prevDatePart = prevCreateStart.current ? prevCreateStart.current.split("T")[0] : "";
+    const currentEnd = form.getValues("endDate");
+    if (!currentEnd) {
+      const [h, m] = (watchCreateStart.split("T")[1] ?? "00:00").split(":").map(Number);
+      const endH = String((h + 1) % 24).padStart(2, "0");
+      form.setValue("endDate", `${newDatePart}T${endH}:${String(m).padStart(2, "0")}`);
+    } else if (prevDatePart && newDatePart !== prevDatePart) {
+      form.setValue("endDate", `${newDatePart}T${(currentEnd.split("T")[1] ?? "20:00")}`);
+    }
+    prevCreateStart.current = watchCreateStart;
+  }, [watchCreateStart]);
+
+  // Auto-fill end date when start date changes (edit form)
+  const prevEditStart = useRef("");
+  const watchEditStart = editForm.watch("startDate");
+  useEffect(() => {
+    if (!watchEditStart) return;
+    const newDatePart = watchEditStart.split("T")[0];
+    const prevDatePart = prevEditStart.current ? prevEditStart.current.split("T")[0] : "";
+    const currentEnd = editForm.getValues("endDate");
+    if (!currentEnd) {
+      const [h, m] = (watchEditStart.split("T")[1] ?? "00:00").split(":").map(Number);
+      const endH = String((h + 1) % 24).padStart(2, "0");
+      editForm.setValue("endDate", `${newDatePart}T${endH}:${String(m).padStart(2, "0")}`);
+    } else if (prevDatePart && newDatePart !== prevDatePart) {
+      editForm.setValue("endDate", `${newDatePart}T${(currentEnd.split("T")[1] ?? "20:00")}`);
+    }
+    prevEditStart.current = watchEditStart;
+  }, [watchEditStart]);
+
   function openEdit(ev: any) {
     setEditEvent(ev);
     // Derive ticket source from saved values
@@ -1696,6 +1758,8 @@ export default function Events() {
       pocEmail: ev.pocEmail ?? "",
       pocPhone: ev.pocPhone ?? "",
     });
+    // Seed ref so auto-fill effect doesn't trigger on load
+    prevEditStart.current = ev.startDate ? toDatetimeLocal(new Date(ev.startDate)) : "";
   }
 
   const { mutate: sendLateReport, isPending: sendingReport } = useSendLateReport();
@@ -1842,7 +1906,7 @@ export default function Events() {
                             <FormField control={form.control} name="startDate" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
-                                <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                                <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                               </FormItem>
                             )} />
                             <FormField control={form.control} name="day1EndTime" render={({ field }) => (
@@ -1865,7 +1929,7 @@ export default function Events() {
                             <FormField control={form.control} name="endDate" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
-                                <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                                <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                               </FormItem>
                             )} />
                           </div>
@@ -1876,13 +1940,13 @@ export default function Events() {
                         <FormField control={form.control} name="startDate" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Start Date & Time</FormLabel>
-                            <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                            <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="endDate" render={({ field }) => (
                           <FormItem>
                             <FormLabel>End Date & Time</FormLabel>
-                            <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                            <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                           </FormItem>
                         )} />
                       </div>
@@ -2431,7 +2495,7 @@ export default function Events() {
                       <FormField control={editForm.control} name="startDate" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
-                          <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                          <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                         </FormItem>
                       )} />
                       <FormField control={editForm.control} name="day1EndTime" render={({ field }) => (
@@ -2454,7 +2518,7 @@ export default function Events() {
                       <FormField control={editForm.control} name="endDate" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
-                          <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                          <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                         </FormItem>
                       )} />
                     </div>
@@ -2465,13 +2529,13 @@ export default function Events() {
                   <FormField control={editForm.control} name="startDate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Start Date & Time</FormLabel>
-                      <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                      <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                     </FormItem>
                   )} />
                   <FormField control={editForm.control} name="endDate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>End Date & Time</FormLabel>
-                      <FormControl><Input type="datetime-local" step="900" className="rounded-xl" {...field} /></FormControl>
+                      <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
                     </FormItem>
                   )} />
                 </div>
