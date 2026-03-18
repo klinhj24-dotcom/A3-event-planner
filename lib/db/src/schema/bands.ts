@@ -1,5 +1,6 @@
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { eventsTable } from "./events";
+import { employeesTable } from "./employees";
 
 export const bandsTable = pgTable("bands", {
   id: serial("id").primaryKey(),
@@ -13,6 +14,7 @@ export const bandsTable = pgTable("bands", {
   notes: text("notes"),
   website: text("website"),
   instagram: text("instagram"),
+  leaderEmployeeId: integer("leader_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -75,6 +77,9 @@ export const eventLineupTable = pgTable("event_lineup", {
   inviteStatus: text("invite_status").notNull().default("not_sent"), // not_sent | sent | confirmed | declined
   confirmationSent: boolean("confirmation_sent").notNull().default(false),
   reminderSent: boolean("reminder_sent").notNull().default(false),
+  // Band leader attendance
+  leaderAttending: boolean("leader_attending").notNull().default(false),
+  leaderStaffSlotId: integer("leader_staff_slot_id"), // plain ref to event_staff_slots.id (no FK to avoid circular)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

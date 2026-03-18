@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { google } from "googleapis";
-import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable } from "@workspace/db";
+import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable } from "@workspace/db";
 import { eq, asc, and, inArray, sql } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
@@ -27,6 +27,8 @@ router.get("/bands", async (req, res) => {
       notes: bandsTable.notes,
       website: bandsTable.website,
       instagram: bandsTable.instagram,
+      leaderEmployeeId: bandsTable.leaderEmployeeId,
+      leaderName: sql<string | null>`(SELECT name FROM employees WHERE id = ${bandsTable.leaderEmployeeId})`,
       createdAt: bandsTable.createdAt,
       updatedAt: bandsTable.updatedAt,
       contactEmailCount: sql<number>`(SELECT COUNT(*)::int FROM band_contacts WHERE band_contacts.band_id = ${bandsTable.id} AND band_contacts.email IS NOT NULL)`,
@@ -77,10 +79,10 @@ router.get("/bands/:id", async (req, res) => {
 router.post("/bands", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
-    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram, leaderEmployeeId } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const [band] = await db.insert(bandsTable)
-      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes, website: website || null, instagram: instagram || null })
+      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes, website: website || null, instagram: instagram || null, leaderEmployeeId: leaderEmployeeId ? Number(leaderEmployeeId) : null })
       .returning();
     res.status(201).json(band);
   } catch (err) {
@@ -93,7 +95,7 @@ router.put("/bands/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram, leaderEmployeeId } = req.body;
     const [band] = await db.update(bandsTable)
       .set({
         ...(name !== undefined ? { name } : {}),
@@ -105,6 +107,7 @@ router.put("/bands/:id", async (req, res) => {
         ...(notes !== undefined ? { notes } : {}),
         ...(website !== undefined ? { website: website || null } : {}),
         ...(instagram !== undefined ? { instagram: instagram || null } : {}),
+        ...(leaderEmployeeId !== undefined ? { leaderEmployeeId: leaderEmployeeId ? Number(leaderEmployeeId) : null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(bandsTable.id, id))
@@ -289,6 +292,11 @@ const LINEUP_SELECT = {
   inviteStatus: eventLineupTable.inviteStatus,
   confirmationSent: eventLineupTable.confirmationSent,
   reminderSent: eventLineupTable.reminderSent,
+  // Band leader
+  leaderAttending: eventLineupTable.leaderAttending,
+  leaderStaffSlotId: eventLineupTable.leaderStaffSlotId,
+  bandLeaderEmployeeId: bandsTable.leaderEmployeeId,
+  bandLeaderName: sql<string | null>`(SELECT name FROM employees WHERE id = ${bandsTable.leaderEmployeeId})`,
 };
 
 router.get("/events/:id/lineup", async (req, res) => {
@@ -359,7 +367,45 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent, leaderAttending } = req.body;
+
+    // Handle leader attending toggle — auto-create/delete staff slot
+    let leaderUpdates: { leaderAttending?: boolean; leaderStaffSlotId?: number | null } = {};
+    if (leaderAttending !== undefined) {
+      const [current] = await db.select().from(eventLineupTable).where(eq(eventLineupTable.id, slotId));
+      if (current) {
+        if (leaderAttending && !current.leaderAttending) {
+          const effectiveBandId = bandId !== undefined ? (bandId ? Number(bandId) : null) : current.bandId;
+          if (effectiveBandId) {
+            const [band] = await db.select().from(bandsTable).where(eq(bandsTable.id, effectiveBandId));
+            if (band?.leaderEmployeeId) {
+              const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, current.eventId));
+              const [newSlot] = await db.insert(eventStaffSlotsTable).values({
+                eventId: current.eventId,
+                assignedEmployeeId: band.leaderEmployeeId,
+                startTime: event?.startDate ?? null,
+                endTime: event?.endDate ?? null,
+                notes: `Band Leader — ${band.name}`,
+                isAutoCreated: true,
+              }).returning();
+              leaderUpdates = { leaderAttending: true, leaderStaffSlotId: newSlot.id };
+            } else {
+              leaderUpdates = { leaderAttending: true };
+            }
+          } else {
+            leaderUpdates = { leaderAttending: true };
+          }
+        } else if (!leaderAttending) {
+          if (current.leaderStaffSlotId) {
+            await db.delete(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, current.leaderStaffSlotId));
+          }
+          leaderUpdates = { leaderAttending: false, leaderStaffSlotId: null };
+        } else {
+          leaderUpdates = { leaderAttending };
+        }
+      }
+    }
+
     const [slot] = await db.update(eventLineupTable)
       .set({
         ...(bandId !== undefined ? { bandId: bandId ? Number(bandId) : null } : {}),
@@ -375,6 +421,8 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
         ...(staffNote !== undefined ? { staffNote: staffNote || null } : {}),
         ...(inviteStatus !== undefined ? { inviteStatus } : {}),
         ...(confirmationSent !== undefined ? { confirmationSent } : {}),
+        ...(leaderUpdates.leaderAttending !== undefined ? { leaderAttending: leaderUpdates.leaderAttending } : {}),
+        ...(leaderUpdates.leaderStaffSlotId !== undefined ? { leaderStaffSlotId: leaderUpdates.leaderStaffSlotId } : {}),
         updatedAt: new Date(),
       })
       .where(eq(eventLineupTable.id, slotId))

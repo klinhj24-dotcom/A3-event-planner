@@ -48,11 +48,13 @@ interface Band {
   id: number; name: string; genre: string | null; members: number | null;
   contactName: string | null; contactEmail: string | null; contactPhone: string | null;
   notes: string | null; website: string | null; instagram: string | null;
+  leaderEmployeeId?: number | null; leaderName?: string | null;
   // From list endpoint (summary counts)
   contactEmailCount?: number; contactTotalCount?: number; memberCount?: number;
   // From detail endpoint (full data)
   membersWithContacts?: BandMember[];
 }
+interface EmployeeOption { id: number; name: string; }
 interface EventItem {
   id: number; title: string; startDate: string | null; status: string; type: string;
 }
@@ -109,7 +111,12 @@ function BandFormDialog({
   open, band, onClose, onSaved,
 }: { open: boolean; band: Band | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
-    name: "", genre: "", website: "", instagram: "", notes: "",
+    name: "", genre: "", website: "", instagram: "", notes: "", leaderEmployeeId: "",
+  });
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ["/api/employees"],
+    queryFn: () => fetch("/api/employees", { credentials: "include" }).then(r => r.json()),
   });
 
   React.useEffect(() => {
@@ -120,6 +127,7 @@ function BandFormDialog({
         website: band?.website ?? "",
         instagram: band?.instagram ?? "",
         notes: band?.notes ?? "",
+        leaderEmployeeId: band?.leaderEmployeeId ? String(band.leaderEmployeeId) : "",
       });
     }
   }, [open, band]);
@@ -128,7 +136,10 @@ function BandFormDialog({
     mutationFn: (data: typeof form) =>
       api(band ? `/api/bands/${band.id}` : "/api/bands", {
         method: band ? "PUT" : "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          leaderEmployeeId: data.leaderEmployeeId ? Number(data.leaderEmployeeId) : null,
+        }),
       }),
     onSuccess: () => { onSaved(); onClose(); toast({ title: band ? "Band updated" : "Band added" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -151,6 +162,24 @@ function BandFormDialog({
           <div>
             <Label className="text-xs mb-1.5 block">Genre</Label>
             <Input value={form.genre} onChange={f("genre")} placeholder="Indie, Jazz, Pop…" />
+          </div>
+          <div>
+            <Label className="text-xs mb-1.5 block">Band Leader (TMS Staff)</Label>
+            <Select
+              value={form.leaderEmployeeId || "_none"}
+              onValueChange={v => setForm(p => ({ ...p, leaderEmployeeId: v === "_none" ? "" : v }))}
+            >
+              <SelectTrigger className="h-9 rounded-lg text-sm">
+                <SelectValue placeholder="No leader assigned…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">No leader assigned</SelectItem>
+                {employees.map(e => (
+                  <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">The TMS staff member who leads this band at events</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1056,6 +1085,12 @@ export default function Bands() {
                             ? `${band.memberCount ?? band.members} member${(band.memberCount ?? band.members ?? 0) !== 1 ? "s" : ""}`
                             : "No members yet"}
                         </span>
+                        {band.leaderName && (
+                          <span className="flex items-center gap-1 text-primary/70">
+                            <User className="h-3 w-3" />
+                            {band.leaderName}
+                          </span>
+                        )}
                         {cnt.total > 0 && (
                           <span className="flex items-center gap-1">
                             <Mail className="h-3 w-3" />

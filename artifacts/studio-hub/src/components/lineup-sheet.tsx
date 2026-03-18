@@ -28,6 +28,7 @@ interface Band {
   id: number; name: string; genre?: string | null; members?: number | null;
   contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null;
   notes?: string | null; website?: string | null; instagram?: string | null;
+  leaderEmployeeId?: number | null;
 }
 
 interface BandMember {
@@ -55,6 +56,9 @@ interface LineupSlot {
   groupName?: string | null; notes?: string | null;
   staffNote?: string | null; inviteStatus: string;
   confirmationSent: boolean; reminderSent: boolean;
+  // Band leader attendance
+  leaderAttending?: boolean; leaderStaffSlotId?: number | null;
+  bandLeaderEmployeeId?: number | null; bandLeaderName?: string | null;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -380,6 +384,30 @@ function SlotRow({
           <Button size="sm" className="w-full rounded-lg h-8 text-xs" onClick={save}>
             <Save className="h-3 w-3 mr-1.5" /> Save Changes
           </Button>
+
+          {/* ── Band Leader Attendance (act slots where band has a leader) ─── */}
+          {slot.type === "act" && slot.bandId && slot.bandLeaderEmployeeId && (
+            <div className="pt-2 border-t border-border/30">
+              <div
+                className={`flex items-center justify-between rounded-xl px-3 py-2.5 border transition-colors cursor-pointer ${slot.leaderAttending ? "bg-primary/10 border-primary/30" : "bg-transparent border-border/30 hover:border-border/50"}`}
+                onClick={() => onUpdate(slot.id, { leaderAttending: !slot.leaderAttending })}
+              >
+                <div>
+                  <p className="text-xs font-semibold">{slot.bandLeaderName ?? "Band Leader"} attending?</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {slot.leaderAttending
+                      ? "Scheduled as staff — shift uses event times"
+                      : "Toggle on to auto-schedule as event staff"}
+                  </p>
+                </div>
+                <Switch
+                  checked={!!slot.leaderAttending}
+                  onCheckedChange={v => onUpdate(slot.id, { leaderAttending: v })}
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          )}
 
           {/* ── Invite section (act slots with bands only) ──────────────────── */}
           {slot.type === "act" && slot.bandId && (
