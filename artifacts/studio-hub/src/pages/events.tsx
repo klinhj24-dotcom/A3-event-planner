@@ -967,11 +967,11 @@ function EventOverviewSheet({
     { label: "Edit Event", icon: <Pencil className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onEdit(event); } },
     { label: "Comm Tasks", icon: <ClipboardList className="h-4 w-4" />, color: "text-foreground", bg: "hover:bg-muted/60", fn: () => { onClose(); actions.onTasks(event); } },
     { label: "Post-Event Debrief", icon: <ClipboardCheck className="h-4 w-4" />, color: "text-[#00b199]", bg: "hover:bg-[#00b199]/10", fn: () => { onClose(); actions.onDebrief(event); } },
-    { label: event.type === "Recital" ? "Recital Order" : "Band Lineup", icon: <Music className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onLineup(event); } },
-    { label: "Staff Schedule", icon: <Users2 className="h-4 w-4" />, color: "text-emerald-500", bg: "hover:bg-emerald-500/10", fn: () => { onClose(); actions.onStaffSlots(event); } },
-    { label: "Call Sheet", icon: <FileText className="h-4 w-4" />, color: "text-sky-400", bg: "hover:bg-sky-500/10", fn: () => { onClose(); actions.onCallSheet(event); } },
+    ...(event.hasBandLineup ? [{ label: event.type === "Recital" ? "Recital Order" : "Band Lineup", icon: <Music className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onLineup(event); } }] : []),
+    ...(event.hasStaffSchedule ? [{ label: "Staff Schedule", icon: <Users2 className="h-4 w-4" />, color: "text-emerald-500", bg: "hover:bg-emerald-500/10", fn: () => { onClose(); actions.onStaffSlots(event); } }] : []),
+    ...(event.hasCallSheet ? [{ label: "Call Sheet", icon: <FileText className="h-4 w-4" />, color: "text-sky-400", bg: "hover:bg-sky-500/10", fn: () => { onClose(); actions.onCallSheet(event); } }] : []),
     { label: "Send Invite", icon: <Mail className="h-4 w-4" />, color: "text-violet-400", bg: "hover:bg-violet-500/10", fn: () => { onClose(); actions.onInvite(event); } },
-    { label: "Packing List", icon: <Package className="h-4 w-4" />, color: "text-amber-400", bg: "hover:bg-amber-500/10", fn: () => { onClose(); actions.onPacking(event); } },
+    ...(event.hasPackingList ? [{ label: "Packing List", icon: <Package className="h-4 w-4" />, color: "text-amber-400", bg: "hover:bg-amber-500/10", fn: () => { onClose(); actions.onPacking(event); } }] : []),
   ];
 
   const handleDeleteConfirm = () => {
