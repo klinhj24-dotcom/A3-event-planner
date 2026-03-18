@@ -75,11 +75,17 @@ function computeTimes(slots: LineupSlot[]): (string | null)[] {
   const out: (string | null)[] = [];
   for (let i = 0; i < slots.length; i++) {
     const s = slots[i];
+    // Group headers don't consume time — carry forward previous time
+    if (s.type === "group-header") { out.push(out[i - 1] ?? null); continue; }
     if (s.startTime) { out.push(s.startTime); continue; }
     if (i === 0) { out.push(null); continue; }
     if (s.isOverlapping) { out.push(out[i - 1]); continue; }
-    const prev = slots[i - 1];
-    const prevT = out[i - 1];
+    // Find the last non-group-header slot before this one for time chaining
+    let prevIdx = i - 1;
+    while (prevIdx >= 0 && slots[prevIdx].type === "group-header") prevIdx--;
+    if (prevIdx < 0) { out.push(null); continue; }
+    const prev = slots[prevIdx];
+    const prevT = out[prevIdx];
     if (!prevT || !prev.durationMinutes) { out.push(null); continue; }
     out.push(addMinutes(prevT, prev.durationMinutes + (prev.bufferMinutes ?? 0)));
   }
@@ -210,6 +216,32 @@ function SlotRow({
     } finally {
       setSendingConfirm(false);
     }
+  }
+
+  // ── Group header rendering ────────────────────────────────────────────────
+  if (slot.type === "group-header") {
+    return (
+      <div ref={setNodeRef} style={style} className={`flex items-center gap-2 py-1 ${isDragging ? "opacity-50" : ""}`}>
+        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground p-0.5 touch-none">
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <div className="flex-1 flex items-center gap-2">
+          <div className="h-px flex-1 bg-primary/20" />
+          <input
+            className="bg-transparent text-xs font-bold uppercase tracking-widest text-primary/70 text-center min-w-0 w-28 border-0 outline-none focus:ring-0 hover:text-primary transition-colors"
+            value={draft.label}
+            onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+            onBlur={() => { if (draft.label !== (slot.label ?? "")) onUpdate(slot.id, { label: draft.label || null }); }}
+            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            title="Click to rename group"
+          />
+          <div className="h-px flex-1 bg-primary/20" />
+        </div>
+        <button onClick={() => onDelete(slot.id)} className="text-muted-foreground/30 hover:text-destructive transition-colors p-0.5">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -977,7 +1009,15 @@ export function LineupSheet({ event, open, onClose }: {
               <div className="flex items-center gap-2">
                 {isRecital && ticketRequests.length > 0 && (
                   <Button size="sm" variant="outline" className="rounded-xl gap-1.5 text-xs" onClick={syncRegistrationsToLineup} disabled={syncing}>
-                    {syncing ? <><RefreshCw className="h-3 w-3 animate-spin" /> Syncing…</> : <><RefreshCw className="h-3 w-3" /> Sync from Registrations</>}
+                    {syncing ? <><RefreshCw className="h-3 w-3 animate-spin" /> Syncing…</> : <><RefreshCw className="h-3 w-3" /> Sync</>}
+                  </Button>
+                )}
+                {isRecital && (
+                  <Button size="sm" variant="outline" className="rounded-xl gap-1.5 text-xs" onClick={() => {
+                    const existing = rawSlots.filter(s => s.type === "group-header").length;
+                    addSlot({ type: "group-header", label: `Group ${existing + 1}`, position: rawSlots.length + 1 });
+                  }}>
+                    <Layers className="h-3 w-3" /> Add Group
                   </Button>
                 )}
                 <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => setAddSlotOpen(true)}>
