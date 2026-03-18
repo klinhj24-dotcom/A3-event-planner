@@ -8,6 +8,53 @@ import { createAuthedClient, makeRawEmail } from "../lib/google";
 
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
+// ── Self-healing calendar patch ───────────────────────────────────────────────
+// If the Google Calendar event was deleted externally, recreate it and save the
+// new ID so future syncs work correctly. All errors are non-fatal.
+async function patchOrRecreateCalEvent(
+  calendar: ReturnType<typeof google.calendar>,
+  taskId: number,
+  calEventId: string,
+  summary: string,
+  dueDate: Date | null | undefined,
+  description: string,
+): Promise<void> {
+  try {
+    await calendar.events.patch({
+      calendarId: TMS_COMMS_CALENDAR_ID,
+      eventId: calEventId,
+      requestBody: { summary },
+    });
+  } catch (err: any) {
+    const status = err?.response?.status ?? err?.code;
+    if (status === 404 || status === 410) {
+      // Calendar event was deleted — recreate it
+      try {
+        const dueDateStr = dueDate ? new Date(dueDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+        const created = await calendar.events.insert({
+          calendarId: TMS_COMMS_CALENDAR_ID,
+          requestBody: {
+            summary,
+            description,
+            start: { date: dueDateStr },
+            end: { date: dueDateStr },
+          },
+        });
+        if (created.data.id) {
+          await db.update(commTasksTable)
+            .set({ googleCalendarEventId: created.data.id })
+            .where(eq(commTasksTable.id, taskId));
+        }
+        console.log(`[comms] Recreated deleted calendar event for task ${taskId}`);
+      } catch (recreateErr) {
+        console.warn(`[comms] Could not recreate calendar event for task ${taskId}:`, recreateErr);
+      }
+    } else {
+      console.warn(`[comms] Calendar patch failed for task ${taskId}:`, err?.message ?? err);
+    }
+  }
+}
+
 const router = Router();
 
 function requireAuth(req: any, res: any): boolean {
@@ -115,7 +162,8 @@ router.get("/comm-schedule/tasks", async (req, res) => {
     const now = new Date();
     const overdueIds = await db
       .select({ id: commTasksTable.id, googleCalendarEventId: commTasksTable.googleCalendarEventId,
-                 messageName: commTasksTable.messageName, commType: commTasksTable.commType, channel: commTasksTable.channel })
+                 messageName: commTasksTable.messageName, commType: commTasksTable.commType,
+                 channel: commTasksTable.channel, dueDate: commTasksTable.dueDate })
       .from(commTasksTable)
       .where(and(
         eq(commTasksTable.eventId, eid),
@@ -149,11 +197,12 @@ router.get("/comm-schedule/tasks", async (req, res) => {
           for (const task of overdueIds) {
             if (!task.googleCalendarEventId) continue;
             const baseTitle = [event?.title, task.messageName || task.commType, task.channel ? `(${task.channel})` : null].filter(Boolean).join(" — ");
-            await calendar.events.patch({
-              calendarId: TMS_COMMS_CALENDAR_ID,
-              eventId: task.googleCalendarEventId,
-              requestBody: { summary: `⚠️ LATE — ${baseTitle}` },
-            }).catch(() => {});
+            await patchOrRecreateCalEvent(
+              calendar, task.id, task.googleCalendarEventId,
+              `⚠️ LATE — ${baseTitle}`,
+              task.dueDate,
+              `Event: ${event?.title ?? ""}\nComm type: ${task.commType}${task.channel ? `\nChannel: ${task.channel}` : ""}`,
+            );
           }
         } catch (_) {}
       })();
@@ -469,11 +518,12 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
           });
 
           const calendar = google.calendar({ version: "v3", auth });
-          await calendar.events.patch({
-            calendarId: TMS_COMMS_CALENDAR_ID,
-            eventId: task.googleCalendarEventId,
-            requestBody: { summary: newTitle },
-          });
+          await patchOrRecreateCalEvent(
+            calendar, task.id, task.googleCalendarEventId!,
+            newTitle,
+            task.dueDate,
+            `Event: ${event?.title ?? ""}\nComm type: ${task.commType}${task.channel ? `\nChannel: ${task.channel}` : ""}`,
+          );
         }
       } catch (calErr) {
         // Non-fatal — task is already saved, just log the calendar sync failure
