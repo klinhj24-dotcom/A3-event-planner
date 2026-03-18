@@ -16,26 +16,39 @@ function requireAuth(req: any, res: any): boolean {
 router.get("/bands", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
-    const bands = await db.select({
-      id: bandsTable.id,
-      name: bandsTable.name,
-      genre: bandsTable.genre,
-      members: bandsTable.members,
-      contactName: bandsTable.contactName,
-      contactEmail: bandsTable.contactEmail,
-      contactPhone: bandsTable.contactPhone,
-      notes: bandsTable.notes,
-      website: bandsTable.website,
-      instagram: bandsTable.instagram,
-      leaderEmployeeId: bandsTable.leaderEmployeeId,
-      leaderName: sql<string | null>`(SELECT name FROM employees WHERE id = ${bandsTable.leaderEmployeeId})`,
-      createdAt: bandsTable.createdAt,
-      updatedAt: bandsTable.updatedAt,
-      contactEmailCount: sql<number>`(SELECT COUNT(*)::int FROM band_contacts WHERE band_contacts.band_id = ${bandsTable.id} AND band_contacts.email IS NOT NULL)`,
-      contactTotalCount: sql<number>`(SELECT COUNT(*)::int FROM band_contacts WHERE band_contacts.band_id = ${bandsTable.id})`,
-      memberCount: sql<number>`(SELECT COUNT(*)::int FROM band_members WHERE band_members.band_id = ${bandsTable.id})`,
-    }).from(bandsTable).orderBy(asc(bandsTable.name));
-    res.json(bands);
+    const bands = await db.select().from(bandsTable).orderBy(asc(bandsTable.name));
+    if (!bands.length) { res.json([]); return; }
+
+    const bandIds = bands.map(b => b.id);
+
+    const [memberCounts, contactCounts] = await Promise.all([
+      db.select({
+        bandId: bandMembersTable.bandId,
+        count: sql<number>`COUNT(*)::int`.as("count"),
+      }).from(bandMembersTable).where(inArray(bandMembersTable.bandId, bandIds)).groupBy(bandMembersTable.bandId),
+      db.select({
+        bandId: bandContactsTable.bandId,
+        total: sql<number>`COUNT(*)::int`.as("total"),
+        withEmail: sql<number>`COUNT(*) FILTER (WHERE email IS NOT NULL)::int`.as("with_email"),
+      }).from(bandContactsTable).where(inArray(bandContactsTable.bandId, bandIds)).groupBy(bandContactsTable.bandId),
+    ]);
+
+    const leaderIds = bands.flatMap(b => b.leaderEmployeeId ? [b.leaderEmployeeId] : []);
+    const leaders = leaderIds.length
+      ? await db.select({ id: employeesTable.id, name: employeesTable.name }).from(employeesTable).where(inArray(employeesTable.id, leaderIds))
+      : [];
+
+    const memberMap = Object.fromEntries(memberCounts.map(m => [m.bandId, m.count]));
+    const contactMap = Object.fromEntries(contactCounts.map(c => [c.bandId, c]));
+    const leaderMap = Object.fromEntries(leaders.map(l => [l.id, l.name]));
+
+    res.json(bands.map(b => ({
+      ...b,
+      memberCount: memberMap[b.id] ?? 0,
+      contactEmailCount: contactMap[b.id]?.withEmail ?? 0,
+      contactTotalCount: contactMap[b.id]?.total ?? 0,
+      leaderName: b.leaderEmployeeId ? (leaderMap[b.leaderEmployeeId] ?? null) : null,
+    })));
   } catch (err) {
     console.error("listBands error:", err);
     res.status(500).json({ error: "Internal server error" });
