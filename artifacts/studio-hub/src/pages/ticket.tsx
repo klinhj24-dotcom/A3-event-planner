@@ -283,7 +283,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
           <FormField control={form.control} name="contactEmail" render={({ field }) => (
             <FormItem>
               <FormLabel>Contact Email <span className="text-destructive">*</span></FormLabel>
-              <FormControl><Input className="rounded-xl" type="email" placeholder="jane@example.com" {...field} /></FormControl>
+              <FormControl><Input className="rounded-xl" type="email" placeholder="rigby@themusicspace.com" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />

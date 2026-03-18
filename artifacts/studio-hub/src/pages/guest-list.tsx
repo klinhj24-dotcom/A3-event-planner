@@ -168,7 +168,7 @@ export default function GuestListForm() {
                   <FormItem>
                     <FormLabel className="text-sm">Email Address <span className="text-muted-foreground font-normal text-xs">optional</span></FormLabel>
                     <FormControl>
-                      <Input className="rounded-xl bg-background/50" type="email" placeholder="jane@example.com" {...field} value={field.value ?? ""} />
+                      <Input className="rounded-xl bg-background/50" type="email" placeholder="rigby@themusicspace.com" {...field} value={field.value ?? ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

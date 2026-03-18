@@ -321,7 +321,7 @@ export default function Contacts() {
                     <FormField control={form.control} name="email" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Email</FormLabel>
-                        <FormControl><Input placeholder="jane@example.com" type="email" className="rounded-xl" {...field} /></FormControl>
+                        <FormControl><Input placeholder="rigby@themusicspace.com" type="email" className="rounded-xl" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}/>
