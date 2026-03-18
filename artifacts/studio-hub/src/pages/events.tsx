@@ -1126,43 +1126,69 @@ function EventOverviewSheet({
                 <Ticket className="h-3.5 w-3.5" /> {event.ticketFormType === "recital" ? "Recital Signups" : "Ticket Requests"}
                 <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
               </h4>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {ticketRequests.map((r: any) => {
+              <div className="space-y-1.5 max-h-96 overflow-y-auto">
+                {ticketRequests.map((r: any, idx: number) => {
                   const price = event.ticketPrice ? parseFloat(event.ticketPrice) : null;
                   const lineTotal = price && r.ticketCount ? (price * r.ticketCount).toFixed(2) : null;
+                  const isRecitalEntry = r.formType === "recital" && r.studentFirstName;
                   return (
                   <div key={r.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs transition-colors ${r.charged ? "bg-emerald-500/5 border-emerald-500/20" : "bg-muted/40 border-border/40"}`}>
-                    {/* Charged checkbox */}
-                    <button
-                      onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
-                      title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
-                      className={`shrink-0 mt-0.5 h-4 w-4 rounded border-2 flex items-center justify-center transition-all ${
-                        r.charged ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-emerald-500"
-                      }`}
-                    >
-                      {r.charged && <CheckCircle2 className="h-3 w-3" />}
-                    </button>
+                    {/* Position number (recital) or charged checkbox (general) */}
+                    {isRecitalEntry ? (
+                      <div className="shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold mt-0.5">{idx + 1}</div>
+                    ) : (
+                      <button
+                        onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
+                        title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
+                        className={`shrink-0 mt-0.5 h-4 w-4 rounded border-2 flex items-center justify-center transition-all ${
+                          r.charged ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-emerald-500"
+                        }`}
+                      >
+                        {r.charged && <CheckCircle2 className="h-3 w-3" />}
+                      </button>
+                    )}
 
                     <div className="flex-1 min-w-0">
-                      {r.formType === "recital" && r.studentFirstName ? (
+                      {isRecitalEntry ? (
                         <>
-                          <div className="font-medium text-foreground">{r.studentFirstName} {r.studentLastName}{r.instrument ? ` · ${r.instrument}` : ""}</div>
-                          <div className="text-muted-foreground truncate">Contact: {r.contactFirstName} {r.contactLastName} · {r.contactEmail}</div>
+                          <div className="font-semibold text-foreground text-[13px]">{r.studentFirstName} {r.studentLastName}</div>
+                          <div className="text-muted-foreground mt-0.5">
+                            {[r.instrument, r.recitalSong].filter(Boolean).join(" · ")}
+                          </div>
+                          {r.teacher && <div className="text-muted-foreground">Teacher: {r.teacher}</div>}
+                          {r.specialConsiderations && (
+                            <div className="text-amber-500/80 mt-0.5">Note: {r.specialConsiderations}</div>
+                          )}
+                          <div className="text-muted-foreground/60 mt-1 flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
+                              title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
+                              className={`shrink-0 h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-all ${
+                                r.charged ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-emerald-500"
+                              }`}
+                            >
+                              {r.charged && <CheckCircle2 className="h-2.5 w-2.5" />}
+                            </button>
+                            <span className="truncate">
+                              {r.contactFirstName} {r.contactLastName} · {r.contactEmail}
+                              {r.charged && r.chargedAt && <span className="text-emerald-600 ml-1">· Charged {new Date(r.chargedAt).toLocaleDateString()}</span>}
+                            </span>
+                          </div>
                         </>
                       ) : (
                         <>
                           <div className="font-medium text-foreground">{r.contactFirstName} {r.contactLastName}</div>
                           <div className="text-muted-foreground truncate">{r.contactEmail}</div>
+                          {r.ticketCount && (
+                            <div className="text-muted-foreground">
+                              {r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}
+                              {lineTotal && <span className="ml-1 text-foreground font-semibold">${lineTotal}</span>}
+                            </div>
+                          )}
+                          {r.charged && r.chargedAt && (
+                            <div className="text-emerald-600 text-[10px] mt-0.5">Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
+                          )}
                         </>
-                      )}
-                      {r.formType === "general" && r.ticketCount && (
-                        <div className="text-muted-foreground">
-                          {r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}
-                          {lineTotal && <span className="ml-1 text-foreground font-semibold">${lineTotal}</span>}
-                        </div>
-                      )}
-                      {r.charged && r.chargedAt && (
-                        <div className="text-emerald-600 text-[10px] mt-0.5">Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
                       )}
                     </div>
 
@@ -1191,7 +1217,7 @@ function EventOverviewSheet({
           {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length === 0 && (
             <div className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Ticket className="h-3.5 w-3.5" />
-              No ticket requests yet — share the form link with parents.
+              {event.ticketFormType === "recital" ? "No recital signups yet — share the registration link with families." : "No ticket requests yet — share the form link with parents."}
             </div>
           )}
           {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (
