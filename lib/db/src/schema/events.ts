@@ -28,6 +28,8 @@ export const eventsTable = pgTable("events", {
   ticketsUrl: text("tickets_url"),
   ctaLabel: text("cta_label").default("TICKETS"),
   ticketFormType: text("ticket_form_type").default("none"), // "none" | "general" | "recital"
+  allowGuestList: boolean("allow_guest_list").default(false),
+  guestListPolicy: text("guest_list_policy").default("students_only"), // "students_only" | "plus_one" | "plus_two"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -98,3 +100,34 @@ export const eventDebriefTable = pgTable("event_debriefs", {
 export const insertEventDebriefSchema = createInsertSchema(eventDebriefTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEventDebrief = z.infer<typeof insertEventDebriefSchema>;
 export type EventDebrief = typeof eventDebriefTable.$inferSelect;
+
+// Guest list entries — one row per performer (auto from lineup) or manual VIP entry
+export const eventGuestListTable = pgTable("event_guest_list", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull(),
+  bandMemberId: integer("band_member_id"), // nullable — null for manual entries
+  studentName: text("student_name").notNull(),
+  bandName: text("band_name"),
+  token: text("token").unique().notNull(),
+  // Contact info (pre-filled from member data, parent may update on submission)
+  contactEmail: text("contact_email"),
+  contactName: text("contact_name"),
+  // Guest names (filled in by parent via public form)
+  guestOneName: text("guest_one_name"),
+  guestTwoName: text("guest_two_name"),
+  // Submission state
+  submitted: boolean("submitted").default(false),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  // Door check-in
+  studentCheckedIn: boolean("student_checked_in").default(false),
+  guestOneCheckedIn: boolean("guest_one_checked_in").default(false),
+  guestTwoCheckedIn: boolean("guest_two_checked_in").default(false),
+  // Misc
+  isManual: boolean("is_manual").default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type EventGuestListEntry = typeof eventGuestListTable.$inferSelect;
+export type InsertEventGuestListEntry = typeof eventGuestListTable.$inferInsert;

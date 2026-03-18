@@ -12,6 +12,7 @@ import Events from "@/pages/events";
 import Employees from "@/pages/employees";
 import Signup from "@/pages/signup";
 import TicketForm from "@/pages/ticket";
+import GuestListForm from "@/pages/guest-list";
 import Settings from "@/pages/settings";
 import CommSchedule from "@/pages/comm-schedule";
 import Payroll from "@/pages/payroll";
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup/:token" component={Signup} />
       <Route path="/ticket/:token" component={TicketForm} />
+      <Route path="/guest-list/:token" component={GuestListForm} />
       <Route path="/my-schedule">{() => <ProtectedRoute component={MySchedule} />}</Route>
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
       <Route path="/">{() => <AdminRoute component={Dashboard} />}</Route>

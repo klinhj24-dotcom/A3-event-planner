@@ -673,6 +673,8 @@ const eventSchema = z.object({
   ticketsUrl: z.string().optional(),
   ctaLabel: z.string().optional(),
   ticketFormType: z.string().optional(),
+  allowGuestList: z.boolean().default(false),
+  guestListPolicy: z.string().optional(),
 });
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -710,6 +712,35 @@ function TicketFormLinkRow({ event }: { event: any }) {
         {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  );
+}
+
+// ─── GuestListLinkButton ──────────────────────────────────────────────────────
+function GuestListLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => navigator.clipboard.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })}
+      title="Copy parent registration link"
+      className="text-muted-foreground hover:text-primary transition-colors"
+    >
+      {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+    </button>
+  );
+}
+
+// ─── CheckInToggle ────────────────────────────────────────────────────────────
+function CheckInToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className={`flex items-center gap-1 text-[10px] font-medium rounded-md px-1.5 py-0.5 transition-all border ${checked ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/25" : "text-muted-foreground border-border/40 hover:border-emerald-500/40"}`}
+    >
+      <span className={`h-2.5 w-2.5 rounded-full border flex items-center justify-center ${checked ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/40"}`}>
+        {checked && <span className="block h-1.5 w-1.5 rounded-full bg-white" />}
+      </span>
+      {label}
+    </button>
   );
 }
 
@@ -773,6 +804,62 @@ function EventOverviewSheet({
     },
     onSuccess: () => refetchTickets(),
   });
+
+  // ── Guest list ────────────────────────────────────────────────────────────────
+  const { data: guestListEntries = [], refetch: refetchGuestList } = useQuery<any[]>({
+    queryKey: [`/api/events/${event?.id}/guest-list`],
+    queryFn: () => fetch(`/api/events/${event!.id}/guest-list`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!event?.id && !!event?.allowGuestList,
+  });
+
+  const { mutate: generateGuestList, isPending: generatingGuestList } = useMutation({
+    mutationFn: () => fetch(`/api/events/${event!.id}/guest-list/generate`, { method: "POST", credentials: "include" }).then(r => r.json()),
+    onSuccess: (d) => {
+      toast({ title: `Generated ${d.created} entr${d.created !== 1 ? "ies" : "y"}${d.skipped > 0 ? `, ${d.skipped} already existed` : ""}` });
+      refetchGuestList();
+    },
+    onError: () => toast({ title: "Failed to generate guest list", variant: "destructive" }),
+  });
+
+  const { mutate: toggleGuestCheckin } = useMutation({
+    mutationFn: async ({ entryId, field, value }: { entryId: number; field: string; value: boolean }) => {
+      const res = await fetch(`/api/events/${event!.id}/guest-list/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => refetchGuestList(),
+  });
+
+  const { mutate: deleteGuestEntry } = useMutation({
+    mutationFn: async (entryId: number) => {
+      await fetch(`/api/events/${event!.id}/guest-list/${entryId}`, { method: "DELETE", credentials: "include" });
+    },
+    onSuccess: () => refetchGuestList(),
+  });
+
+  const [showAddManual, setShowAddManual] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualBand, setManualBand] = useState("");
+  const { mutate: addManual, isPending: addingManual } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/events/${event!.id}/guest-list/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentName: manualName, bandName: manualBand }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to add");
+      return res.json();
+    },
+    onSuccess: () => { refetchGuestList(); setShowAddManual(false); setManualName(""); setManualBand(""); },
+    onError: () => toast({ title: "Failed to add entry", variant: "destructive" }),
+  });
+
   if (!event) return null;
 
   const startDate = event.startDate ? new Date(event.startDate) : null;
@@ -1016,6 +1103,131 @@ function EventOverviewSheet({
             </button>
           )}
 
+          {/* Guest list */}
+          {event.allowGuestList && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" /> Guest List
+                  <span className="ml-1 bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{guestListEntries.length}</span>
+                </h4>
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {event.guestListPolicy === "students_only" ? "Students only" : event.guestListPolicy === "plus_one" ? "+1 allowed" : "+2 allowed"}
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => generateGuestList()}
+                  disabled={generatingGuestList}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 border border-border/40 rounded-lg px-2.5 py-1"
+                >
+                  {generatingGuestList ? <Loader2 className="h-3 w-3 animate-spin" /> : <Users className="h-3 w-3" />}
+                  Generate from Lineup
+                </button>
+                <button
+                  onClick={() => setShowAddManual(v => !v)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
+                >
+                  <Plus className="h-3 w-3" /> Add Manual
+                </button>
+              </div>
+
+              {/* Add manual form */}
+              {showAddManual && (
+                <div className="flex items-end gap-2 p-2.5 rounded-xl border border-border/40 bg-muted/30">
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs"
+                      placeholder="Name / VIP *"
+                      value={manualName}
+                      onChange={e => setManualName(e.target.value)}
+                    />
+                    <input
+                      className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs"
+                      placeholder="Band / group (optional)"
+                      value={manualBand}
+                      onChange={e => setManualBand(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={() => manualName.trim() && addManual()}
+                    disabled={addingManual || !manualName.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
+                  >
+                    {addingManual ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+                  </button>
+                </div>
+              )}
+
+              {/* Entries list */}
+              {guestListEntries.length > 0 && (
+                <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                  {guestListEntries.map((entry: any) => {
+                    const domain = window.location.origin;
+                    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+                    const guestLink = `${domain}${base}/guest-list/${entry.token}`;
+                    return (
+                      <div key={entry.id} className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${entry.submitted ? "bg-emerald-500/5 border-emerald-500/15" : "bg-muted/30 border-border/40"}`}>
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-foreground flex items-center gap-1.5">
+                              {entry.studentName}
+                              {entry.submitted && <span className="text-[9px] bg-emerald-500/15 text-emerald-600 rounded px-1 py-0.5 font-semibold">Submitted</span>}
+                              {!entry.submitted && <span className="text-[9px] bg-muted text-muted-foreground rounded px-1 py-0.5">Pending</span>}
+                            </div>
+                            {entry.bandName && <div className="text-muted-foreground">{entry.bandName}</div>}
+                            {entry.contactEmail && <div className="text-muted-foreground truncate">{entry.contactEmail}</div>}
+                            {entry.guestOneName && <div className="text-foreground/80">+1: {entry.guestOneName}</div>}
+                            {entry.guestTwoName && <div className="text-foreground/80">+2: {entry.guestTwoName}</div>}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Copy guest list link */}
+                            <GuestListLinkButton link={guestLink} />
+                            <button
+                              onClick={() => deleteGuestEntry(entry.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                              title="Remove entry"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                        {/* Check-in row */}
+                        <div className="flex items-center gap-2 pt-1 border-t border-border/20">
+                          <CheckInToggle
+                            label="Student"
+                            checked={entry.studentCheckedIn}
+                            onChange={(v) => toggleGuestCheckin({ entryId: entry.id, field: "studentCheckedIn", value: v })}
+                          />
+                          {(entry.guestOneName || event.guestListPolicy === "plus_one" || event.guestListPolicy === "plus_two") && (
+                            <CheckInToggle
+                              label={entry.guestOneName || "+1"}
+                              checked={entry.guestOneCheckedIn}
+                              onChange={(v) => toggleGuestCheckin({ entryId: entry.id, field: "guestOneCheckedIn", value: v })}
+                            />
+                          )}
+                          {(entry.guestTwoName || event.guestListPolicy === "plus_two") && (
+                            <CheckInToggle
+                              label={entry.guestTwoName || "+2"}
+                              checked={entry.guestTwoCheckedIn}
+                              onChange={(v) => toggleGuestCheckin({ entryId: entry.id, field: "guestTwoCheckedIn", value: v })}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {guestListEntries.length === 0 && (
+                <p className="text-xs text-muted-foreground">No entries yet. Click "Generate from Lineup" to auto-populate from your band roster.</p>
+              )}
+            </div>
+          )}
+
           {/* Band / group signups */}
           {eventSignups.length > 0 && (
             <div className="space-y-2">
@@ -1219,12 +1431,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", allowGuestList: false, guestListPolicy: "students_only" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", allowGuestList: false, guestListPolicy: "students_only" }
   });
 
   function openEdit(ev: any) {
@@ -1258,6 +1470,8 @@ export default function Events() {
       ticketsUrl: isInternal ? "" : (ev.ticketsUrl ?? ""),
       ctaLabel: isInternal ? "REGISTER" : (ev.ctaLabel ?? ""),
       ticketFormType: ev.ticketFormType ?? "none",
+      allowGuestList: ev.allowGuestList ?? false,
+      guestListPolicy: ev.guestListPolicy ?? "students_only",
     });
   }
 
@@ -1561,6 +1775,45 @@ export default function Events() {
                             </FormItem>
                           )} />
                           <p className="text-[10px] text-muted-foreground">A shareable registration link will be created automatically. The website calendar will show a REGISTER button pointing to it.</p>
+                        </div>
+                      )}
+
+                      {/* Guest list — only for ticketed events */}
+                      {createTicketSource !== "none" && (
+                        <div className="pt-1 border-t border-border/30 space-y-3">
+                          <FormField control={form.control} name="allowGuestList" render={({ field }) => (
+                            <FormItem>
+                              <div className="flex items-center gap-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => field.onChange(!field.value)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${field.value ? "bg-primary" : "bg-input"}`}
+                                >
+                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${field.value ? "translate-x-4" : "translate-x-0"}`} />
+                                </button>
+                                <FormLabel className="text-xs font-medium cursor-pointer" onClick={() => field.onChange(!field.value)}>
+                                  Allow performer guest list
+                                </FormLabel>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground ml-11">Performers register their guests via a unique link. Each student gets free admission.</p>
+                            </FormItem>
+                          )} />
+
+                          {form.watch("allowGuestList") && (
+                            <FormField control={form.control} name="guestListPolicy" render={({ field }) => (
+                              <FormItem className="ml-11">
+                                <FormLabel className="text-xs">Guest policy</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value ?? "students_only"}>
+                                  <FormControl><SelectTrigger className="rounded-xl h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="students_only">Students only (no plus-ones)</SelectItem>
+                                    <SelectItem value="plus_one">Students + optional +1</SelectItem>
+                                    <SelectItem value="plus_two">Students + optional +2</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )} />
+                          )}
                         </div>
                       )}
 
@@ -2047,6 +2300,45 @@ export default function Events() {
                       </FormItem>
                     )} />
                     <p className="text-[10px] text-muted-foreground">The website calendar will show a REGISTER button linking to your registration form automatically.</p>
+                  </div>
+                )}
+
+                {/* Guest list — only for ticketed events */}
+                {editTicketSource !== "none" && (
+                  <div className="pt-1 border-t border-border/30 space-y-3">
+                    <FormField control={editForm.control} name="allowGuestList" render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => field.onChange(!field.value)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${field.value ? "bg-primary" : "bg-input"}`}
+                          >
+                            <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${field.value ? "translate-x-4" : "translate-x-0"}`} />
+                          </button>
+                          <FormLabel className="text-xs font-medium cursor-pointer" onClick={() => field.onChange(!field.value)}>
+                            Allow performer guest list
+                          </FormLabel>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground ml-11">Performers register their guests via a unique link. Each student gets free admission.</p>
+                      </FormItem>
+                    )} />
+
+                    {editForm.watch("allowGuestList") && (
+                      <FormField control={editForm.control} name="guestListPolicy" render={({ field }) => (
+                        <FormItem className="ml-11">
+                          <FormLabel className="text-xs">Guest policy</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? "students_only"}>
+                            <FormControl><SelectTrigger className="rounded-xl h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="students_only">Students only (no plus-ones)</SelectItem>
+                              <SelectItem value="plus_one">Students + optional +1</SelectItem>
+                              <SelectItem value="plus_two">Students + optional +2</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )} />
+                    )}
                   </div>
                 )}
 

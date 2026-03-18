@@ -21,6 +21,7 @@ import packingRouter from "./packing";
 import eventTypesRouter from "./event-types";
 import eventStaffingRouter from "./event-staffing";
 import ticketsRouter from "./tickets";
+import guestListRouter from "./guest-list";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(packingRouter);
 router.use(eventTypesRouter);
 router.use(eventStaffingRouter);
 router.use(ticketsRouter);
+router.use(guestListRouter);
 
 export default router;
