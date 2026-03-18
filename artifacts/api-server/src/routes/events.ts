@@ -9,7 +9,9 @@ import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
 
 function getAppDomain() {
-  return process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
+  // Prefer the stable REPLIT_DOMAINS (works in both dev and deployed) over the
+  // ephemeral REPLIT_DEV_DOMAIN which can change between restarts
+  return process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "localhost";
 }
 
 function buildTicketUrl(signupToken: string) {
