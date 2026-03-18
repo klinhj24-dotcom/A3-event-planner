@@ -673,6 +673,7 @@ const eventSchema = z.object({
   ticketsUrl: z.string().optional(),
   ctaLabel: z.string().optional(),
   ticketFormType: z.string().optional(),
+  ticketPrice: z.coerce.number().min(0).optional(),
   allowGuestList: z.boolean().default(false),
   guestListPolicy: z.string().optional(),
 });
@@ -805,6 +806,20 @@ function EventOverviewSheet({
     onSuccess: () => refetchTickets(),
   });
 
+  const { mutate: updateTicketStatus } = useMutation({
+    mutationFn: async ({ requestId, status }: { requestId: number; status: string }) => {
+      const res = await fetch(`/api/events/${event!.id}/ticket-requests/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => refetchTickets(),
+    onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
+  });
+
   // ── Guest list ────────────────────────────────────────────────────────────────
   const { data: guestListEntries = [], refetch: refetchGuestList } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/guest-list`],
@@ -859,6 +874,70 @@ function EventOverviewSheet({
     onSuccess: () => { refetchGuestList(); setShowAddManual(false); setManualName(""); setManualBand(""); },
     onError: () => toast({ title: "Failed to add entry", variant: "destructive" }),
   });
+
+  const { mutate: sendGuestListLinks, isPending: sendingGuestListLinks } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/events/${event!.id}/guest-list/send-links`, { method: "POST", credentials: "include" });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Failed to send"); }
+      return res.json();
+    },
+    onSuccess: (d) => toast({ title: d.message || `Sent ${d.sent} emails` }),
+    onError: (e: any) => toast({ title: e.message || "Failed to send guest list links", variant: "destructive" }),
+  });
+
+  function printGuestList() {
+    if (!event || guestListEntries.length === 0) return;
+    const eventTitle = event.title;
+    const eventDate = event.startDate ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "";
+    const policy = event.guestListPolicy === "plus_two" ? "+2" : event.guestListPolicy === "plus_one" ? "+1" : "Students only";
+    const plusOneCol = event.guestListPolicy === "plus_one" || event.guestListPolicy === "plus_two";
+    const plusTwoCol = event.guestListPolicy === "plus_two";
+
+    const rows = guestListEntries.map((e: any) => `
+      <tr>
+        <td>${e.studentName ?? ""}</td>
+        <td>${e.bandName ?? ""}</td>
+        <td>${e.contactName ?? ""}${e.contactEmail ? `<br><span style="color:#888;font-size:12px;">${e.contactEmail}</span>` : ""}</td>
+        ${plusOneCol ? `<td>${e.guestOneName ?? ""}</td>` : ""}
+        ${plusTwoCol ? `<td>${e.guestTwoName ?? ""}</td>` : ""}
+        <td style="text-align:center;">${e.submitted ? "✓" : ""}</td>
+        <td style="text-align:center;">${e.studentCheckedIn ? "✓" : ""}</td>
+        ${plusOneCol ? `<td style="text-align:center;">${e.guestOneCheckedIn ? "✓" : ""}</td>` : ""}
+        ${plusTwoCol ? `<td style="text-align:center;">${e.guestTwoCheckedIn ? "✓" : ""}</td>` : ""}
+      </tr>
+    `).join("");
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html><head><title>Guest List — ${eventTitle}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #111; margin: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f0f0f0; text-align: left; padding: 7px 8px; border: 1px solid #ddd; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  td { padding: 7px 8px; border: 1px solid #ddd; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h1>Guest List — ${eventTitle}</h1>
+<p>${eventDate}${eventDate && policy ? " · " : ""}${policy} · ${guestListEntries.length} entr${guestListEntries.length !== 1 ? "ies" : "y"}</p>
+<table>
+  <thead><tr>
+    <th>Student</th><th>Band</th><th>Contact</th>
+    ${plusOneCol ? "<th>Guest +1</th>" : ""}
+    ${plusTwoCol ? "<th>Guest +2</th>" : ""}
+    <th>Submitted</th><th>✓ Student</th>
+    ${plusOneCol ? "<th>✓ +1</th>" : ""}
+    ${plusTwoCol ? "<th>✓ +2</th>" : ""}
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<script>window.onload = () => { window.print(); }</script>
+</body></html>`);
+    win.document.close();
+  }
 
   if (!event) return null;
 
@@ -1048,7 +1127,10 @@ function EventOverviewSheet({
                 <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
               </h4>
               <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {ticketRequests.map((r: any) => (
+                {ticketRequests.map((r: any) => {
+                  const price = event.ticketPrice ? parseFloat(event.ticketPrice) : null;
+                  const lineTotal = price && r.ticketCount ? (price * r.ticketCount).toFixed(2) : null;
+                  return (
                   <div key={r.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs transition-colors ${r.charged ? "bg-emerald-500/5 border-emerald-500/20" : "bg-muted/40 border-border/40"}`}>
                     {/* Charged checkbox */}
                     <button
@@ -1070,19 +1152,35 @@ function EventOverviewSheet({
                         <div className="text-muted-foreground">Performer: {r.studentFirstName} {r.studentLastName}{r.instrument ? ` · ${r.instrument}` : ""}</div>
                       )}
                       {r.formType === "general" && r.ticketCount && (
-                        <div className="text-muted-foreground">{r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}</div>
+                        <div className="text-muted-foreground">
+                          {r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}
+                          {lineTotal && <span className="ml-1 text-foreground font-semibold">${lineTotal}</span>}
+                        </div>
                       )}
                       {r.charged && r.chargedAt && (
                         <div className="text-emerald-600 text-[10px] mt-0.5">Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
                       )}
                     </div>
-                    <span className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize ${
-                      r.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
-                      r.status === "cancelled" ? "bg-destructive/10 text-destructive" :
-                      "bg-amber-500/10 text-amber-600"
-                    }`}>{r.status}</span>
+
+                    {/* Status selector */}
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      <select
+                        value={r.status}
+                        onChange={e => updateTicketStatus({ requestId: r.id, status: e.target.value })}
+                        className={`rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize border-0 outline-none cursor-pointer ${
+                          r.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
+                          r.status === "cancelled" ? "bg-destructive/10 text-destructive" :
+                          "bg-amber-500/10 text-amber-600"
+                        }`}
+                      >
+                        <option value="pending">pending</option>
+                        <option value="confirmed">confirmed</option>
+                        <option value="cancelled">cancelled</option>
+                      </select>
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1132,6 +1230,24 @@ function EventOverviewSheet({
                 >
                   <Plus className="h-3 w-3" /> Add Manual
                 </button>
+                {guestListEntries.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => sendGuestListLinks()}
+                      disabled={sendingGuestListLinks}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 border border-border/40 rounded-lg px-2.5 py-1"
+                    >
+                      {sendingGuestListLinks ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                      Email all links
+                    </button>
+                    <button
+                      onClick={() => printGuestList()}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
+                    >
+                      <Printer className="h-3 w-3" /> Print
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Add manual form */}
@@ -1470,6 +1586,7 @@ export default function Events() {
       ticketsUrl: isInternal ? "" : (ev.ticketsUrl ?? ""),
       ctaLabel: isInternal ? "REGISTER" : (ev.ctaLabel ?? ""),
       ticketFormType: ev.ticketFormType ?? "none",
+      ticketPrice: ev.ticketPrice ? Number(ev.ticketPrice) : undefined,
       allowGuestList: ev.allowGuestList ?? false,
       guestListPolicy: ev.guestListPolicy ?? "students_only",
     });
@@ -1774,6 +1891,19 @@ export default function Events() {
                               </Select>
                             </FormItem>
                           )} />
+                          {form.watch("ticketFormType") === "general" && (
+                            <FormField control={form.control} name="ticketPrice" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                                <FormControl>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                    <Input type="number" min="0" step="0.01" placeholder="15.00" className="rounded-xl h-9 pl-6" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            )} />
+                          )}
                           <p className="text-[10px] text-muted-foreground">A shareable registration link will be created automatically. The website calendar will show a REGISTER button pointing to it.</p>
                         </div>
                       )}
@@ -2299,6 +2429,19 @@ export default function Events() {
                         </Select>
                       </FormItem>
                     )} />
+                    {editForm.watch("ticketFormType") === "general" && (
+                      <FormField control={editForm.control} name="ticketPrice" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                              <Input type="number" min="0" step="0.01" placeholder="15.00" className="rounded-xl h-9 pl-6" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                    )}
                     <p className="text-[10px] text-muted-foreground">The website calendar will show a REGISTER button linking to your registration form automatically.</p>
                   </div>
                 )}

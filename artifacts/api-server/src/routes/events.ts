@@ -168,7 +168,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, isTwoDay, day1EndTime, day2StartTime, allowGuestList, guestListPolicy } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, isTwoDay, day1EndTime, day2StartTime, allowGuestList, guestListPolicy } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -198,6 +198,7 @@ router.post("/events", async (req, res) => {
         ticketsUrl: resolvedTicketsUrl,
         ctaLabel: resolvedCtaLabel,
         ticketFormType: ticketFormType ?? "none",
+        ticketPrice: ticketPrice != null ? ticketPrice.toString() : null,
         allowGuestList: allowGuestList ?? false,
         guestListPolicy: guestListPolicy ?? "students_only",
       })
@@ -249,7 +250,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, isTwoDay, day1EndTime, day2StartTime, allowGuestList, guestListPolicy } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, isTwoDay, day1EndTime, day2StartTime, allowGuestList, guestListPolicy } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -283,6 +284,7 @@ router.put("/events/:id", async (req, res) => {
         ticketsUrl: resolvedTicketsUrl,
         ctaLabel: resolvedCtaLabel,
         ticketFormType: ticketFormType !== undefined ? ticketFormType : undefined,
+        ticketPrice: ticketPrice !== undefined ? (ticketPrice != null ? ticketPrice.toString() : null) : undefined,
         allowGuestList: allowGuestList !== undefined ? allowGuestList : undefined,
         guestListPolicy: guestListPolicy !== undefined ? guestListPolicy : undefined,
         updatedAt: new Date(),

@@ -64,6 +64,9 @@ type RecitalForm = z.infer<typeof recitalSchema>;
 function GeneralTicketForm({ event, token }: { event: any; token: string }) {
   const [submitted, setSubmitted] = useState(false);
   const form = useForm<GeneralForm>({ resolver: zodResolver(generalSchema) });
+  const ticketCount = parseInt(form.watch("ticketCount") as any) || 0;
+  const ticketPrice = event?.ticketPrice ? parseFloat(event.ticketPrice) : null;
+  const total = ticketPrice && ticketCount > 0 ? (ticketPrice * ticketCount).toFixed(2) : null;
 
   const { mutate: submit, isPending } = useMutation({
     mutationFn: async (data: GeneralForm) => {
@@ -127,7 +130,16 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
         )} />
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2.5 text-sm text-amber-700 dark:text-amber-400">
           <CreditCard className="h-4 w-4 shrink-0 mt-0.5" />
-          <p>Your card on file will be charged on the next open business day.</p>
+          <div className="space-y-0.5">
+            {ticketPrice != null ? (
+              <>
+                <p><strong>${ticketPrice.toFixed(2)}</strong> per ticket{total ? <> · <strong>Total: ${total}</strong></> : ""}</p>
+                <p className="text-xs opacity-80">Your card on file will be charged on the next open business day.</p>
+              </>
+            ) : (
+              <p>Your card on file will be charged on the next open business day.</p>
+            )}
+          </div>
         </div>
         <Button type="submit" disabled={isPending} className="w-full rounded-xl">
           {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : "Request Tickets"}

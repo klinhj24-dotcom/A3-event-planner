@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { db, eventsTable, eventGuestListTable, eventLineupTable, bandMembersTable, bandContactsTable, bandsTable } from "@workspace/db";
+import { db, eventsTable, eventGuestListTable, eventLineupTable, bandMembersTable, bandContactsTable, bandsTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
 const router = Router();
 
@@ -248,6 +249,82 @@ router.delete("/events/:eventId/guest-list/:entryId", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("deleteGuestList error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Admin: email guest list links to all entries with an email ────────────────
+router.post("/events/:eventId/guest-list/send-links", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const eventId = parseInt(req.params.eventId);
+    const userId = (req.user as any)?.id;
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+    if (!event.allowGuestList) { res.status(400).json({ error: "Guest list not enabled" }); return; }
+
+    const entries = await db.select().from(eventGuestListTable).where(eq(eventGuestListTable.eventId, eventId));
+    const withEmail = entries.filter(e => e.contactEmail);
+
+    if (withEmail.length === 0) {
+      res.json({ sent: 0, message: "No entries with email addresses" });
+      return;
+    }
+
+    const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
+      ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+      : "https://event-mgmt.replit.app";
+
+    // Get Gmail client for this user
+    const [userRow] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!userRow?.googleAccessToken) {
+      res.status(400).json({ error: "No Gmail connected — please connect Gmail in Settings" });
+      return;
+    }
+
+    const auth = createAuthedClient(userRow.googleAccessToken, userRow.googleRefreshToken ?? "", userRow.googleTokenExpiry);
+    const { google } = await import("googleapis");
+    const gmail = google.gmail({ version: "v1", auth });
+    const from = userRow.googleEmail ?? userRow.email ?? "";
+
+    const startDate = event.startDate ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "TBD";
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const entry of withEmail) {
+      try {
+        const link = `${BASE_URL}/guest-list/${entry.token}`;
+        const contactName = entry.contactName || "there";
+
+        const body = `Hi ${contactName},\n\n${entry.studentName || "Your student"} has been added to the guest list for ${event.title} on ${startDate}.\n\nPlease use the link below to confirm your guest registration and add any guests you're bringing.`;
+
+        const html = buildHtmlEmail({
+          recipientName: contactName,
+          body,
+          ctaLabel: "Complete Guest List Registration",
+          ctaUrl: link,
+        });
+
+        const raw = makeHtmlEmail({
+          to: entry.contactEmail!,
+          from,
+          subject: `Guest List — ${event.title} (${startDate})`,
+          html,
+        });
+
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        sent++;
+      } catch (err) {
+        console.error(`Failed to send guest list link to ${entry.contactEmail}:`, err);
+        failed++;
+      }
+    }
+
+    res.json({ sent, failed, message: `Sent ${sent} email${sent !== 1 ? "s" : ""}${failed > 0 ? `, ${failed} failed` : ""}` });
+  } catch (err) {
+    console.error("sendGuestListLinks error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

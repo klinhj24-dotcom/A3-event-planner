@@ -388,7 +388,7 @@ router.get("/band-confirm/:token", async (req, res) => {
     const { token } = req.params;
     const [invite] = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.token, token));
     if (!invite) {
-      res.status(404).send(confirmPage({ error: "This link is invalid or has expired." }));
+      res.status(404).json({ error: "This link is invalid or has expired." });
       return;
     }
 
@@ -407,17 +407,17 @@ router.get("/band-confirm/:token", async (req, res) => {
 
     const eventWindow = event ? formatEventWindow(event) : "TBD";
 
-    res.send(confirmPage({
+    res.json({
       invite,
       event: event ?? null,
       slot: slot ?? null,
       eventWindow,
       alreadyConfirmedBy: alreadyConfirmed?.contactName ?? null,
       alreadyDeclinedBy: alreadyDeclined?.contactName ?? null,
-    }));
+    });
   } catch (err) {
     console.error("band-confirm GET error:", err);
-    res.status(500).send(confirmPage({ error: "Something went wrong. Please try again later." }));
+    res.status(500).json({ error: "Something went wrong. Please try again later." });
   }
 });
 
@@ -428,7 +428,7 @@ router.post("/band-confirm/:token", async (req, res) => {
     const { action, conflictNote } = req.body; // action: "confirm" | "decline"
 
     const [invite] = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.token, token));
-    if (!invite) { res.status(404).send(confirmPage({ error: "Invalid token." })); return; }
+    if (!invite) { res.status(404).json({ error: "Invalid token." }); return; }
 
     const newStatus = action === "decline" ? "declined" : "confirmed";
     await db.update(eventBandInvitesTable).set({
@@ -453,16 +453,16 @@ router.post("/band-confirm/:token", async (req, res) => {
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
 
-    res.send(confirmPage({
+    res.json({
       submitted: true,
       confirmed: newStatus === "confirmed",
       contactName: invite.contactName ?? "there",
       bandName: slot?.bandName ?? "your band",
       eventTitle: event?.title ?? "the event",
-    }));
+    });
   } catch (err) {
     console.error("band-confirm POST error:", err);
-    res.status(500).send(confirmPage({ error: "Something went wrong." }));
+    res.status(500).json({ error: "Something went wrong." });
   }
 });
 
