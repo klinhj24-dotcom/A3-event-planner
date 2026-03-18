@@ -13,6 +13,7 @@ import { z } from "zod";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
+import { PublicFooter } from "@/components/public-footer";
 
 const TEACHERS = [
   "Charlie Ballantine",
@@ -393,6 +394,7 @@ export default function TicketForm() {
             </div>
           </motion.div>
         )}
+        <PublicFooter eventUrl={event?.websiteUrl} />
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, Users, Music2, MapPin, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
+import { PublicFooter } from "@/components/public-footer";
 
 // ── Schemas ────────────────────────────────────────────────────────────────────
 const studentsOnlySchema = z.object({
@@ -224,7 +225,7 @@ export default function GuestListForm() {
         )}
       </motion.div>
 
-      <p className="mt-6 text-xs text-muted-foreground/50">The Music Space</p>
+      <PublicFooter />
     </div>
   );
 }

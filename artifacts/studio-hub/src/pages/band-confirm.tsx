@@ -6,6 +6,7 @@ import { Loader2, Music, CheckCircle2, XCircle, AlertCircle } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
+import { PublicFooter } from "@/components/public-footer";
 
 const TMS_CC = "info@themusicspace.com";
 
@@ -207,6 +208,7 @@ export default function BandConfirmPage() {
             </p>
           </motion.div>
         )}
+        <PublicFooter />
       </div>
     </div>
   );
