@@ -322,6 +322,7 @@ export default function TicketForm() {
   });
 
   const startDate = event?.startDate ? new Date(event.startDate) : null;
+  const endDate = event?.endDate ? new Date(event.endDate) : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center py-8 px-4">
@@ -359,7 +360,12 @@ export default function TicketForm() {
                 {startDate && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
-                    <span>{format(startDate, "EEEE, MMMM d, yyyy")}</span>
+                    <span>
+                      {format(startDate, "EEEE, MMMM d, yyyy")}
+                      {format(startDate, "HH:mm") !== "00:00" && (
+                        <> · {format(startDate, "h:mm a")}{endDate && format(endDate, "HH:mm") !== "00:00" ? ` – ${format(endDate, "h:mm a")}` : ""}</>
+                      )}
+                    </span>
                   </div>
                 )}
                 {event.location && (
