@@ -20,16 +20,41 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
   Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
+  Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface Band { id: number; name: string; genre?: string | null; members?: number | null; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null; notes?: string | null; }
+interface Band {
+  id: number; name: string; genre?: string | null; members?: number | null;
+  contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null;
+  notes?: string | null; website?: string | null; instagram?: string | null;
+}
+
+interface BandMember {
+  id: number; bandId: number; name: string; role?: string | null;
+  email?: string | null; phone?: string | null; notes?: string | null;
+  contacts: BandContact[];
+}
+
+interface BandContact {
+  id: number; memberId: number; bandId: number; name: string;
+  email?: string | null; phone?: string | null; relationship?: string | null; isPrimary: boolean;
+}
+
+interface BandInvite {
+  id: number; contactName: string | null; contactEmail: string;
+  status: string; conflictNote: string | null; sentAt: string | null; respondedAt: string | null;
+}
+
 interface LineupSlot {
   id: number; eventId: number; bandId?: number | null; bandName?: string | null;
+  contactName?: string | null; contactEmail?: string | null;
   position: number; label?: string | null; startTime?: string | null;
   durationMinutes?: number | null; bufferMinutes?: number | null;
   isOverlapping: boolean; confirmed: boolean; type: string;
   groupName?: string | null; notes?: string | null;
+  staffNote?: string | null; inviteStatus: string;
+  confirmationSent: boolean; reminderSent: boolean;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -67,14 +92,50 @@ const SLOT_TYPE_META: Record<string, { label: string; icon: React.ReactNode; col
   break:        { label: "Break",        icon: <Coffee className="h-3.5 w-3.5" />,     color: "text-emerald-500" },
 };
 
+const INVITE_STATUS_META: Record<string, { label: string; cls: string }> = {
+  not_sent:  { label: "Not Invited", cls: "bg-muted/40 text-muted-foreground" },
+  sent:      { label: "Invite Sent", cls: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
+  confirmed: { label: "Confirmed",   cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  declined:  { label: "Declined",    cls: "bg-red-500/15 text-red-400 border-red-500/20" },
+};
+
+// ── Invite status row ──────────────────────────────────────────────────────────
+function InviteRow({ invite }: { invite: BandInvite }) {
+  const statusCls = invite.status === "confirmed"
+    ? "text-emerald-400"
+    : invite.status === "declined"
+    ? "text-red-400"
+    : "text-muted-foreground";
+  const statusIcon = invite.status === "confirmed" ? "✅" : invite.status === "declined" ? "❌" : "⏳";
+  return (
+    <div className="flex flex-col gap-0.5 py-1.5 border-b border-border/20 last:border-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">{invite.contactName ?? invite.contactEmail}</span>
+        <span className={`text-[11px] font-medium flex items-center gap-1 ${statusCls}`}>
+          {statusIcon} {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
+        </span>
+      </div>
+      <span className="text-[10px] text-muted-foreground">{invite.contactEmail}</span>
+      {invite.conflictNote && (
+        <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1.5">
+          <p className="text-[11px] text-amber-400 font-medium mb-0.5">Day-of note:</p>
+          <p className="text-[11px] text-amber-300/80">{invite.conflictNote}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
   slot, calcTime, bands, eventId, isRecital,
-  onUpdate, onDelete,
+  onUpdate, onDelete, onSendInvite, onSendConfirmation,
 }: {
   slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => void;
   onDelete: (id: number) => void;
+  onSendInvite: (slotId: number, staffNote: string) => void;
+  onSendConfirmation: (slotId: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: slot.id });
@@ -90,10 +151,33 @@ function SlotRow({
     notes: slot.notes ?? "",
     bandId: slot.bandId ? String(slot.bandId) : "",
     groupName: slot.groupName ?? "",
+    staffNote: slot.staffNote ?? "",
   });
+
+  // Sync draft staffNote when slot changes
+  useEffect(() => { setDraft(d => ({ ...d, staffNote: slot.staffNote ?? "" })); }, [slot.staffNote]);
+
+  // Load invites when expanded and slot has a band
+  const { data: invites = [], refetch: refetchInvites } = useQuery<BandInvite[]>({
+    queryKey: [`/api/events/${eventId}/lineup/${slot.id}/invites`],
+    queryFn: async () => {
+      const r = await fetch(`/api/events/${eventId}/lineup/${slot.id}/invites`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: expanded && !!slot.bandId,
+  });
+
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [sendingConfirm, setSendingConfirm] = useState(false);
 
   const displayName = slot.bandName || slot.label || (SLOT_TYPE_META[slot.type]?.label ?? slot.type);
   const meta = SLOT_TYPE_META[slot.type] ?? SLOT_TYPE_META.act;
+  const inviteStatusMeta = INVITE_STATUS_META[slot.inviteStatus] ?? INVITE_STATUS_META.not_sent;
+
+  const confirmedCount = invites.filter(i => i.status === "confirmed").length;
+  const declinedCount = invites.filter(i => i.status === "declined").length;
+  const pendingCount = invites.filter(i => i.status === "pending").length;
 
   function save() {
     onUpdate(slot.id, {
@@ -105,42 +189,56 @@ function SlotRow({
       notes: draft.notes || null,
       bandId: draft.bandId ? Number(draft.bandId) : null,
       groupName: draft.groupName || null,
+      staffNote: draft.staffNote || null,
     });
+  }
+
+  async function handleSendInvite() {
+    setSendingInvite(true);
+    try {
+      await onSendInvite(slot.id, draft.staffNote);
+      refetchInvites();
+    } finally {
+      setSendingInvite(false);
+    }
+  }
+
+  async function handleSendConfirmation() {
+    setSendingConfirm(true);
+    try {
+      await onSendConfirmation(slot.id);
+    } finally {
+      setSendingConfirm(false);
+    }
   }
 
   return (
     <div ref={setNodeRef} style={style} className={`rounded-xl border transition-all ${slot.isOverlapping ? "border-[#00b199]/30 bg-[#00b199]/5 ml-6" : "border-border/50 bg-card"} ${isDragging ? "shadow-lg" : "shadow-sm"}`}>
       {/* Main row */}
       <div className="flex items-center gap-3 px-4 py-3">
-        {/* Drag handle */}
         <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 touch-none">
           <GripVertical className="h-4 w-4" />
         </button>
 
-        {/* Time */}
         <div className="w-20 shrink-0 text-sm font-mono font-medium text-muted-foreground">
-          {calcTime ? (
-            <span className="text-foreground/80">{fmt12(calcTime)}</span>
-          ) : (
-            <span className="text-muted-foreground/40 text-xs">set time</span>
-          )}
+          {calcTime ? <span className="text-foreground/80">{fmt12(calcTime)}</span> : <span className="text-muted-foreground/40 text-xs">set time</span>}
         </div>
 
-        {/* Type icon */}
         <span className={`shrink-0 ${meta.color}`}>{meta.icon}</span>
 
-        {/* Name */}
         <div className="flex-1 min-w-0">
           <span className="font-medium text-sm truncate block">{displayName}</span>
-          {slot.groupName && (
-            <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>
-          )}
-          {slot.isOverlapping && (
-            <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps with previous</span>
-          )}
+          {slot.groupName && <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>}
+          {slot.isOverlapping && <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps with previous</span>}
         </div>
 
-        {/* Duration */}
+        {/* Invite status badge (acts with bands only) */}
+        {slot.type === "act" && slot.bandId && (
+          <Badge variant="outline" className={`text-[10px] shrink-0 rounded-full px-2 ${inviteStatusMeta.cls}`}>
+            {inviteStatusMeta.label}
+          </Badge>
+        )}
+
         {slot.durationMinutes && (
           <Badge variant="outline" className="text-[10px] shrink-0 gap-1 border-border/40">
             <Timer className="h-2.5 w-2.5" />{slot.durationMinutes}m
@@ -152,20 +250,16 @@ function SlotRow({
           </Badge>
         )}
 
-        {/* Confirmed toggle (acts only) */}
         {slot.type === "act" && (
           <button
             title={slot.confirmed ? "Confirmed — click to unmark" : "Mark as confirmed"}
             onClick={() => onUpdate(slot.id, { confirmed: !slot.confirmed })}
             className={`shrink-0 transition-colors p-0.5 ${slot.confirmed ? "text-emerald-500 hover:text-emerald-400" : "text-muted-foreground/40 hover:text-emerald-500"}`}
           >
-            {slot.confirmed
-              ? <CheckCircle2 className="h-4 w-4" />
-              : <Circle className="h-4 w-4" />}
+            {slot.confirmed ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
           </button>
         )}
 
-        {/* Expand / delete */}
         <button onClick={() => setExpanded(e => !e)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
@@ -177,6 +271,7 @@ function SlotRow({
       {/* Expanded edit panel */}
       {expanded && (
         <div className="border-t border-border/40 px-4 pb-4 pt-3 space-y-3">
+          {/* Band / act selection */}
           {slot.type === "act" && !isRecital && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -200,7 +295,7 @@ function SlotRow({
           {slot.type === "act" && isRecital && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Student / Performer Name</label>
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Student / Performer</label>
                 <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="e.g. Alex Johnson" />
               </div>
               <div className="space-y-1">
@@ -235,7 +330,7 @@ function SlotRow({
           <div className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-2">
             <div>
               <p className="text-xs font-medium">Overlaps with previous act</p>
-              <p className="text-[10px] text-muted-foreground">Runs at the same time — e.g. dance group while next band sets up</p>
+              <p className="text-[10px] text-muted-foreground">Runs simultaneously — e.g. dance group while next band sets up</p>
             </div>
             <Switch checked={draft.isOverlapping} onCheckedChange={v => setDraft(d => ({ ...d, isOverlapping: v }))} />
           </div>
@@ -253,6 +348,81 @@ function SlotRow({
           <Button size="sm" className="w-full rounded-lg h-8 text-xs" onClick={save}>
             <Save className="h-3 w-3 mr-1.5" /> Save Changes
           </Button>
+
+          {/* ── Invite section (act slots with bands only) ──────────────────── */}
+          {slot.type === "act" && slot.bandId && (
+            <div className="pt-2 border-t border-border/30 space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Mail className="h-3 w-3" /> Band Invite
+              </p>
+
+              {/* Staff note for invite */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Estimated Slot Note <span className="text-muted-foreground/60 normal-case">(included in invite email)</span>
+                </label>
+                <textarea
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs min-h-[56px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={draft.staffNote}
+                  onChange={e => setDraft(d => ({ ...d, staffNote: e.target.value }))}
+                  placeholder="e.g. You'll likely go on around 7:00–7:45 PM. Final time confirmed closer to the event."
+                />
+              </div>
+
+              {/* Invite action buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-lg h-7 text-xs gap-1.5 flex-1"
+                  disabled={sendingInvite}
+                  onClick={handleSendInvite}
+                >
+                  <Send className="h-3 w-3" />
+                  {sendingInvite ? "Sending…" : slot.inviteStatus === "not_sent" ? "Send Invite" : "Re-invite New Contacts"}
+                </Button>
+                {slot.confirmed && !slot.confirmationSent && (
+                  <Button
+                    size="sm"
+                    className="rounded-lg h-7 text-xs gap-1.5 flex-1 bg-emerald-600 hover:bg-emerald-500"
+                    disabled={sendingConfirm}
+                    onClick={handleSendConfirmation}
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    {sendingConfirm ? "Sending…" : "Send Lock-In Email"}
+                  </Button>
+                )}
+                {slot.confirmationSent && (
+                  <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                    ✓ Lock-in sent
+                  </Badge>
+                )}
+              </div>
+
+              {/* Per-contact invite status */}
+              {invites.length > 0 && (
+                <div className="rounded-xl border border-border/30 bg-muted/20 p-3 space-y-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Contact Responses</p>
+                    <div className="flex items-center gap-2 text-[10px]">
+                      {confirmedCount > 0 && <span className="text-emerald-400">✅ {confirmedCount} confirmed</span>}
+                      {pendingCount > 0 && <span className="text-muted-foreground">⏳ {pendingCount} pending</span>}
+                      {declinedCount > 0 && <span className="text-red-400">❌ {declinedCount} declined</span>}
+                    </div>
+                  </div>
+                  {invites.map(invite => <InviteRow key={invite.id} invite={invite} />)}
+                </div>
+              )}
+              {invites.length === 0 && slot.inviteStatus !== "not_sent" && (
+                <p className="text-[11px] text-muted-foreground text-center py-1">Loading invite responses…</p>
+              )}
+              {slot.inviteStatus === "not_sent" && (
+                <p className="text-[11px] text-muted-foreground">
+                  No invites sent yet. Add a staff note above, then click Send Invite.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -293,6 +463,182 @@ function printRecitalOrder(title: string, slots: LineupSlot[], calcTimes: (strin
   if (w) { w.document.write(html); w.document.close(); w.print(); }
 }
 
+// ── Band Members Dialog ────────────────────────────────────────────────────────
+function BandMembersDialog({ band, open, onClose }: { band: Band | null; open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [addingMember, setAddingMember] = useState(false);
+  const [memberForm, setMemberForm] = useState({ name: "", role: "", email: "", phone: "" });
+  const [addingContact, setAddingContact] = useState<number | null>(null);
+  const [contactForm, setContactForm] = useState({ name: "", email: "", phone: "", relationship: "" });
+  const [editingMember, setEditingMember] = useState<BandMember | null>(null);
+
+  const { data: members = [], refetch } = useQuery<BandMember[]>({
+    queryKey: [`/api/bands/${band?.id}/members`],
+    queryFn: async () => {
+      const r = await fetch(`/api/bands/${band!.id}/members`, { credentials: "include" });
+      return r.json();
+    },
+    enabled: open && !!band,
+  });
+
+  const { mutate: createMember, isPending: creatingMember } = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await fetch(`/api/bands/${band!.id}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    onSuccess: () => { refetch(); setMemberForm({ name: "", role: "", email: "", phone: "" }); setAddingMember(false); toast({ title: "Member added" }); },
+    onError: () => toast({ title: "Failed to add member", variant: "destructive" }),
+  });
+
+  const { mutate: deleteMember } = useMutation({
+    mutationFn: async (id: number) => { await fetch(`/api/bands/members/${id}`, { method: "DELETE", credentials: "include" }); },
+    onSuccess: () => { refetch(); toast({ title: "Member removed" }); },
+  });
+
+  const { mutate: createContact, isPending: creatingContact } = useMutation({
+    mutationFn: async ({ memberId, data }: { memberId: number; data: any }) => {
+      const r = await fetch(`/api/bands/members/${memberId}/contacts`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    onSuccess: () => { refetch(); setContactForm({ name: "", email: "", phone: "", relationship: "" }); setAddingContact(null); toast({ title: "Contact added" }); },
+    onError: () => toast({ title: "Failed to add contact", variant: "destructive" }),
+  });
+
+  const { mutate: deleteContact } = useMutation({
+    mutationFn: async (id: number) => { await fetch(`/api/bands/contacts/${id}`, { method: "DELETE", credentials: "include" }); },
+    onSuccess: () => { refetch(); },
+  });
+
+  if (!band) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:w-full sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            {band.name} — Members & Contacts
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-1">
+          {/* Members list */}
+          {members.map(member => (
+            <div key={member.id} className="rounded-xl border border-border/50 bg-muted/20 overflow-hidden">
+              {/* Member header */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">{member.name}</p>
+                  {member.role && <p className="text-xs text-muted-foreground">{member.role}</p>}
+                </div>
+                {member.email && <a href={`mailto:${member.email}`} className="text-[11px] text-primary hover:underline">{member.email}</a>}
+                <button onClick={() => deleteMember(member.id)} className="text-muted-foreground hover:text-destructive transition-colors p-0.5 shrink-0">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Contacts */}
+              <div className="px-4 py-2 space-y-2">
+                {member.contacts.length === 0 && addingContact !== member.id && (
+                  <p className="text-[11px] text-muted-foreground italic">No contacts yet</p>
+                )}
+                {member.contacts.map(contact => (
+                  <div key={contact.id} className="flex items-center gap-2 rounded-lg border border-border/30 bg-card px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium">{contact.name}</span>
+                        {contact.relationship && <span className="text-[10px] text-muted-foreground">({contact.relationship})</span>}
+                        {contact.isPrimary && <Badge className="text-[9px] px-1 py-0 h-4 bg-primary/20 text-primary border-0">Primary</Badge>}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        {contact.email && <span className="text-[10px] text-muted-foreground">{contact.email}</span>}
+                        {contact.phone && <span className="text-[10px] text-muted-foreground">{contact.phone}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => deleteContact(contact.id)} className="text-muted-foreground hover:text-destructive p-0.5 shrink-0">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add contact inline */}
+                {addingContact === member.id ? (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-3 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Add Contact</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input className="h-7 text-xs rounded-lg" placeholder="Name *" value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} />
+                      <Input className="h-7 text-xs rounded-lg" placeholder="Relationship (Parent, Self…)" value={contactForm.relationship} onChange={e => setContactForm(f => ({ ...f, relationship: e.target.value }))} />
+                      <Input type="email" className="h-7 text-xs rounded-lg" placeholder="Email" value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} />
+                      <Input type="tel" className="h-7 text-xs rounded-lg" placeholder="Phone" value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="h-7 text-xs rounded-lg flex-1" disabled={!contactForm.name || creatingContact}
+                        onClick={() => createContact({ memberId: member.id, data: { name: contactForm.name, email: contactForm.email || null, phone: contactForm.phone || null, relationship: contactForm.relationship || null } })}>
+                        Add Contact
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg" onClick={() => { setAddingContact(null); setContactForm({ name: "", email: "", phone: "", relationship: "" }); }}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setAddingContact(member.id); setContactForm({ name: "", email: "", phone: "", relationship: "" }); }}
+                    className="text-[11px] text-primary hover:text-primary/80 transition-colors flex items-center gap-1 py-1"
+                  >
+                    <Plus className="h-3 w-3" /> Add contact
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {members.length === 0 && !addingMember && (
+            <p className="text-sm text-muted-foreground text-center py-4">No members yet. Add your first member below.</p>
+          )}
+
+          {/* Add member form */}
+          {addingMember ? (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Add Member</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Name *</label>
+                  <Input className="h-8 text-xs rounded-lg" placeholder="Alex Johnson" value={memberForm.name} onChange={e => setMemberForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Role / Instrument</label>
+                  <Input className="h-8 text-xs rounded-lg" placeholder="Lead Vocals, Guitar…" value={memberForm.role} onChange={e => setMemberForm(f => ({ ...f, role: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Member Email</label>
+                  <Input type="email" className="h-8 text-xs rounded-lg" placeholder="alex@email.com" value={memberForm.email} onChange={e => setMemberForm(f => ({ ...f, email: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Phone</label>
+                  <Input type="tel" className="h-8 text-xs rounded-lg" placeholder="(555) 000-0000" value={memberForm.phone} onChange={e => setMemberForm(f => ({ ...f, phone: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1 rounded-lg h-8 text-xs" disabled={!memberForm.name || creatingMember}
+                  onClick={() => createMember({ name: memberForm.name, role: memberForm.role || null, email: memberForm.email || null, phone: memberForm.phone || null })}>
+                  Add Member
+                </Button>
+                <Button size="sm" variant="ghost" className="rounded-lg h-8 text-xs" onClick={() => { setAddingMember(false); setMemberForm({ name: "", role: "", email: "", phone: "" }); }}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="w-full rounded-xl h-9 text-xs gap-1.5" onClick={() => setAddingMember(true)}>
+              <Plus className="h-3.5 w-3.5" /> Add Member
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main sheet ─────────────────────────────────────────────────────────────────
 export function LineupSheet({ event, open, onClose }: {
   event: { id: number; title: string; type?: string } | null;
@@ -303,46 +649,38 @@ export function LineupSheet({ event, open, onClose }: {
   const queryClient = useQueryClient();
   const eventId = event?.id;
 
-  // ── Queries ──────────────────────────────────────────────────────────────────
   const { data: rawBands = [] } = useQuery<Band[]>({
     queryKey: ["/api/bands"],
-    queryFn: async () => { const r = await fetch("/api/bands"); return r.json(); },
+    queryFn: async () => { const r = await fetch("/api/bands", { credentials: "include" }); return r.json(); },
     enabled: open,
   });
   const { data: rawSlots = [] } = useQuery<LineupSlot[]>({
     queryKey: [`/api/events/${eventId}/lineup`],
-    queryFn: async () => { const r = await fetch(`/api/events/${eventId}/lineup`); return r.json(); },
+    queryFn: async () => { const r = await fetch(`/api/events/${eventId}/lineup`, { credentials: "include" }); return r.json(); },
     enabled: open && !!eventId,
   });
 
-  // Local optimistic slots state for smooth drag-and-drop
   const [localSlots, setLocalSlots] = useState<LineupSlot[] | null>(null);
   const slots = localSlots ?? rawSlots;
-
-  // Reset local state whenever server data refreshes or event changes
   useEffect(() => { setLocalSlots(null); }, [rawSlots, eventId]);
 
-  // ── Band mutations ────────────────────────────────────────────────────────────
+  // ── Band mutations ─────────────────────────────────────────────────────────
   const [newBandName, setNewBandName] = useState("");
   const [newBandGenre, setNewBandGenre] = useState("");
   const [newBandMembers, setNewBandMembers] = useState("");
-  const [newBandContactName, setNewBandContactName] = useState("");
-  const [newBandContactEmail, setNewBandContactEmail] = useState("");
-  const [newBandContactPhone, setNewBandContactPhone] = useState("");
   const [addBandOpen, setAddBandOpen] = useState(false);
-
   const [editingBand, setEditingBand] = useState<Band | null>(null);
-  const [editBandForm, setEditBandForm] = useState({ name: "", genre: "", members: "", contactName: "", contactEmail: "", contactPhone: "", notes: "" });
+  const [editBandForm, setEditBandForm] = useState({ name: "", genre: "", members: "", notes: "", website: "", instagram: "" });
+  const [managingMembersBand, setManagingMembersBand] = useState<Band | null>(null);
 
   const { mutate: createBand, isPending: creatingBand } = useMutation({
     mutationFn: async (data: any) => {
-      const r = await fetch("/api/bands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const r = await fetch("/api/bands", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
       return r.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bands"] });
       setNewBandName(""); setNewBandGenre(""); setNewBandMembers("");
-      setNewBandContactName(""); setNewBandContactEmail(""); setNewBandContactPhone("");
       setAddBandOpen(false);
       toast({ title: "Band added" });
     },
@@ -350,25 +688,19 @@ export function LineupSheet({ event, open, onClose }: {
 
   const { mutate: updateBand, isPending: updatingBand } = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const r = await fetch(`/api/bands/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const r = await fetch(`/api/bands/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
       return r.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bands"] });
-      setEditingBand(null);
-      toast({ title: "Band updated" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/bands"] }); setEditingBand(null); toast({ title: "Band updated" }); },
     onError: () => toast({ title: "Failed to update band", variant: "destructive" }),
   });
 
   const { mutate: deleteBand } = useMutation({
-    mutationFn: async (id: number) => {
-      await fetch(`/api/bands/${id}`, { method: "DELETE" });
-    },
+    mutationFn: async (id: number) => { await fetch(`/api/bands/${id}`, { method: "DELETE", credentials: "include" }); },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/bands"] }),
   });
 
-  // ── Lineup mutations ──────────────────────────────────────────────────────────
+  // ── Lineup mutations ───────────────────────────────────────────────────────
   const [addSlotOpen, setAddSlotOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
     type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false,
@@ -376,10 +708,10 @@ export function LineupSheet({ event, open, onClose }: {
 
   const { mutate: addSlot, isPending: addingSlot } = useMutation({
     mutationFn: async (data: any) => {
-      const r = await fetch(`/api/events/${eventId}/lineup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const r = await fetch(`/api/events/${eventId}/lineup`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
       return r.json();
     },
-    onSuccess: (newSlotData) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
       setLocalSlots([]);
       setAddSlotOpen(false);
@@ -390,33 +722,75 @@ export function LineupSheet({ event, open, onClose }: {
 
   const { mutate: updateSlot } = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const r = await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const r = await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
       return r.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
-      setLocalSlots([]);
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] }); setLocalSlots([]); },
     onError: () => toast({ title: "Failed to update slot", variant: "destructive" }),
   });
 
   const { mutate: deleteSlot } = useMutation({
-    mutationFn: async (id: number) => {
-      await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "DELETE" });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
-      setLocalSlots([]);
-    },
+    mutationFn: async (id: number) => { await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "DELETE", credentials: "include" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] }); setLocalSlots([]); },
   });
 
   const { mutate: reorderSlots } = useMutation({
     mutationFn: async (items: { id: number; position: number }[]) => {
-      await fetch(`/api/events/${eventId}/lineup/reorder`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(items) });
+      await fetch(`/api/events/${eventId}/lineup/reorder`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(items) });
     },
   });
 
-  // ── Drag and drop ─────────────────────────────────────────────────────────────
+  // ── Invite mutations ───────────────────────────────────────────────────────
+  const [bulkInviting, setBulkInviting] = useState(false);
+
+  async function handleSendInvite(slotId: number, staffNote: string): Promise<void> {
+    const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ staffNote }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      toast({ title: "Failed to send invite", description: data.error, variant: "destructive" });
+      throw new Error(data.error);
+    }
+    toast({ title: `Invite sent to ${data.sent} contact${data.sent !== 1 ? "s" : ""}` });
+    queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+  }
+
+  async function handleSendConfirmation(slotId: number): Promise<void> {
+    const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-confirmation`, {
+      method: "POST",
+      credentials: "include",
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      toast({ title: "Failed to send confirmation", description: data.error, variant: "destructive" });
+      throw new Error(data.error);
+    }
+    toast({ title: "Lock-in confirmation sent!", description: `To: ${data.to}${data.bcc > 0 ? ` + ${data.bcc} BCC'd` : ""}` });
+    queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+  }
+
+  async function handleBulkInvite() {
+    setBulkInviting(true);
+    try {
+      const r = await fetch(`/api/events/${eventId}/lineup/send-invites-bulk`, { method: "POST", credentials: "include" });
+      const data = await r.json();
+      if (!r.ok) { toast({ title: "Bulk invite failed", description: data.error, variant: "destructive" }); return; }
+      if (data.sent === 0) {
+        toast({ title: data.message ?? "All bands already invited", description: `${data.skipped} band(s) already had invites sent.` });
+      } else {
+        toast({ title: `Invites sent!`, description: `${data.sent} emails sent to ${data.slotsSent} band slot(s). ${data.skipped > 0 ? `${data.skipped} already invited (skipped).` : ""}` });
+      }
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+    } finally {
+      setBulkInviting(false);
+    }
+  }
+
+  // ── DnD ─────────────────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -435,13 +809,14 @@ export function LineupSheet({ event, open, onClose }: {
   const isRecital = event?.type === "Recital";
   const calcTimes = computeTimes(slots);
 
-  const handleUpdate = useCallback((id: number, data: Partial<LineupSlot>) => {
-    updateSlot({ id, data });
-  }, [updateSlot]);
+  const handleUpdate = useCallback((id: number, data: Partial<LineupSlot>) => { updateSlot({ id, data }); }, [updateSlot]);
+  const handleDelete = useCallback((id: number) => { deleteSlot(id); }, [deleteSlot]);
 
-  const handleDelete = useCallback((id: number) => {
-    deleteSlot(id);
-  }, [deleteSlot]);
+  // Invite stats for header
+  const actSlots = slots.filter(s => s.type === "act" && s.bandId);
+  const invitedCount = actSlots.filter(s => s.inviteStatus !== "not_sent").length;
+  const confirmedCount = actSlots.filter(s => s.inviteStatus === "confirmed").length;
+  const uninvitedCount = actSlots.filter(s => s.inviteStatus === "not_sent").length;
 
   function submitAddSlot() {
     addSlot({
@@ -461,20 +836,42 @@ export function LineupSheet({ event, open, onClose }: {
     <Sheet open={open} onOpenChange={o => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-full sm:max-w-5xl p-0 flex flex-col overflow-hidden">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/30 shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <SheetTitle className="font-display text-xl">
               {isRecital ? "Recital Order" : "Band Lineup"} — <span className="text-muted-foreground font-normal">{event?.title}</span>
             </SheetTitle>
-            {isRecital && slots.length > 0 && (
-              <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5 shrink-0" onClick={() => printRecitalOrder(event?.title ?? "Recital", slots, calcTimes)}>
-                <Printer className="h-3.5 w-3.5" /> Print Order
-              </Button>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {isRecital && slots.length > 0 && (
+                <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5" onClick={() => printRecitalOrder(event?.title ?? "Recital", slots, calcTimes)}>
+                  <Printer className="h-3.5 w-3.5" /> Print Order
+                </Button>
+              )}
+              {!isRecital && actSlots.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs rounded-lg gap-1.5"
+                  disabled={bulkInviting || uninvitedCount === 0}
+                  onClick={handleBulkInvite}
+                  title={uninvitedCount === 0 ? "All bands already invited" : `Send invites to ${uninvitedCount} uninvited band(s)`}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {bulkInviting ? "Sending…" : `Invite All Bands${uninvitedCount > 0 ? ` (${uninvitedCount})` : ""}`}
+                </Button>
+              )}
+              {!isRecital && actSlots.length > 0 && (
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="text-emerald-400">✅ {confirmedCount}</span>
+                  <span>·</span>
+                  <span>{invitedCount}/{actSlots.length} invited</span>
+                </div>
+              )}
+            </div>
           </div>
         </SheetHeader>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* ── Left: Bands panel (hidden for recitals) ───────────────────────── */}
+          {/* ── Left: Bands panel ─────────────────────────────────────────────── */}
           {!isRecital && <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/20">
               <span className="text-sm font-semibold">Band Roster</span>
@@ -493,15 +890,17 @@ export function LineupSheet({ event, open, onClose }: {
                       <p className="text-sm font-medium truncate">{band.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
-                        {band.members && (
-                          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                            <Users className="h-2.5 w-2.5" />{band.members}
-                          </span>
-                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", contactName: band.contactName ?? "", contactEmail: band.contactEmail ?? "", contactPhone: band.contactPhone ?? "", notes: band.notes ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
+                      <button
+                        title="Manage members & contacts"
+                        onClick={() => setManagingMembersBand(band)}
+                        className="text-muted-foreground hover:text-primary p-0.5"
+                      >
+                        <Users className="h-3 w-3" />
+                      </button>
+                      <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", notes: band.notes ?? "", website: band.website ?? "", instagram: band.instagram ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button onClick={() => deleteBand(band.id)} className="text-muted-foreground hover:text-destructive p-0.5">
@@ -509,21 +908,12 @@ export function LineupSheet({ event, open, onClose }: {
                       </button>
                     </div>
                   </div>
-                  {(band.contactName || band.contactEmail || band.contactPhone) && (
-                    <div className="mt-2 pt-2 border-t border-border/20 space-y-0.5">
-                      {band.contactName && <p className="text-[11px] font-medium text-foreground/80 truncate">{band.contactName}</p>}
-                      {band.contactEmail && (
-                        <a href={`mailto:${band.contactEmail}`} className="flex items-center gap-1 text-[10px] text-primary hover:underline truncate">
-                          <span>✉</span>{band.contactEmail}
-                        </a>
-                      )}
-                      {band.contactPhone && (
-                        <a href={`tel:${band.contactPhone}`} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground truncate">
-                          <span>📞</span>{band.contactPhone}
-                        </a>
-                      )}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => setManagingMembersBand(band)}
+                    className="mt-1.5 text-[10px] text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
+                  >
+                    <Users className="h-2.5 w-2.5" /> Members & Contacts
+                  </button>
                 </div>
               ))}
             </div>
@@ -562,13 +952,14 @@ export function LineupSheet({ event, open, onClose }: {
                       isRecital={isRecital}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
+                      onSendInvite={handleSendInvite}
+                      onSendConfirmation={handleSendConfirmation}
                     />
                   ))}
                 </div>
               </SortableContext>
             </DndContext>
 
-            {/* End of show total time */}
             {slots.length > 0 && (() => {
               const lastTime = calcTimes[calcTimes.length - 1];
               const last = slots[slots.length - 1];
@@ -588,7 +979,7 @@ export function LineupSheet({ event, open, onClose }: {
 
       {/* Add Band Dialog */}
       <Dialog open={addBandOpen} onOpenChange={setAddBandOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl">
+        <DialogContent className="sm:max-w-[420px] rounded-2xl">
           <DialogHeader><DialogTitle className="font-display text-xl">Add Band / Act</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><label className="text-xs font-medium">Name *</label>
@@ -602,23 +993,12 @@ export function LineupSheet({ event, open, onClose }: {
                 <Input type="number" min="1" className="rounded-xl" value={newBandMembers} onChange={e => setNewBandMembers(e.target.value)} placeholder="4" />
               </div>
             </div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-1">Point of Contact</p>
-            <div className="space-y-1"><label className="text-xs font-medium">Contact Name</label>
-              <Input className="rounded-xl" value={newBandContactName} onChange={e => setNewBandContactName(e.target.value)} placeholder="Jane Smith" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><label className="text-xs font-medium">Email</label>
-                <Input type="email" className="rounded-xl" value={newBandContactEmail} onChange={e => setNewBandContactEmail(e.target.value)} placeholder="jane@band.com" />
-              </div>
-              <div className="space-y-1"><label className="text-xs font-medium">Phone</label>
-                <Input type="tel" className="rounded-xl" value={newBandContactPhone} onChange={e => setNewBandContactPhone(e.target.value)} placeholder="(555) 000-0000" />
-              </div>
-            </div>
+            <p className="text-[11px] text-muted-foreground">After adding, use <strong>Members & Contacts</strong> to add individual members and their contacts for email invites.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setAddBandOpen(false)}>Cancel</Button>
             <Button className="rounded-xl" disabled={!newBandName || creatingBand}
-              onClick={() => createBand({ name: newBandName, genre: newBandGenre || null, members: newBandMembers ? Number(newBandMembers) : null, contactName: newBandContactName || null, contactEmail: newBandContactEmail || null, contactPhone: newBandContactPhone || null })}>
+              onClick={() => createBand({ name: newBandName, genre: newBandGenre || null, members: newBandMembers ? Number(newBandMembers) : null })}>
               Add Band
             </Button>
           </DialogFooter>
@@ -627,37 +1007,36 @@ export function LineupSheet({ event, open, onClose }: {
 
       {/* Edit Band Dialog */}
       <Dialog open={!!editingBand} onOpenChange={o => !o && setEditingBand(null)}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl">
-          <DialogHeader><DialogTitle className="font-display text-xl">Edit Band / Act</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-[420px] rounded-2xl">
+          <DialogHeader><DialogTitle className="font-display text-xl">Edit Band</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><label className="text-xs font-medium">Name *</label>
-              <Input className="rounded-xl" value={editBandForm.name} onChange={e => setEditBandForm(f => ({ ...f, name: e.target.value }))} placeholder="The Midnight Groove" />
+              <Input className="rounded-xl" value={editBandForm.name} onChange={e => setEditBandForm(f => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><label className="text-xs font-medium">Genre</label>
-                <Input className="rounded-xl" value={editBandForm.genre} onChange={e => setEditBandForm(f => ({ ...f, genre: e.target.value }))} placeholder="Jazz, Rock…" />
+                <Input className="rounded-xl" value={editBandForm.genre} onChange={e => setEditBandForm(f => ({ ...f, genre: e.target.value }))} />
               </div>
               <div className="space-y-1"><label className="text-xs font-medium">Members</label>
-                <Input type="number" min="1" className="rounded-xl" value={editBandForm.members} onChange={e => setEditBandForm(f => ({ ...f, members: e.target.value }))} placeholder="4" />
+                <Input type="number" min="1" className="rounded-xl" value={editBandForm.members} onChange={e => setEditBandForm(f => ({ ...f, members: e.target.value }))} />
               </div>
-            </div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-1">Point of Contact</p>
-            <div className="space-y-1"><label className="text-xs font-medium">Contact Name</label>
-              <Input className="rounded-xl" value={editBandForm.contactName} onChange={e => setEditBandForm(f => ({ ...f, contactName: e.target.value }))} placeholder="Jane Smith" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><label className="text-xs font-medium">Email</label>
-                <Input type="email" className="rounded-xl" value={editBandForm.contactEmail} onChange={e => setEditBandForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="jane@band.com" />
+              <div className="space-y-1"><label className="text-xs font-medium">Website</label>
+                <Input className="rounded-xl" value={editBandForm.website} onChange={e => setEditBandForm(f => ({ ...f, website: e.target.value }))} placeholder="https://…" />
               </div>
-              <div className="space-y-1"><label className="text-xs font-medium">Phone</label>
-                <Input type="tel" className="rounded-xl" value={editBandForm.contactPhone} onChange={e => setEditBandForm(f => ({ ...f, contactPhone: e.target.value }))} placeholder="(555) 000-0000" />
+              <div className="space-y-1"><label className="text-xs font-medium">Instagram</label>
+                <Input className="rounded-xl" value={editBandForm.instagram} onChange={e => setEditBandForm(f => ({ ...f, instagram: e.target.value }))} placeholder="@handle" />
               </div>
+            </div>
+            <div className="space-y-1"><label className="text-xs font-medium">Notes</label>
+              <Input className="rounded-xl" value={editBandForm.notes} onChange={e => setEditBandForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setEditingBand(null)}>Cancel</Button>
             <Button className="rounded-xl" disabled={!editBandForm.name || updatingBand}
-              onClick={() => editingBand && updateBand({ id: editingBand.id, data: { name: editBandForm.name, genre: editBandForm.genre || null, members: editBandForm.members ? Number(editBandForm.members) : null, contactName: editBandForm.contactName || null, contactEmail: editBandForm.contactEmail || null, contactPhone: editBandForm.contactPhone || null, notes: editBandForm.notes || null } })}>
+              onClick={() => updateBand({ id: editingBand!.id, data: { name: editBandForm.name, genre: editBandForm.genre || null, members: editBandForm.members ? Number(editBandForm.members) : null, notes: editBandForm.notes || null, website: editBandForm.website || null, instagram: editBandForm.instagram || null } })}>
               Save Changes
             </Button>
           </DialogFooter>
@@ -666,91 +1045,68 @@ export function LineupSheet({ event, open, onClose }: {
 
       {/* Add Slot Dialog */}
       <Dialog open={addSlotOpen} onOpenChange={setAddSlotOpen}>
-        <DialogContent className="sm:max-w-[440px] rounded-2xl">
-          <DialogHeader><DialogTitle className="font-display text-xl">{isRecital ? "Add Performer" : "Add Lineup Slot"}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Slot Type</label>
-              <div className="flex gap-2">
-                {(["act", "announcement", "break"] as const).map(t => (
-                  <button key={t} onClick={() => setNewSlot(s => ({ ...s, type: t }))}
-                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium border transition-all ${newSlot.type === t ? "bg-primary text-primary-foreground border-primary" : "border-border/50 text-muted-foreground hover:border-primary/50"}`}>
-                    {SLOT_TYPE_META[t].icon}{t === "act" && isRecital ? "Performer" : SLOT_TYPE_META[t].label}
-                  </button>
-                ))}
+        <DialogContent className="sm:max-w-[420px] rounded-2xl">
+          <DialogHeader><DialogTitle className="font-display text-xl">{isRecital ? "Add Performer" : "Add Slot"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            {!isRecital && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Slot Type</label>
+                <Select value={newSlot.type} onValueChange={v => setNewSlot(s => ({ ...s, type: v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="act">🎵 Act / Band</SelectItem>
+                    <SelectItem value="announcement">📣 Announcement</SelectItem>
+                    <SelectItem value="break">☕ Break</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-
+            )}
             {newSlot.type === "act" && !isRecital && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1 col-span-2">
-                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Band / Act</label>
-                  <Select value={newSlot.bandId} onValueChange={v => setNewSlot(s => ({ ...s, bandId: v }))}>
-                    <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pick from roster or custom…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_custom">Custom name…</SelectItem>
-                      {rawBands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {(newSlot.bandId === "_custom" || !newSlot.bandId) && (
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Custom Label</label>
-                    <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder="Act name…" />
-                  </div>
-                )}
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Band</label>
+                <Select value={newSlot.bandId} onValueChange={v => setNewSlot(s => ({ ...s, bandId: v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a band or custom…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_custom">Custom name…</SelectItem>
+                    {rawBands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             )}
-            {newSlot.type === "act" && isRecital && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Student Name</label>
-                  <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder="e.g. Alex Johnson" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Group / Class</label>
-                  <Input className="rounded-xl" value={newSlot.groupName} onChange={e => setNewSlot(s => ({ ...s, groupName: e.target.value }))} placeholder="e.g. Beginner Guitar" />
-                </div>
+            {(newSlot.type !== "act" || newSlot.bandId === "_custom" || !newSlot.bandId || isRecital) && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium">{isRecital ? "Performer Name *" : "Label"}</label>
+                <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder={isRecital ? "Alex Johnson" : "Custom name…"} />
               </div>
             )}
-            {newSlot.type !== "act" && (
+            {isRecital && (
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Label</label>
-                <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder={newSlot.type === "announcement" ? "MC introduces headliner…" : "Intermission…"} />
+                <label className="text-xs font-medium">Group / Class</label>
+                <Input className="rounded-xl" value={newSlot.groupName} onChange={e => setNewSlot(s => ({ ...s, groupName: e.target.value }))} placeholder="e.g. Beginner Guitar" />
               </div>
             )}
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Set time</label>
-                <Input type="time" className="rounded-xl" value={newSlot.startTime} onChange={e => setNewSlot(s => ({ ...s, startTime: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Duration (min)</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><label className="text-xs font-medium">Duration (min)</label>
                 <Input type="number" min="0" className="rounded-xl" value={newSlot.duration} onChange={e => setNewSlot(s => ({ ...s, duration: e.target.value }))} placeholder="30" />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Buffer after (min)</label>
+              <div className="space-y-1"><label className="text-xs font-medium">Buffer after (min)</label>
                 <Input type="number" min="0" className="rounded-xl" value={newSlot.buffer} onChange={e => setNewSlot(s => ({ ...s, buffer: e.target.value }))} placeholder="15" />
               </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-border/40 px-4 py-3">
-              <div>
-                <p className="text-sm font-medium flex items-center gap-1.5"><Layers className="h-3.5 w-3.5 text-[#00b199]" /> Overlaps with previous act</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Runs at the same time — e.g. dance group while band sets up</p>
-              </div>
-              <Switch checked={newSlot.isOverlapping} onCheckedChange={v => setNewSlot(s => ({ ...s, isOverlapping: v }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setAddSlotOpen(false)}>Cancel</Button>
-            <Button className="rounded-xl" disabled={addingSlot} onClick={submitAddSlot}>
-              {addingSlot ? "Adding…" : "Add to Lineup"}
-            </Button>
+            <Button className="rounded-xl" disabled={addingSlot} onClick={submitAddSlot}>Add Slot</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Band Members Dialog */}
+      <BandMembersDialog
+        band={managingMembersBand}
+        open={!!managingMembersBand}
+        onClose={() => setManagingMembersBand(null)}
+      />
     </Sheet>
   );
 }

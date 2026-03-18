@@ -52,6 +52,8 @@ export function makeRawEmail({
   from,
   subject,
   body,
+  cc,
+  bcc,
   threadId,
   replyToMessageId,
 }: {
@@ -59,12 +61,16 @@ export function makeRawEmail({
   from: string;
   subject: string;
   body: string;
+  cc?: string[];
+  bcc?: string[];
   threadId?: string;
   replyToMessageId?: string;
 }): string {
   const headers = [
     `From: ${from}`,
     `To: ${to}`,
+    ...(cc && cc.length ? [`Cc: ${cc.join(", ")}`] : []),
+    ...(bcc && bcc.length ? [`Bcc: ${bcc.join(", ")}`] : []),
     `Subject: ${subject}`,
     `Content-Type: text/plain; charset="UTF-8"`,
     ...(replyToMessageId ? [`In-Reply-To: ${replyToMessageId}`, `References: ${replyToMessageId}`] : []),
@@ -80,6 +86,8 @@ export function makeHtmlEmail({
   from,
   subject,
   html,
+  cc,
+  bcc,
   threadId,
   replyToMessageId,
 }: {
@@ -87,12 +95,16 @@ export function makeHtmlEmail({
   from: string;
   subject: string;
   html: string;
+  cc?: string[];
+  bcc?: string[];
   threadId?: string;
   replyToMessageId?: string;
 }): string {
   const headers = [
     `From: ${from}`,
     `To: ${to}`,
+    ...(cc && cc.length ? [`Cc: ${cc.join(", ")}`] : []),
+    ...(bcc && bcc.length ? [`Bcc: ${bcc.join(", ")}`] : []),
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/html; charset="UTF-8"`,

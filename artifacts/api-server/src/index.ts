@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
 import { seedEventTypes } from "./seeds/event-types";
 import { startStaffReminderCron } from "./lib/staff-reminders";
+import { startBandReminderCron } from "./lib/band-reminders";
 
 const rawPort = process.env["PORT"];
 
@@ -64,5 +65,6 @@ initDb().then(() => {
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startStaffReminderCron();
+    startBandReminderCron();
   });
 });

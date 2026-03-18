@@ -1,13 +1,18 @@
 import { Router } from "express";
-import { db, bandsTable, eventLineupTable } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable } from "@workspace/db";
+import { eq, asc, and } from "drizzle-orm";
 
 const router = Router();
 
-// ── Bands CRUD ───────────────────────────────────────────────────────────────
+function requireAuth(req: any, res: any): boolean {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return false; }
+  return true;
+}
+
+// ── Bands CRUD ────────────────────────────────────────────────────────────────
 
 router.get("/bands", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const bands = await db.select().from(bandsTable).orderBy(asc(bandsTable.name));
     res.json(bands);
@@ -17,13 +22,47 @@ router.get("/bands", async (req, res) => {
   }
 });
 
-router.post("/bands", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+// Get a single band with all members and their contacts
+router.get("/bands/:id", async (req, res) => {
+  if (!requireAuth(req, res)) return;
   try {
-    const { name, genre, members, contactName, contactEmail, contactPhone, notes } = req.body;
+    const id = parseInt(req.params.id);
+    const [band] = await db.select().from(bandsTable).where(eq(bandsTable.id, id));
+    if (!band) { res.status(404).json({ error: "Band not found" }); return; }
+
+    const members = await db
+      .select()
+      .from(bandMembersTable)
+      .where(eq(bandMembersTable.bandId, id))
+      .orderBy(asc(bandMembersTable.id));
+
+    const contacts = members.length
+      ? await db
+          .select()
+          .from(bandContactsTable)
+          .where(eq(bandContactsTable.bandId, id))
+          .orderBy(asc(bandContactsTable.id))
+      : [];
+
+    const membersWithContacts = members.map(m => ({
+      ...m,
+      contacts: contacts.filter(c => c.memberId === m.id),
+    }));
+
+    res.json({ ...band, membersWithContacts });
+  } catch (err) {
+    console.error("getBand error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/bands", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const [band] = await db.insert(bandsTable)
-      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes })
+      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes, website: website || null, instagram: instagram || null })
       .returning();
     res.status(201).json(band);
   } catch (err) {
@@ -33,12 +72,23 @@ router.post("/bands", async (req, res) => {
 });
 
 router.put("/bands/:id", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { name, genre, members, contactName, contactEmail, contactPhone, notes } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram } = req.body;
     const [band] = await db.update(bandsTable)
-      .set({ name, genre, members: members ? Number(members) : null, contactName: contactName !== undefined ? (contactName || null) : undefined, contactEmail: contactEmail !== undefined ? (contactEmail || null) : undefined, contactPhone: contactPhone !== undefined ? (contactPhone || null) : undefined, notes, updatedAt: new Date() })
+      .set({
+        ...(name !== undefined ? { name } : {}),
+        ...(genre !== undefined ? { genre } : {}),
+        ...(members !== undefined ? { members: members ? Number(members) : null } : {}),
+        ...(contactName !== undefined ? { contactName: contactName || null } : {}),
+        ...(contactEmail !== undefined ? { contactEmail: contactEmail || null } : {}),
+        ...(contactPhone !== undefined ? { contactPhone: contactPhone || null } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+        ...(website !== undefined ? { website: website || null } : {}),
+        ...(instagram !== undefined ? { instagram: instagram || null } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(bandsTable.id, id))
       .returning();
     if (!band) { res.status(404).json({ error: "Not found" }); return; }
@@ -50,13 +100,142 @@ router.put("/bands/:id", async (req, res) => {
 });
 
 router.delete("/bands/:id", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
     await db.delete(bandsTable).where(eq(bandsTable.id, id));
     res.status(204).send();
   } catch (err) {
     console.error("deleteBand error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Band Members CRUD ─────────────────────────────────────────────────────────
+
+router.get("/bands/:bandId/members", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const bandId = parseInt(req.params.bandId);
+    const members = await db
+      .select()
+      .from(bandMembersTable)
+      .where(eq(bandMembersTable.bandId, bandId))
+      .orderBy(asc(bandMembersTable.id));
+
+    const contacts = members.length
+      ? await db.select().from(bandContactsTable).where(eq(bandContactsTable.bandId, bandId)).orderBy(asc(bandContactsTable.id))
+      : [];
+
+    res.json(members.map(m => ({ ...m, contacts: contacts.filter(c => c.memberId === m.id) })));
+  } catch (err) {
+    console.error("listMembers error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/bands/:bandId/members", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const bandId = parseInt(req.params.bandId);
+    const { name, role, email, phone, notes } = req.body;
+    if (!name) { res.status(400).json({ error: "name is required" }); return; }
+    const [member] = await db.insert(bandMembersTable)
+      .values({ bandId, name, role: role || null, email: email || null, phone: phone || null, notes: notes || null })
+      .returning();
+    res.status(201).json({ ...member, contacts: [] });
+  } catch (err) {
+    console.error("createMember error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/bands/members/:memberId", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const memberId = parseInt(req.params.memberId);
+    const { name, role, email, phone, notes } = req.body;
+    const [member] = await db.update(bandMembersTable)
+      .set({
+        ...(name !== undefined ? { name } : {}),
+        ...(role !== undefined ? { role: role || null } : {}),
+        ...(email !== undefined ? { email: email || null } : {}),
+        ...(phone !== undefined ? { phone: phone || null } : {}),
+        ...(notes !== undefined ? { notes: notes || null } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(bandMembersTable.id, memberId))
+      .returning();
+    if (!member) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(member);
+  } catch (err) {
+    console.error("updateMember error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/bands/members/:memberId", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    await db.delete(bandMembersTable).where(eq(bandMembersTable.id, parseInt(req.params.memberId)));
+    res.status(204).send();
+  } catch (err) {
+    console.error("deleteMember error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Band Contacts CRUD ────────────────────────────────────────────────────────
+
+router.post("/bands/members/:memberId/contacts", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const memberId = parseInt(req.params.memberId);
+    const [member] = await db.select().from(bandMembersTable).where(eq(bandMembersTable.id, memberId));
+    if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+    const { name, email, phone, relationship, isPrimary } = req.body;
+    if (!name) { res.status(400).json({ error: "name is required" }); return; }
+    const [contact] = await db.insert(bandContactsTable)
+      .values({ memberId, bandId: member.bandId, name, email: email || null, phone: phone || null, relationship: relationship || null, isPrimary: isPrimary ?? false })
+      .returning();
+    res.status(201).json(contact);
+  } catch (err) {
+    console.error("createContact error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/bands/contacts/:contactId", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const contactId = parseInt(req.params.contactId);
+    const { name, email, phone, relationship, isPrimary } = req.body;
+    const [contact] = await db.update(bandContactsTable)
+      .set({
+        ...(name !== undefined ? { name } : {}),
+        ...(email !== undefined ? { email: email || null } : {}),
+        ...(phone !== undefined ? { phone: phone || null } : {}),
+        ...(relationship !== undefined ? { relationship: relationship || null } : {}),
+        ...(isPrimary !== undefined ? { isPrimary } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(bandContactsTable.id, contactId))
+      .returning();
+    if (!contact) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(contact);
+  } catch (err) {
+    console.error("updateContact error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/bands/contacts/:contactId", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    await db.delete(bandContactsTable).where(eq(bandContactsTable.id, parseInt(req.params.contactId)));
+    res.status(204).send();
+  } catch (err) {
+    console.error("deleteContact error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -80,10 +259,14 @@ const LINEUP_SELECT = {
   confirmed: eventLineupTable.confirmed,
   type: eventLineupTable.type,
   notes: eventLineupTable.notes,
+  staffNote: eventLineupTable.staffNote,
+  inviteStatus: eventLineupTable.inviteStatus,
+  confirmationSent: eventLineupTable.confirmationSent,
+  reminderSent: eventLineupTable.reminderSent,
 };
 
 router.get("/events/:id/lineup", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
     const slots = await db
@@ -100,10 +283,10 @@ router.get("/events/:id/lineup", async (req, res) => {
 });
 
 router.post("/events/:id/lineup", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position, staffNote } = req.body;
     const [slot] = await db.insert(eventLineupTable)
       .values({
         eventId,
@@ -117,6 +300,7 @@ router.post("/events/:id/lineup", async (req, res) => {
         confirmed: confirmed ?? false,
         type: type ?? "act",
         notes,
+        staffNote: staffNote || null,
         position: position ?? 0,
       })
       .returning();
@@ -130,9 +314,9 @@ router.post("/events/:id/lineup", async (req, res) => {
   }
 });
 
-// IMPORTANT: reorder MUST come before /:slotId to avoid "reorder" being parsed as a slotId
+// IMPORTANT: reorder MUST come before /:slotId
 router.put("/events/:id/lineup/reorder", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const items: { id: number; position: number }[] = req.body;
     await Promise.all(items.map(({ id, position }) =>
@@ -146,22 +330,25 @@ router.put("/events/:id/lineup/reorder", async (req, res) => {
 });
 
 router.put("/events/:id/lineup/:slotId", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent } = req.body;
     const [slot] = await db.update(eventLineupTable)
       .set({
-        bandId: bandId !== undefined ? (bandId ? Number(bandId) : null) : undefined,
-        label,
-        groupName: groupName !== undefined ? (groupName || null) : undefined,
-        startTime: startTime !== undefined ? (startTime || null) : undefined,
-        durationMinutes: durationMinutes !== undefined ? (durationMinutes ? Number(durationMinutes) : null) : undefined,
-        bufferMinutes: bufferMinutes !== undefined ? Number(bufferMinutes) : undefined,
-        isOverlapping: isOverlapping !== undefined ? isOverlapping : undefined,
-        confirmed: confirmed !== undefined ? confirmed : undefined,
-        type,
-        notes,
+        ...(bandId !== undefined ? { bandId: bandId ? Number(bandId) : null } : {}),
+        ...(label !== undefined ? { label } : {}),
+        ...(groupName !== undefined ? { groupName: groupName || null } : {}),
+        ...(startTime !== undefined ? { startTime: startTime || null } : {}),
+        ...(durationMinutes !== undefined ? { durationMinutes: durationMinutes ? Number(durationMinutes) : null } : {}),
+        ...(bufferMinutes !== undefined ? { bufferMinutes: Number(bufferMinutes) } : {}),
+        ...(isOverlapping !== undefined ? { isOverlapping } : {}),
+        ...(confirmed !== undefined ? { confirmed } : {}),
+        ...(type !== undefined ? { type } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+        ...(staffNote !== undefined ? { staffNote: staffNote || null } : {}),
+        ...(inviteStatus !== undefined ? { inviteStatus } : {}),
+        ...(confirmationSent !== undefined ? { confirmationSent } : {}),
         updatedAt: new Date(),
       })
       .where(eq(eventLineupTable.id, slotId))
@@ -178,7 +365,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
 });
 
 router.delete("/events/:id/lineup/:slotId", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!requireAuth(req, res)) return;
   try {
     await db.delete(eventLineupTable).where(eq(eventLineupTable.id, parseInt(req.params.slotId)));
     res.status(204).send();
