@@ -276,14 +276,14 @@ function MemberFormDialog({
         <DialogHeader>
           <DialogTitle>{member ? "Edit Member" : "Add Band Member"}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Enter the student's info, then add their parent or guardian contacts.
+            Enter the member's info, then add their contacts.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Student info */}
+          {/* Member info */}
           <div className="rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Student</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Member</p>
             <div>
               <Label className="text-xs mb-1.5 block">Full Name *</Label>
               <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
@@ -328,13 +328,13 @@ function MemberFormDialog({
               />
               <div>
                 <p className="text-xs font-semibold">Band Leader</p>
-                <p className="text-[11px] text-muted-foreground">This student is also a staff band leader at TMS</p>
+                <p className="text-[11px] text-muted-foreground">This member is a staff band leader at TMS</p>
               </div>
             </div>
 
             <div>
               <Label className="text-xs mb-1.5 block">Notes</Label>
-              <Textarea value={memberForm.notes} onChange={mf("notes")} rows={2} placeholder="Any notes about this student…" />
+              <Textarea value={memberForm.notes} onChange={mf("notes")} rows={2} placeholder="Any notes about this member…" />
             </div>
           </div>
 
