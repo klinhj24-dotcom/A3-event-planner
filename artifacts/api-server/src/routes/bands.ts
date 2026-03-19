@@ -172,7 +172,7 @@ router.post("/bands/:bandId/members", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const bandId = parseInt(req.params.bandId);
-    const { name, role, instruments, isBandLeader, email, phone, notes } = req.body;
+    const { name, role, instruments, isBandLeader, leaderEmployeeId, email, phone, notes } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const [member] = await db.insert(bandMembersTable)
       .values({
@@ -180,6 +180,7 @@ router.post("/bands/:bandId/members", async (req, res) => {
         role: role || null,
         instruments: Array.isArray(instruments) ? instruments : null,
         isBandLeader: isBandLeader ?? false,
+        leaderEmployeeId: leaderEmployeeId ? Number(leaderEmployeeId) : null,
         email: email || null, phone: phone || null, notes: notes || null,
       })
       .returning();
@@ -194,13 +195,14 @@ router.put("/bands/members/:memberId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const memberId = parseInt(req.params.memberId);
-    const { name, role, instruments, isBandLeader, email, phone, notes } = req.body;
+    const { name, role, instruments, isBandLeader, leaderEmployeeId, email, phone, notes } = req.body;
     const [member] = await db.update(bandMembersTable)
       .set({
         ...(name !== undefined ? { name } : {}),
         ...(role !== undefined ? { role: role || null } : {}),
         ...(instruments !== undefined ? { instruments: Array.isArray(instruments) ? instruments : null } : {}),
         ...(isBandLeader !== undefined ? { isBandLeader } : {}),
+        ...(leaderEmployeeId !== undefined ? { leaderEmployeeId: leaderEmployeeId ? Number(leaderEmployeeId) : null } : {}),
         ...(email !== undefined ? { email: email || null } : {}),
         ...(phone !== undefined ? { phone: phone || null } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),

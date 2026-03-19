@@ -30,6 +30,7 @@ export const bandMembersTable = pgTable("band_members", {
   role: text("role"),              // legacy free-text field, kept for backward compat
   instruments: text("instruments").array(),  // multi-select e.g. ["Guitar", "Vocals"]
   isBandLeader: boolean("is_band_leader").notNull().default(false),
+  leaderEmployeeId: integer("leader_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   email: text("email"),           // member's own email (optional)
   phone: text("phone"),
   notes: text("notes"),
