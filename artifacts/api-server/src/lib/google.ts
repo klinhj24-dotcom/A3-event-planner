@@ -46,6 +46,14 @@ export function createAuthedClient(accessToken: string, refreshToken: string, ex
   return oauth2Client;
 }
 
+// RFC 2047 encode a subject that contains non-ASCII characters
+function encodeSubject(subject: string): string {
+  if (/[^\x00-\x7F]/.test(subject)) {
+    return `=?UTF-8?B?${Buffer.from(subject, "utf-8").toString("base64")}?=`;
+  }
+  return subject;
+}
+
 // Encode email as base64url for Gmail API
 export function makeRawEmail({
   to,
@@ -71,7 +79,7 @@ export function makeRawEmail({
     `To: ${to}`,
     ...(cc && cc.length ? [`Cc: ${cc.join(", ")}`] : []),
     ...(bcc && bcc.length ? [`Bcc: ${bcc.join(", ")}`] : []),
-    `Subject: ${subject}`,
+    `Subject: ${encodeSubject(subject)}`,
     `Content-Type: text/plain; charset="UTF-8"`,
     ...(replyToMessageId ? [`In-Reply-To: ${replyToMessageId}`, `References: ${replyToMessageId}`] : []),
   ].join("\r\n");
@@ -105,7 +113,7 @@ export function makeHtmlEmail({
     `To: ${to}`,
     ...(cc && cc.length ? [`Cc: ${cc.join(", ")}`] : []),
     ...(bcc && bcc.length ? [`Bcc: ${bcc.join(", ")}`] : []),
-    `Subject: ${subject}`,
+    `Subject: ${encodeSubject(subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/html; charset="UTF-8"`,
     ...(replyToMessageId ? [`In-Reply-To: ${replyToMessageId}`, `References: ${replyToMessageId}`] : []),
