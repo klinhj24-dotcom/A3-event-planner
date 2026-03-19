@@ -130,6 +130,19 @@ export default function Employees() {
     onError: () => toast({ title: "Failed to update password", variant: "destructive" }),
   });
 
+  // Delete employee record
+  const { mutate: deleteEmployee } = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({ title: "Team member removed" });
+    },
+    onError: () => toast({ title: "Failed to remove team member", variant: "destructive" }),
+  });
+
   // Delete portal user
   const { mutate: deletePortalUser } = useMutation({
     mutationFn: async (userId: string) => {
@@ -365,9 +378,24 @@ export default function Employees() {
                         {employee.isActive ? "Active" : "Inactive"}
                       </Badge>
                       {isAdmin && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => openEdit(employee)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => openEdit(employee)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                            title="Remove from roster"
+                            onClick={() => {
+                              if (confirm(`Remove ${employee.name} from the roster? This cannot be undone.`)) {
+                                deleteEmployee(employee.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>

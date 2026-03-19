@@ -1,4 +1,3 @@
-import { execSync } from "child_process";
 import app from "./app";
 import { db, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
@@ -24,17 +23,6 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function initDb() {
-  try {
-    console.log("Running DB schema push...");
-    execSync("pnpm --filter @workspace/db run push-force", {
-      stdio: "inherit",
-      timeout: 60_000,
-    });
-    console.log("DB schema push complete.");
-  } catch (err) {
-    console.error("DB schema push failed (continuing anyway):", err);
-  }
-
   try {
     const [existing] = await db
       .select({ count: sql<number>`count(*)::int` })
