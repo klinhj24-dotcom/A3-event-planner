@@ -1,6 +1,5 @@
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { eventsTable } from "./events";
-import { employeesTable } from "./employees";
 
 export const bandsTable = pgTable("bands", {
   id: serial("id").primaryKey(),
@@ -14,7 +13,7 @@ export const bandsTable = pgTable("bands", {
   notes: text("notes"),
   website: text("website"),
   instagram: text("instagram"),
-  leaderEmployeeId: integer("leader_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
+  leaderName: text("leader_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -30,7 +29,6 @@ export const bandMembersTable = pgTable("band_members", {
   role: text("role"),              // legacy free-text field, kept for backward compat
   instruments: text("instruments").array(),  // multi-select e.g. ["Guitar", "Vocals"]
   isBandLeader: boolean("is_band_leader").notNull().default(false),
-  leaderEmployeeId: integer("leader_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   email: text("email"),           // member's own email (optional)
   phone: text("phone"),
   notes: text("notes"),

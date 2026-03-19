@@ -34,7 +34,6 @@ interface BandContact {
 interface BandMember {
   id: number; bandId: number; name: string; role: string | null;
   instruments: string[] | null; isBandLeader: boolean;
-  leaderEmployeeId: number | null;
   email: string | null; phone: string | null; notes: string | null;
   contacts: BandContact[];
 }
@@ -49,7 +48,7 @@ interface Band {
   id: number; name: string; genre: string | null; members: number | null;
   contactName: string | null; contactEmail: string | null; contactPhone: string | null;
   notes: string | null; website: string | null; instagram: string | null;
-  leaderEmployeeId?: number | null; leaderName?: string | null;
+  leaderName?: string | null;
   // From list endpoint (summary counts)
   contactEmailCount?: number; contactTotalCount?: number; memberCount?: number;
   // From detail endpoint (full data)
@@ -112,12 +111,7 @@ function BandFormDialog({
   open, band, onClose, onSaved,
 }: { open: boolean; band: Band | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
-    name: "", genre: "", website: "", instagram: "", notes: "", leaderEmployeeId: "",
-  });
-
-  const { data: employees = [] } = useQuery<EmployeeOption[]>({
-    queryKey: ["/api/employees"],
-    queryFn: () => fetch("/api/employees", { credentials: "include" }).then(r => r.json()),
+    name: "", genre: "", website: "", instagram: "", notes: "", leaderName: "",
   });
 
   React.useEffect(() => {
@@ -128,7 +122,7 @@ function BandFormDialog({
         website: band?.website ?? "",
         instagram: band?.instagram ?? "",
         notes: band?.notes ?? "",
-        leaderEmployeeId: band?.leaderEmployeeId ? String(band.leaderEmployeeId) : "",
+        leaderName: band?.leaderName ?? "",
       });
     }
   }, [open, band]);
@@ -137,10 +131,7 @@ function BandFormDialog({
     mutationFn: (data: typeof form) =>
       api(band ? `/api/bands/${band.id}` : "/api/bands", {
         method: band ? "PUT" : "POST",
-        body: JSON.stringify({
-          ...data,
-          leaderEmployeeId: data.leaderEmployeeId ? Number(data.leaderEmployeeId) : null,
-        }),
+        body: JSON.stringify(data),
       }),
     onSuccess: () => { onSaved(); onClose(); toast({ title: band ? "Band updated" : "Band added" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -165,22 +156,9 @@ function BandFormDialog({
             <Input value={form.genre} onChange={f("genre")} placeholder="Indie, Jazz, Pop…" />
           </div>
           <div>
-            <Label className="text-xs mb-1.5 block">Band Leader (TMS Staff)</Label>
-            <Select
-              value={form.leaderEmployeeId || "_none"}
-              onValueChange={v => setForm(p => ({ ...p, leaderEmployeeId: v === "_none" ? "" : v }))}
-            >
-              <SelectTrigger className="h-9 rounded-lg text-sm">
-                <SelectValue placeholder="No leader assigned…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">No leader assigned</SelectItem>
-                {employees.map(e => (
-                  <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground mt-1">The TMS staff member who leads this band at events</p>
+            <Label className="text-xs mb-1.5 block">Band Leader</Label>
+            <Input value={form.leaderName} onChange={f("leaderName")} placeholder="e.g. Hanna Lang" />
+            <p className="text-[11px] text-muted-foreground mt-1">The person who leads this band at events</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -213,16 +191,11 @@ function MemberFormDialog({
   open, bandId, member, onClose, onSaved,
 }: { open: boolean; bandId: number; member: BandMember | null; onClose: () => void; onSaved: () => void }) {
   const emptyContact = { name: "", relationship: "", email: "", phone: "" };
-  const [memberForm, setMemberForm] = useState({ name: "", instruments: [] as string[], isBandLeader: false, leaderEmployeeId: "", notes: "" });
+  const [memberForm, setMemberForm] = useState({ name: "", instruments: [] as string[], isBandLeader: false, notes: "" });
   const [primary, setPrimary] = useState(emptyContact);
   const [secondary, setSecondary] = useState(emptyContact);
   const [showSecondary, setShowSecondary] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const { data: employees = [] } = useQuery<EmployeeOption[]>({
-    queryKey: ["/api/employees"],
-    queryFn: () => fetch("/api/employees", { credentials: "include" }).then(r => r.json()),
-  });
 
   // Existing contact IDs when editing
   const existingPrimaryId = member?.contacts.find(c => c.isPrimary)?.id;
@@ -234,7 +207,6 @@ function MemberFormDialog({
       name: member?.name ?? "",
       instruments: member?.instruments ?? [],
       isBandLeader: member?.isBandLeader ?? false,
-      leaderEmployeeId: member?.leaderEmployeeId ? String(member.leaderEmployeeId) : "",
       notes: member?.notes ?? "",
     });
     const pc = member?.contacts.find(c => c.isPrimary);
@@ -264,13 +236,10 @@ function MemberFormDialog({
     if (!memberForm.name.trim()) return;
     setSaving(true);
     try {
-      // 1. Save member (with instruments array + isBandLeader + leaderEmployeeId)
+      // 1. Save member (with instruments array + isBandLeader)
       const savedMember: BandMember = await api(
         member ? `/api/bands/members/${member.id}` : `/api/bands/${bandId}/members`,
-        { method: member ? "PUT" : "POST", body: JSON.stringify({
-          ...memberForm,
-          leaderEmployeeId: memberForm.leaderEmployeeId ? Number(memberForm.leaderEmployeeId) : null,
-        }) }
+        { method: member ? "PUT" : "POST", body: JSON.stringify(memberForm) }
       );
       const memberId = savedMember.id;
 
@@ -328,46 +297,18 @@ function MemberFormDialog({
               <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
             </div>
 
-            {/* Band Leader toggle + employee selector */}
-            <div className="space-y-2">
-              <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors cursor-pointer ${memberForm.isBandLeader ? "bg-primary/10 border-primary/30" : "bg-transparent border-border/30 hover:border-border/50"}`}
-                onClick={() => setMemberForm(p => ({ ...p, isBandLeader: !p.isBandLeader, leaderEmployeeId: p.isBandLeader ? "" : p.leaderEmployeeId }))}>
-                <Switch
-                  checked={memberForm.isBandLeader}
-                  onCheckedChange={v => setMemberForm(p => ({ ...p, isBandLeader: v, leaderEmployeeId: v ? p.leaderEmployeeId : "" }))}
-                  onClick={e => e.stopPropagation()}
-                />
-                <div>
-                  <p className="text-xs font-semibold">Band Leader</p>
-                  <p className="text-[11px] text-muted-foreground">This member is a staff band leader at TMS</p>
-                </div>
+            {/* Band Leader toggle */}
+            <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors cursor-pointer ${memberForm.isBandLeader ? "bg-primary/10 border-primary/30" : "bg-transparent border-border/30 hover:border-border/50"}`}
+              onClick={() => setMemberForm(p => ({ ...p, isBandLeader: !p.isBandLeader }))}>
+              <Switch
+                checked={memberForm.isBandLeader}
+                onCheckedChange={v => setMemberForm(p => ({ ...p, isBandLeader: v }))}
+                onClick={e => e.stopPropagation()}
+              />
+              <div>
+                <p className="text-xs font-semibold">Band Leader</p>
+                <p className="text-[11px] text-muted-foreground">This member leads the band</p>
               </div>
-              {memberForm.isBandLeader && (
-                <div className="pl-1">
-                  <Label className="text-xs mb-1.5 block text-muted-foreground">TMS Staff Member</Label>
-                  <Select
-                    value={memberForm.leaderEmployeeId || "_none"}
-                    onValueChange={v => {
-                      const emp = employees.find(e => String(e.id) === v);
-                      setMemberForm(p => ({
-                        ...p,
-                        leaderEmployeeId: v === "_none" ? "" : v,
-                        name: emp ? emp.name : p.name,
-                      }));
-                    }}
-                  >
-                    <SelectTrigger className="h-9 rounded-lg text-sm">
-                      <SelectValue placeholder="Select TMS staff member…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">Not linked to a staff member</SelectItem>
-                      {employees.map(e => (
-                        <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
             </div>
 
             {/* Instrument multi-select */}

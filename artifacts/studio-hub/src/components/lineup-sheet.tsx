@@ -28,7 +28,7 @@ interface Band {
   id: number; name: string; genre?: string | null; members?: number | null;
   contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null;
   notes?: string | null; website?: string | null; instagram?: string | null;
-  leaderEmployeeId?: number | null;
+  leaderName?: string | null;
 }
 
 interface BandMember {
@@ -58,7 +58,7 @@ interface LineupSlot {
   confirmationSent: boolean; reminderSent: boolean;
   // Band leader attendance
   leaderAttending?: boolean; leaderStaffSlotId?: number | null;
-  bandLeaderEmployeeId?: number | null; bandLeaderName?: string | null;
+  bandLeaderName?: string | null;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -386,7 +386,7 @@ function SlotRow({
           </Button>
 
           {/* ── Band Leader Attendance (act slots where band has a leader) ─── */}
-          {slot.type === "act" && slot.bandId && slot.bandLeaderEmployeeId && (
+          {slot.type === "act" && slot.bandId && slot.bandLeaderName && (
             <div className="pt-2 border-t border-border/30">
               <div
                 className={`flex items-center justify-between rounded-xl px-3 py-2.5 border transition-colors cursor-pointer ${slot.leaderAttending ? "bg-primary/10 border-primary/30" : "bg-transparent border-border/30 hover:border-border/50"}`}
