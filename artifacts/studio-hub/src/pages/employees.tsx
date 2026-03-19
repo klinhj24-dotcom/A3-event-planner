@@ -157,6 +157,23 @@ export default function Employees() {
     onError: () => toast({ title: "Failed to delete portal account", variant: "destructive" }),
   });
 
+  const { mutate: linkPortalAccount } = useMutation({
+    mutationFn: async ({ employeeId, userId }: { employeeId: number; userId: string }) => {
+      const res = await fetch(`/api/employees/${employeeId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      refetchPortalUsers();
+      toast({ title: "Portal account linked" });
+    },
+    onError: () => toast({ title: "Failed to link account", variant: "destructive" }),
+  });
+
   const { mutate: updateEmployee, isPending: isUpdating } = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch(`/api/employees/${data.id}`, {
@@ -499,25 +516,39 @@ export default function Employees() {
                               </Button>
                             </div>
                           </>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs rounded-lg border-dashed gap-1.5 w-full"
-                            onClick={() => {
-                              setCreatePortalFor(employee);
-                              portalForm.reset({
-                                firstName: employee.name.split(" ")[0] || "",
-                                lastName: employee.name.split(" ").slice(1).join(" ") || "",
-                                email: employee.email || "",
-                                password: "",
-                                role: "employee",
-                              });
-                            }}
-                          >
-                            <KeyRound className="h-3 w-3" /> Create Portal Login
-                          </Button>
-                        )}
+                        ) : (() => {
+                          const matchingPortalUser = employee.email
+                            ? portalUsers?.find((p: any) => p.email?.toLowerCase() === employee.email?.toLowerCase())
+                            : null;
+                          return matchingPortalUser ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs rounded-lg border-dashed gap-1.5 w-full"
+                              onClick={() => linkPortalAccount({ employeeId: employee.id, userId: matchingPortalUser.id })}
+                            >
+                              <KeyRound className="h-3 w-3" /> Link Existing Account
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs rounded-lg border-dashed gap-1.5 w-full"
+                              onClick={() => {
+                                setCreatePortalFor(employee);
+                                portalForm.reset({
+                                  firstName: employee.name.split(" ")[0] || "",
+                                  lastName: employee.name.split(" ").slice(1).join(" ") || "",
+                                  email: employee.email || "",
+                                  password: "",
+                                  role: "employee",
+                                });
+                              }}
+                            >
+                              <KeyRound className="h-3 w-3" /> Create Portal Login
+                            </Button>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
