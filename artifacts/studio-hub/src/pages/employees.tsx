@@ -41,6 +41,7 @@ export default function Employees() {
   const { data: employees, isLoading } = useListEmployees();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [roleTab, setRoleTab] = useState<"all" | "staff" | "teacher" | "intern">("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [createPortalFor, setCreatePortalFor] = useState<any | null>(null);
@@ -198,10 +199,11 @@ export default function Employees() {
     });
   }
 
-  const filteredEmployees = employees?.filter(e =>
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.role.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filteredEmployees = employees?.filter(e => {
+    const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase());
+    const matchesTab = roleTab === "all" || e.role === roleTab;
+    return matchesSearch && matchesTab;
+  });
 
   function getPortalUser(userId: string | null | undefined) {
     if (!userId || !portalUsers) return null;
@@ -219,7 +221,7 @@ export default function Employees() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="font-display text-3xl font-bold tracking-tight">Team Roster</h1>
-            <p className="text-muted-foreground mt-1">Manage staff and intern records.</p>
+            <p className="text-muted-foreground mt-1">Manage staff, teacher, and intern records.</p>
           </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
@@ -294,9 +296,34 @@ export default function Employees() {
           </Dialog>
         </div>
 
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search team..." className="pl-9 rounded-xl" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search team..." className="pl-9 rounded-xl" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-muted/30 p-1">
+            {(["all", "staff", "teacher", "intern"] as const).map(tab => {
+              const counts = {
+                all: employees?.length ?? 0,
+                staff: employees?.filter(e => e.role === "staff").length ?? 0,
+                teacher: employees?.filter(e => e.role === "teacher").length ?? 0,
+                intern: employees?.filter(e => e.role === "intern").length ?? 0,
+              };
+              const labels = { all: "All", staff: "Staff", teacher: "Teachers", intern: "Interns" };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setRoleTab(tab)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${roleTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {labels[tab]}
+                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${roleTab === tab ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                    {counts[tab]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
