@@ -30,7 +30,7 @@ async function sendSignupConfirmation(signup: { name: string; email?: string | n
     const html = buildHtmlEmail({ recipientName: firstName, body });
     const auth = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
     const gmail = google.gmail({ version: "v1", auth });
-    const raw = makeHtmlEmail({ to: signup.email, from: gmailUser.email || "", subject, html });
+    const raw = makeHtmlEmail({ to: signup.email, from: gmailUser.email || "", subject, html, cc: ["info@themusicspace.com"] });
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
   } catch (err) {
     console.error("Signup confirmation email failed (non-fatal):", err);
@@ -134,7 +134,7 @@ router.post("/events/:id/signups/remind", async (req, res) => {
         if (signup.role) body += `<strong>Your role:</strong> ${signup.role}\n`;
         body += `\nIf anything has changed or you have any questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;
         const html = buildHtmlEmail({ recipientName: firstName, body });
-        const raw = makeHtmlEmail({ to: signup.email!, from: gmailUser.email || "", subject, html });
+        const raw = makeHtmlEmail({ to: signup.email!, from: gmailUser.email || "", subject, html, cc: ["info@themusicspace.com"] });
         await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
         sent++;
       } catch (err) {
