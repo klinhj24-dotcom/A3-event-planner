@@ -48,7 +48,8 @@ interface Band {
   id: number; name: string; genre: string | null; members: number | null;
   contactName: string | null; contactEmail: string | null; contactPhone: string | null;
   notes: string | null; website: string | null; instagram: string | null;
-  leaderName?: string | null;
+  leaderEmployeeId?: number | null;
+  leaderName?: string | null; // resolved from employee join
   // From list endpoint (summary counts)
   contactEmailCount?: number; contactTotalCount?: number; memberCount?: number;
   // From detail endpoint (full data)
@@ -111,8 +112,15 @@ function BandFormDialog({
   open, band, onClose, onSaved,
 }: { open: boolean; band: Band | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
-    name: "", genre: "", website: "", instagram: "", notes: "", leaderName: "",
+    name: "", genre: "", website: "", instagram: "", notes: "", leaderEmployeeId: "",
   });
+
+  const { data: allEmployees = [] } = useQuery<any[]>({
+    queryKey: ["/api/employees"],
+    queryFn: () => fetch("/api/employees", { credentials: "include" }).then(r => r.json()),
+    enabled: open,
+  });
+  const bandLeaderEmployees = allEmployees.filter((e: any) => e.isBandLeader && e.isActive);
 
   React.useEffect(() => {
     if (open) {
@@ -122,7 +130,7 @@ function BandFormDialog({
         website: band?.website ?? "",
         instagram: band?.instagram ?? "",
         notes: band?.notes ?? "",
-        leaderName: band?.leaderName ?? "",
+        leaderEmployeeId: band?.leaderEmployeeId ? String(band.leaderEmployeeId) : "",
       });
     }
   }, [open, band]);
@@ -157,8 +165,26 @@ function BandFormDialog({
           </div>
           <div>
             <Label className="text-xs mb-1.5 block">Band Leader</Label>
-            <Input value={form.leaderName} onChange={f("leaderName")} placeholder="e.g. Hanna Lang" />
-            <p className="text-[11px] text-muted-foreground mt-1">The person who leads this band at events</p>
+            {bandLeaderEmployees.length === 0 ? (
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                No band leaders on staff yet. Mark a staff member as Band Leader in Team Roster.
+              </p>
+            ) : (
+              <Select
+                value={form.leaderEmployeeId || "_none"}
+                onValueChange={v => setForm(prev => ({ ...prev, leaderEmployeeId: v === "_none" ? "" : v }))}
+              >
+                <SelectTrigger className="rounded-lg h-9 text-sm">
+                  <SelectValue placeholder="Select band leader…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No band leader</SelectItem>
+                  {bandLeaderEmployees.map((e: any) => (
+                    <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

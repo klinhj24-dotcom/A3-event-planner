@@ -14,6 +14,7 @@ export const employeesTable = pgTable("employees", {
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
   userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   notes: text("notes"),
+  isBandLeader: boolean("is_band_leader").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

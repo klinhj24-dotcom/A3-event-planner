@@ -2,6 +2,7 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable } from "@workspace/db";
 import { eq, asc, and, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
 const router = Router();
@@ -13,6 +14,8 @@ function requireAuth(req: any, res: any): boolean {
 
 // ── Bands CRUD ────────────────────────────────────────────────────────────────
 
+const leaderEmp = alias(employeesTable, "leader_emp");
+
 router.get("/bands", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
@@ -20,8 +23,9 @@ router.get("/bands", async (req, res) => {
     if (!bands.length) { res.json([]); return; }
 
     const bandIds = bands.map(b => b.id);
+    const leaderIds = bands.map(b => b.leaderEmployeeId).filter(Boolean) as number[];
 
-    const [memberCounts, contactCounts] = await Promise.all([
+    const [memberCounts, contactCounts, leaders] = await Promise.all([
       db.select({
         bandId: bandMembersTable.bandId,
         count: sql<number>`COUNT(*)::int`.as("count"),
@@ -31,13 +35,18 @@ router.get("/bands", async (req, res) => {
         total: sql<number>`COUNT(*)::int`.as("total"),
         withEmail: sql<number>`COUNT(*) FILTER (WHERE email IS NOT NULL)::int`.as("with_email"),
       }).from(bandContactsTable).where(inArray(bandContactsTable.bandId, bandIds)).groupBy(bandContactsTable.bandId),
+      leaderIds.length
+        ? db.select({ id: employeesTable.id, name: employeesTable.name }).from(employeesTable).where(inArray(employeesTable.id, leaderIds))
+        : Promise.resolve([]),
     ]);
 
     const memberMap = Object.fromEntries(memberCounts.map(m => [m.bandId, m.count]));
     const contactMap = Object.fromEntries(contactCounts.map(c => [c.bandId, c]));
+    const leaderMap = Object.fromEntries(leaders.map(l => [l.id, l.name]));
 
     res.json(bands.map(b => ({
       ...b,
+      leaderName: b.leaderEmployeeId ? (leaderMap[b.leaderEmployeeId] ?? null) : null,
       memberCount: memberMap[b.id] ?? 0,
       contactEmailCount: contactMap[b.id]?.withEmail ?? 0,
       contactTotalCount: contactMap[b.id]?.total ?? 0,
@@ -75,7 +84,13 @@ router.get("/bands/:id", async (req, res) => {
       contacts: contacts.filter(c => c.memberId === m.id),
     }));
 
-    res.json({ ...band, membersWithContacts });
+    let leaderName: string | null = null;
+    if (band.leaderEmployeeId) {
+      const [leaderRow] = await db.select({ name: employeesTable.name }).from(employeesTable).where(eq(employeesTable.id, band.leaderEmployeeId));
+      leaderName = leaderRow?.name ?? null;
+    }
+
+    res.json({ ...band, leaderName, membersWithContacts });
   } catch (err) {
     console.error("getBand error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -85,10 +100,10 @@ router.get("/bands/:id", async (req, res) => {
 router.post("/bands", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
-    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram, leaderName } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram, leaderEmployeeId } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const [band] = await db.insert(bandsTable)
-      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes, website: website || null, instagram: instagram || null, leaderName: leaderName || null })
+      .values({ name, genre, members: members ? Number(members) : null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes, website: website || null, instagram: instagram || null, leaderEmployeeId: leaderEmployeeId ? Number(leaderEmployeeId) : null })
       .returning();
     res.status(201).json(band);
   } catch (err) {
@@ -101,7 +116,7 @@ router.put("/bands/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram, leaderName } = req.body;
+    const { name, genre, members, contactName, contactEmail, contactPhone, notes, website, instagram, leaderEmployeeId } = req.body;
     const [band] = await db.update(bandsTable)
       .set({
         ...(name !== undefined ? { name } : {}),
@@ -113,7 +128,7 @@ router.put("/bands/:id", async (req, res) => {
         ...(notes !== undefined ? { notes } : {}),
         ...(website !== undefined ? { website: website || null } : {}),
         ...(instagram !== undefined ? { instagram: instagram || null } : {}),
-        ...(leaderName !== undefined ? { leaderName: leaderName || null } : {}),
+        ...(leaderEmployeeId !== undefined ? { leaderEmployeeId: leaderEmployeeId ? Number(leaderEmployeeId) : null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(bandsTable.id, id))
@@ -301,7 +316,8 @@ const LINEUP_SELECT = {
   // Band leader
   leaderAttending: eventLineupTable.leaderAttending,
   leaderStaffSlotId: eventLineupTable.leaderStaffSlotId,
-  bandLeaderName: bandsTable.leaderName,
+  bandLeaderEmployeeId: bandsTable.leaderEmployeeId,
+  bandLeaderName: leaderEmp.name,
 };
 
 router.get("/events/:id/lineup", async (req, res) => {
@@ -312,6 +328,7 @@ router.get("/events/:id/lineup", async (req, res) => {
       .select(LINEUP_SELECT)
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
       .where(eq(eventLineupTable.eventId, eventId))
       .orderBy(asc(eventLineupTable.position));
     res.json(slots);
@@ -345,6 +362,7 @@ router.post("/events/:id/lineup", async (req, res) => {
       .returning();
     const [full] = await db.select(LINEUP_SELECT).from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
       .where(eq(eventLineupTable.id, slot.id));
     res.status(201).json(full);
   } catch (err) {
@@ -413,6 +431,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
     if (!slot) { res.status(404).json({ error: "Not found" }); return; }
     const [full] = await db.select(LINEUP_SELECT).from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
       .where(eq(eventLineupTable.id, slot.id));
     res.json(full);
   } catch (err) {

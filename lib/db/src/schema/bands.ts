@@ -1,5 +1,6 @@
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { eventsTable } from "./events";
+import { employeesTable } from "./employees";
 
 export const bandsTable = pgTable("bands", {
   id: serial("id").primaryKey(),
@@ -13,7 +14,7 @@ export const bandsTable = pgTable("bands", {
   notes: text("notes"),
   website: text("website"),
   instagram: text("instagram"),
-  leaderName: text("leader_name"),
+  leaderEmployeeId: integer("leader_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -24,14 +24,14 @@ router.post("/employees", async (req, res) => {
     return;
   }
   try {
-    const { name, email, phone, role, isActive, notes, hourlyRate } = req.body;
+    const { name, email, phone, role, isActive, notes, hourlyRate, isBandLeader } = req.body;
     if (!name || !role) {
       res.status(400).json({ error: "name and role are required" });
       return;
     }
     const [employee] = await db
       .insert(employeesTable)
-      .values({ name, email, phone, role, isActive: isActive ?? true, notes, hourlyRate: hourlyRate ? String(hourlyRate) : null })
+      .values({ name, email, phone, role, isActive: isActive ?? true, notes, hourlyRate: hourlyRate ? String(hourlyRate) : null, isBandLeader: isBandLeader ?? false })
       .returning();
     res.status(201).json(employee);
   } catch (err) {
@@ -66,10 +66,10 @@ router.put("/employees/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { name, email, phone, role, isActive, notes, hourlyRate, userId } = req.body;
+    const { name, email, phone, role, isActive, notes, hourlyRate, userId, isBandLeader } = req.body;
     const [employee] = await db
       .update(employeesTable)
-      .set({ name, email, phone, role, isActive, notes, hourlyRate: hourlyRate !== undefined ? (hourlyRate ? String(hourlyRate) : null) : undefined, userId: userId !== undefined ? (userId || null) : undefined, updatedAt: new Date() })
+      .set({ name, email, phone, role, isActive, notes, hourlyRate: hourlyRate !== undefined ? (hourlyRate ? String(hourlyRate) : null) : undefined, userId: userId !== undefined ? (userId || null) : undefined, ...(isBandLeader !== undefined ? { isBandLeader } : {}), updatedAt: new Date() })
       .where(eq(employeesTable.id, id))
       .returning();
     if (!employee) {

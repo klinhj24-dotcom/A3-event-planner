@@ -26,6 +26,7 @@ const employeeSchema = z.object({
   role: z.string().min(1, "Role is required"),
   hourlyRate: z.string().optional(),
   isActive: z.boolean().optional(),
+  isBandLeader: z.boolean().optional(),
 });
 
 const portalUserSchema = z.object({
@@ -176,12 +177,12 @@ export default function Employees() {
 
   const createForm = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true },
+    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true, isBandLeader: false },
   });
 
   const editForm = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true },
+    defaultValues: { name: "", role: "intern", email: "", phone: "", hourlyRate: "", isActive: true, isBandLeader: false },
   });
 
   function openEdit(employee: any) {
@@ -193,6 +194,7 @@ export default function Employees() {
       phone: employee.phone || "",
       hourlyRate: employee.hourlyRate ? String(employee.hourlyRate) : "",
       isActive: employee.isActive,
+      isBandLeader: employee.isBandLeader ?? false,
     });
   }
 
@@ -230,7 +232,7 @@ export default function Employees() {
                 <DialogTitle className="font-display text-2xl">Add Team Member</DialogTitle>
               </DialogHeader>
               <Form {...createForm}>
-                <form onSubmit={createForm.handleSubmit((data) => createEmployee({ data: { ...data, isActive: true } }))} className="space-y-4 mt-2">
+                <form onSubmit={createForm.handleSubmit((data) => createEmployee({ data: { ...data, isActive: true, isBandLeader: data.isBandLeader ?? false } }))} className="space-y-4 mt-2">
                   <FormField control={createForm.control} name="name" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Full Name *</FormLabel>
@@ -267,6 +269,17 @@ export default function Employees() {
                     <FormItem>
                       <FormLabel>Hourly Rate ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
                       <FormControl><Input placeholder="e.g. 18.00" type="number" step="0.01" min="0" className="rounded-xl" {...field} /></FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={createForm.control} name="isBandLeader" render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3">
+                      <div>
+                        <FormLabel className="cursor-pointer">Band Leader</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">This staff member leads bands at events</p>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                      </FormControl>
                     </FormItem>
                   )} />
                   <DialogFooter className="pt-4">
@@ -313,6 +326,11 @@ export default function Employees() {
                         <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === "staff" ? "bg-primary/10 text-primary hover:bg-primary/20" : employee.role === "teacher" ? "bg-[#00b199]/10 text-[#00b199] hover:bg-[#00b199]/20" : "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"}`}>
                           {employee.role}
                         </Badge>
+                        {(employee as any).isBandLeader && (
+                          <Badge variant="secondary" className="text-[10px] uppercase tracking-wider bg-[#00b199]/10 text-[#00b199]">
+                            Band Leader
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -502,6 +520,17 @@ export default function Employees() {
                   <FormLabel className="cursor-pointer">Active</FormLabel>
                   <FormControl>
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )} />
+              <FormField control={editForm.control} name="isBandLeader" render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3">
+                  <div>
+                    <FormLabel className="cursor-pointer">Band Leader</FormLabel>
+                    <p className="text-[11px] text-muted-foreground">This staff member leads bands at events</p>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
                   </FormControl>
                 </FormItem>
               )} />
