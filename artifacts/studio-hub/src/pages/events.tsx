@@ -647,6 +647,16 @@ function toDatetimeLocal(date: Date): string {
 }
 
 // Split date + time picker — time snaps to 15-min intervals properly
+const EVENT_TIME_OPTIONS = Array.from({ length: 96 }, (_, i) => {
+  const h = Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const value = `${pad(h)}:${pad(m)}`;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return { value, label: `${h12}:${pad(m)} ${period}` };
+});
+
 function DateTimeSplit({ value, onChange, onBlur }: { value?: string; onChange: (v: string) => void; onBlur?: () => void }) {
   const datePart = value ? value.split("T")[0] : "";
   const timePart = value ? (value.split("T")[1] ?? "").slice(0, 5) : "";
@@ -660,14 +670,16 @@ function DateTimeSplit({ value, onChange, onBlur }: { value?: string; onChange: 
         onBlur={onBlur}
         className="rounded-xl flex-1"
       />
-      <Input
-        type="time"
-        step="900"
-        value={timePart}
-        onChange={e => onChange(combine(datePart, e.target.value))}
-        onBlur={onBlur}
-        className="rounded-xl w-[110px]"
-      />
+      <Select value={timePart} onValueChange={t => { onChange(combine(datePart, t)); onBlur?.(); }}>
+        <SelectTrigger className="rounded-xl w-[120px]">
+          <SelectValue placeholder="Time" />
+        </SelectTrigger>
+        <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+          {EVENT_TIME_OPTIONS.map(o => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
