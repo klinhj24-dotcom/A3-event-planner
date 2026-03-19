@@ -347,7 +347,14 @@ function MemberFormDialog({
                   <Label className="text-xs mb-1.5 block text-muted-foreground">TMS Staff Member</Label>
                   <Select
                     value={memberForm.leaderEmployeeId || "_none"}
-                    onValueChange={v => setMemberForm(p => ({ ...p, leaderEmployeeId: v === "_none" ? "" : v }))}
+                    onValueChange={v => {
+                      const emp = employees.find(e => String(e.id) === v);
+                      setMemberForm(p => ({
+                        ...p,
+                        leaderEmployeeId: v === "_none" ? "" : v,
+                        name: emp ? emp.name : p.name,
+                      }));
+                    }}
                   >
                     <SelectTrigger className="h-9 rounded-lg text-sm">
                       <SelectValue placeholder="Select TMS staff member…" />
