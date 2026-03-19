@@ -412,7 +412,7 @@ export function StaffSlotsSheet({
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Role *</label>
               <Select value={addForm.roleTypeId} onValueChange={v => setAddForm(f => ({ ...f, roleTypeId: v }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a role…" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   {roleTypes.map(rt => (
                     <SelectItem key={rt.id} value={String(rt.id)}>
                       <div className="flex items-center gap-2">
@@ -429,7 +429,7 @@ export function StaffSlotsSheet({
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Assign To (optional)</label>
               <Select value={addForm.assignedEmployeeId} onValueChange={v => setAddForm(f => ({ ...f, assignedEmployeeId: v }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue placeholder="Leave unassigned for now…" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-60 overflow-y-auto">
                   <SelectItem value="unassigned">Unassigned</SelectItem>
                   {employees.map(e => (
                     <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
