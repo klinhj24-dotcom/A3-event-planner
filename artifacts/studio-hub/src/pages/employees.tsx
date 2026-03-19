@@ -212,9 +212,13 @@ export default function Employees() {
     });
   }
 
+  const isStaffMember = (e: any) => e.role === "staff" || !!(e.userId);
+
   const filteredEmployees = employees?.filter(e => {
     const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = roleTab === "all" || e.role === roleTab;
+    const matchesTab = roleTab === "all"
+      || (roleTab === "staff" && isStaffMember(e))
+      || (roleTab !== "staff" && e.role === roleTab);
     return matchesSearch && matchesTab;
   });
 
@@ -318,7 +322,7 @@ export default function Employees() {
             {(["all", "staff", "teacher", "intern"] as const).map(tab => {
               const counts = {
                 all: employees?.length ?? 0,
-                staff: employees?.filter(e => e.role === "staff").length ?? 0,
+                staff: employees?.filter(e => isStaffMember(e)).length ?? 0,
                 teacher: employees?.filter(e => e.role === "teacher").length ?? 0,
                 intern: employees?.filter(e => e.role === "intern").length ?? 0,
               };
