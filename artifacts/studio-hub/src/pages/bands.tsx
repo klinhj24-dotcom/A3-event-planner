@@ -223,6 +223,13 @@ function MemberFormDialog({
   const [showSecondary, setShowSecondary] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const { data: allEmployees = [] } = useQuery<any[]>({
+    queryKey: ["/api/employees"],
+    queryFn: () => fetch("/api/employees", { credentials: "include" }).then(r => r.json()),
+    enabled: open,
+  });
+  const bandLeaderEmployees = allEmployees.filter((e: any) => e.isBandLeader && e.isActive);
+
   // Existing contact IDs when editing
   const existingPrimaryId = member?.contacts.find(c => c.isPrimary)?.id;
   const existingSecondaryId = member?.contacts.find(c => !c.isPrimary)?.id;
@@ -318,24 +325,52 @@ function MemberFormDialog({
           {/* Member info */}
           <div className="rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Member</p>
-            <div>
-              <Label className="text-xs mb-1.5 block">Full Name *</Label>
-              <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
-            </div>
 
-            {/* Band Leader toggle */}
+            {/* Band Leader toggle — first */}
             <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors cursor-pointer ${memberForm.isBandLeader ? "bg-primary/10 border-primary/30" : "bg-transparent border-border/30 hover:border-border/50"}`}
-              onClick={() => setMemberForm(p => ({ ...p, isBandLeader: !p.isBandLeader }))}>
+              onClick={() => setMemberForm(p => ({ ...p, isBandLeader: !p.isBandLeader, name: "" }))}>
               <Switch
                 checked={memberForm.isBandLeader}
-                onCheckedChange={v => setMemberForm(p => ({ ...p, isBandLeader: v }))}
+                onCheckedChange={v => setMemberForm(p => ({ ...p, isBandLeader: v, name: "" }))}
                 onClick={e => e.stopPropagation()}
               />
               <div>
                 <p className="text-xs font-semibold">Band Leader</p>
-                <p className="text-[11px] text-muted-foreground">This member leads the band</p>
+                <p className="text-[11px] text-muted-foreground">This member is a TMS band leader</p>
               </div>
             </div>
+
+            {/* Name: dropdown when band leader, text input otherwise */}
+            {memberForm.isBandLeader ? (
+              <div>
+                <Label className="text-xs mb-1.5 block">Band Leader *</Label>
+                {bandLeaderEmployees.length === 0 ? (
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                    No band leaders on staff yet. Mark a staff member as Band Leader in Team Roster first.
+                  </p>
+                ) : (
+                  <Select
+                    value={memberForm.name || "_none"}
+                    onValueChange={v => setMemberForm(p => ({ ...p, name: v === "_none" ? "" : v }))}
+                  >
+                    <SelectTrigger className="rounded-lg h-9 text-sm">
+                      <SelectValue placeholder="Select band leader…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Select band leader…</SelectItem>
+                      {bandLeaderEmployees.map((e: any) => (
+                        <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            ) : (
+              <div>
+                <Label className="text-xs mb-1.5 block">Full Name *</Label>
+                <Input value={memberForm.name} onChange={mf("name")} placeholder="e.g. Elliot Riefler" />
+              </div>
+            )}
 
             {/* Instrument multi-select */}
             <div>
