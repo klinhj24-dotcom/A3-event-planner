@@ -15,32 +15,6 @@ import { motion } from "framer-motion";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
 import { PublicFooter } from "@/components/public-footer";
 
-const TEACHERS = [
-  "Charlie Ballantine",
-  "Victoria Bee",
-  "Kit Benz",
-  "Ralph Bernabe",
-  "Tsveta Dabova",
-  "Ida Dierker",
-  "Stephen Filer",
-  "Brandon Gouin",
-  "Nathan Hillman",
-  "Nick Komosa",
-  "Justin Levy",
-  "Johanna McGuire",
-  "Rachel McNear",
-  "Covenant Olaleye",
-  "Sean Oliver",
-  "Violet Palm",
-  "Max Phelps",
-  "Hannah Piasecki",
-  "Griffin Quinnan",
-  "Grey Rayadurg",
-  "Jeffrey Roden",
-  "Noah Stuehler",
-  "Roxanne Wehking",
-  "Derek Wiegmann",
-];
 
 const generalSchema = z.object({
   contactFirstName: z.string().min(1, "First name is required"),
@@ -254,7 +228,9 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent className="max-h-64 overflow-y-auto">
-                  {TEACHERS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {(event.teachers ?? []).sort((a: any, b: any) => a.name.localeCompare(b.name)).map((t: any) => (
+                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <FormMessage />

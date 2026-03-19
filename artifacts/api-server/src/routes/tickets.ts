@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, eventsTable, eventTicketRequestsTable, eventLineupTable, usersTable } from "@workspace/db";
+import { db, eventsTable, eventTicketRequestsTable, eventLineupTable, usersTable, employeesTable } from "@workspace/db";
 import { eq, desc, and, ne, count } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
@@ -32,7 +32,14 @@ router.get("/ticket/:token", async (req, res) => {
       res.status(400).json({ error: "This event does not have a ticket form" });
       return;
     }
-    res.json(event);
+
+    // Return teachers list so the public form can populate the dropdown live
+    const teachers = await db
+      .select({ id: employeesTable.id, name: employeesTable.name, email: employeesTable.email })
+      .from(employeesTable)
+      .where(and(eq(employeesTable.role, "teacher"), eq(employeesTable.isActive, true)));
+
+    res.json({ ...event, teachers });
   } catch (err) {
     console.error("getTicketForm error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -170,14 +177,21 @@ router.post("/ticket/:token/submit", async (req, res) => {
 
         bodyText += `\nIf you have any questions, please reply to this email.\n\nThank you,\nThe Music Space Team`;
 
-        const html = buildHtmlEmail({
-          recipientName: contactFirstName,
-          body: bodyText,
-        });
+        const html = buildHtmlEmail({ recipientName: contactFirstName, body: bodyText });
+
+        // Build CC list: always desk, plus teacher's email if we can find them
+        const cc: string[] = ["info@themusicspace.com"];
+        if (isRecital && teacher) {
+          const [teacherRecord] = await db
+            .select({ email: employeesTable.email })
+            .from(employeesTable)
+            .where(and(eq(employeesTable.name, teacher), eq(employeesTable.role, "teacher")));
+          if (teacherRecord?.email) cc.push(teacherRecord.email);
+        }
 
         const auth = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
         const gmail = google.gmail({ version: "v1", auth });
-        const raw = makeHtmlEmail({ to: contactEmail, from: gmailUser.email || "", subject, html });
+        const raw = makeHtmlEmail({ to: contactEmail, from: gmailUser.email || "", subject, html, cc });
         await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
       }
     } catch (emailErr) {
@@ -303,7 +317,15 @@ router.post("/events/:id/ticket-requests/remind", async (req, res) => {
         }
         body += `\nIf anything has changed or you have questions, just reply to this email.\n\nSee you there!\nThe Music Space Team`;
         const html = buildHtmlEmail({ recipientName: firstName, body });
-        const raw = makeHtmlEmail({ to: r.contactEmail!, from: gmailUser.email || "", subject, html });
+        const reminderCc: string[] = ["info@themusicspace.com"];
+        if (isRecital && r.teacher) {
+          const [tr] = await db
+            .select({ email: employeesTable.email })
+            .from(employeesTable)
+            .where(and(eq(employeesTable.name, r.teacher), eq(employeesTable.role, "teacher")));
+          if (tr?.email) reminderCc.push(tr.email);
+        }
+        const raw = makeHtmlEmail({ to: r.contactEmail!, from: gmailUser.email || "", subject, html, cc: reminderCc });
         await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
         sent++;
       } catch (err) {
