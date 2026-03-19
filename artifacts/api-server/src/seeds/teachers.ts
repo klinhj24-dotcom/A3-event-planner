@@ -35,12 +35,12 @@ export async function seedTeachers() {
       .from(employeesTable)
       .where(sql`role = 'teacher'`);
 
-    if (count >= TEACHERS.length) {
+    if (count > 0) {
       console.log(`Teachers already seeded (${count} found) — skipping.`);
       return;
     }
 
-    console.log(`Seeding ${TEACHERS.length} teachers...`);
+    console.log(`Seeding ${TEACHERS.length} teachers (fresh DB)...`);
     for (const t of TEACHERS) {
       await db
         .insert(employeesTable)
