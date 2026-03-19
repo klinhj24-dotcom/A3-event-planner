@@ -442,22 +442,12 @@ export function StaffSlotsSheet({
               <div className="space-y-1">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shift Start</label>
                 <Input type="date" className="rounded-xl h-9 text-sm" value={addForm.startDate} onChange={e => setAddForm(f => ({ ...f, startDate: e.target.value }))} />
-                <Select value={addForm.startTime} onValueChange={v => setAddForm(f => ({ ...f, startTime: v }))}>
-                  <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Time…" /></SelectTrigger>
-                  <SelectContent className="max-h-52">
-                    {TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input type="time" className="rounded-xl h-9 text-sm" value={addForm.startTime} onChange={e => setAddForm(f => ({ ...f, startTime: e.target.value }))} />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shift End</label>
                 <Input type="date" className="rounded-xl h-9 text-sm" value={addForm.endDate} onChange={e => setAddForm(f => ({ ...f, endDate: e.target.value }))} />
-                <Select value={addForm.endTime} onValueChange={v => setAddForm(f => ({ ...f, endTime: v }))}>
-                  <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Time…" /></SelectTrigger>
-                  <SelectContent className="max-h-52">
-                    {TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input type="time" className="rounded-xl h-9 text-sm" value={addForm.endTime} onChange={e => setAddForm(f => ({ ...f, endTime: e.target.value }))} />
               </div>
             </div>
 
