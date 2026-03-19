@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
 import { seedEventTypes } from "./seeds/event-types";
+import { seedTeachers } from "./seeds/teachers";
 import { startStaffReminderCron } from "./lib/staff-reminders";
 import { startBandReminderCron } from "./lib/band-reminders";
 
@@ -59,6 +60,7 @@ async function initDb() {
 
   await seedEventTypes();
   await seedCommRules();
+  await seedTeachers();
 }
 
 initDb().then(() => {
