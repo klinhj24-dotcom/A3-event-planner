@@ -25,7 +25,7 @@ async function getSenderUser() {
 }
 
 function formatEventWindow(event: any): string {
-  const opts: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric", year: "numeric" };
+  const opts: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" };
   const start = event.startDate ? new Date(event.startDate).toLocaleDateString("en-US", opts) : null;
   const end = event.endDate ? new Date(event.endDate).toLocaleDateString("en-US", { ...opts, weekday: undefined }) : null;
   if (start && end && start !== end) return `${start} – ${end}`;
