@@ -224,6 +224,7 @@ Database layer using Drizzle ORM with PostgreSQL.
 
 ## Important Notes
 
+- **SCHEMA CHANGES REQUIRE USER CONFIRMATION**: Before modifying any schema file (`lib/db/src/schema/`) or running `push-force`, always explicitly tell the user what is changing (new columns, new tables, dropped columns, etc.) and wait for their go-ahead. Never run a schema push without prior approval.
 - Generated files in `lib/api-zod/src/generated/` and `lib/api-client-react/src/generated/` have been manually extended to add `username` and `role` to `AuthUser`. Do NOT regenerate from spec without re-adding these fields.
 - `AuthUser.role` and `AuthUser.username` are NOT in the OpenAPI spec but ARE in the Zod schema and TypeScript interfaces.
 - The `upsertUser` function in auth.ts intentionally does NOT override `role` on conflict update, so admin-set roles persist across logins.
