@@ -548,6 +548,7 @@ router.post("/band-confirm/:token", async (req, res) => {
             body += `\n`;
           }
           if (conflictNote?.trim()) body += `\nYour note: ${conflictNote.trim()}\n`;
+          if (event?.ticketsUrl) body += `\nGeneral Admission Tickets: ${event.ticketsUrl}\n`;
           body += `\nIf anything changes or you have questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;
 
           const html = buildHtmlEmail({ recipientName: invite.contactName ?? "there", body });

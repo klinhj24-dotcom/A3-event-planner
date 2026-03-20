@@ -122,6 +122,13 @@ export default function BandConfirmPage() {
                     Your guest list has been submitted.
                   </div>
                 )}
+                {result.confirmed && event?.ticketsUrl && (
+                  <div className="mt-4 rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 text-sm text-left">
+                    <p className="font-medium mb-1">General Admission Tickets</p>
+                    <p className="text-muted-foreground text-xs mb-2">Share this link with family and friends who want to attend:</p>
+                    <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs">{event.ticketsUrl}</a>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -189,6 +196,12 @@ export default function BandConfirmPage() {
                   )}
                   {invite.staffNote && (
                     <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Notes:</span><span className="text-muted-foreground">{invite.staffNote}</span></div>
+                  )}
+                  {event?.ticketsUrl && (
+                    <div className="flex gap-2 pt-1 border-t border-border/30 mt-1">
+                      <span className="font-medium w-24 shrink-0">Tickets:</span>
+                      <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs">{event.ticketsUrl}</a>
+                    </div>
                   )}
                 </div>
 
