@@ -1924,7 +1924,12 @@ export default function Events() {
                             <FormField control={form.control} name="day1EndTime" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 1 End Time</FormLabel>
-                                <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
+                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                  <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
+                                  <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                                    {EVENT_TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
                               </FormItem>
                             )} />
                           </div>
@@ -1935,7 +1940,12 @@ export default function Events() {
                             <FormField control={form.control} name="day2StartTime" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
-                                <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
+                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                  <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
+                                  <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                                    {EVENT_TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
                               </FormItem>
                             )} />
                             <FormField control={form.control} name="endDate" render={({ field }) => (
@@ -2513,7 +2523,12 @@ export default function Events() {
                       <FormField control={editForm.control} name="day1EndTime" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 1 End Time</FormLabel>
-                          <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
+                          <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                            <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
+                            <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                              {EVENT_TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </FormItem>
                       )} />
                     </div>
@@ -2524,7 +2539,12 @@ export default function Events() {
                       <FormField control={editForm.control} name="day2StartTime" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
-                          <FormControl><Input type="time" step="900" className="rounded-xl" {...field} /></FormControl>
+                          <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                            <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
+                            <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                              {EVENT_TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </FormItem>
                       )} />
                       <FormField control={editForm.control} name="endDate" render={({ field }) => (
