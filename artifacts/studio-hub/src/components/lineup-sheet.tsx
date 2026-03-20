@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  useDraggable, useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -728,6 +729,35 @@ function BandMembersDialog({ band, open, onClose }: { band: Band | null; open: b
   );
 }
 
+// ── Draggable band card (roster → show order) ───────────────────────────────
+function DraggableBandCard({ band, children }: { band: Band; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `band-${band.id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1 }}
+      className="touch-none"
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Droppable show order area ────────────────────────────────────────────────
+function DroppableShowOrder({ children, isEmpty }: { children: React.ReactNode; isEmpty: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "show-order" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-1 overflow-y-auto p-6 space-y-4 transition-colors ${isOver && isEmpty ? "bg-primary/5" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ── Main sheet ─────────────────────────────────────────────────────────────────
 export function LineupSheet({ event, open, onClose }: {
   event: { id: number; title: string; type?: string; isTwoDay?: boolean } | null;
@@ -935,9 +965,35 @@ export function LineupSheet({ event, open, onClose }: {
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
+
+    // Band card dropped onto show order → create act slot
+    const activeId = String(active.id);
+    if (activeId.startsWith("band-")) {
+      const bandId = Number(activeId.replace("band-", ""));
+      const band = rawBands.find(b => b.id === bandId);
+      if (band) {
+        addSlot({
+          type: "act",
+          bandId,
+          label: null,
+          groupName: null,
+          startTime: null,
+          durationMinutes: null,
+          bufferMinutes: 15,
+          isOverlapping: false,
+          eventDay: newSlot.eventDay,
+          position: slots.length,
+        });
+      }
+      return;
+    }
+
+    // Slot reordering
+    if (active.id === over.id) return;
     const oldIdx = slots.findIndex(s => s.id === active.id);
     const newIdx = slots.findIndex(s => s.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
     const reordered = arrayMove(slots, oldIdx, newIdx).map((s, i) => ({ ...s, position: i }));
     setLocalSlots(reordered);
     reorderSlots(reordered.map(s => ({ id: s.id, position: s.position })));
@@ -1008,6 +1064,7 @@ export function LineupSheet({ event, open, onClose }: {
           </div>
         </SheetHeader>
 
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-hidden">
           {/* ── Left: Bands panel ─────────────────────────────────────────────── */}
           {!isRecital && <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
@@ -1022,47 +1079,53 @@ export function LineupSheet({ event, open, onClose }: {
                 <p className="text-xs text-muted-foreground text-center py-6">No bands yet. Add one to get started.</p>
               )}
               {rawBands.map(band => (
-                <div key={band.id} className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{band.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
+                <DraggableBandCard key={band.id} band={band}>
+                  <div className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group cursor-grab active:cursor-grabbing">
+                    <div className="flex items-start gap-2">
+                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{band.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onPointerDown={e => e.stopPropagation()}>
+                        <button
+                          title="Manage members & contacts"
+                          onClick={() => setManagingMembersBand(band)}
+                          className="text-muted-foreground hover:text-primary p-0.5"
+                        >
+                          <Users className="h-3 w-3" />
+                        </button>
+                        <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", notes: band.notes ?? "", website: band.website ?? "", instagram: band.instagram ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button onClick={() => deleteBand(band.id)} className="text-muted-foreground hover:text-destructive p-0.5">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        title="Manage members & contacts"
-                        onClick={() => setManagingMembersBand(band)}
-                        className="text-muted-foreground hover:text-primary p-0.5"
-                      >
-                        <Users className="h-3 w-3" />
-                      </button>
-                      <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", notes: band.notes ?? "", website: band.website ?? "", instagram: band.instagram ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button onClick={() => deleteBand(band.id)} className="text-muted-foreground hover:text-destructive p-0.5">
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => setManagingMembersBand(band)}
+                      className="mt-1.5 text-[10px] text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
+                    >
+                      <Users className="h-2.5 w-2.5" /> Members & Contacts
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setManagingMembersBand(band)}
-                    className="mt-1.5 text-[10px] text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
-                  >
-                    <Users className="h-2.5 w-2.5" /> Members & Contacts
-                  </button>
-                </div>
+                </DraggableBandCard>
               ))}
             </div>
           </div>}
 
           {/* ── Right: Lineup panel ───────────────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <DroppableShowOrder isEmpty={slots.length === 0}>
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-sm font-semibold">{isRecital ? "Performance Order" : "Show Order"}</p>
-                <p className="text-xs text-muted-foreground">Drag to reorder · Times auto-calculate from duration + buffer</p>
+                <p className="text-xs text-muted-foreground">
+                  {isRecital ? "Drag to reorder · Times auto-calculate from duration + buffer" : "Drag bands here or use Add Slot · Drag to reorder"}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 {isRecital && ticketRequests.length > 0 && (
@@ -1088,12 +1151,51 @@ export function LineupSheet({ event, open, onClose }: {
               <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-border/50 text-center">
                 <Music className="h-10 w-10 text-muted-foreground/20 mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">{isRecital ? "No performers added yet" : "No acts added yet"}</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Click "{isRecital ? "Add Performer" : "Add Slot"}" to start building the {isRecital ? "recital order" : "lineup"}</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  {isRecital ? `Click "Add Performer" to start building the recital order` : "Drag a band from the roster or click \"Add Slot\""}
+                </p>
               </div>
             )}
 
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={slots.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={slots.map(s => s.id)} strategy={verticalListSortingStrategy}>
+              {event?.isTwoDay ? (
+                // Day 1 / Day 2 sections
+                [1, 2].map(day => {
+                  const daySlots = slots.filter(s => (s.eventDay ?? 1) === day);
+                  const dayIndices = daySlots.map(ds => slots.indexOf(ds));
+                  return (
+                    <div key={day} className="space-y-2">
+                      <div className={`flex items-center gap-3 ${day === 2 ? "mt-4" : ""}`}>
+                        <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
+                        <span className={`text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${day === 1 ? "text-sky-400 bg-sky-500/10" : "text-orange-400 bg-orange-500/10"}`}>
+                          Day {day}
+                        </span>
+                        <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
+                      </div>
+                      {daySlots.length === 0 && (
+                        <p className="text-xs text-muted-foreground/50 text-center py-3 italic">No slots for Day {day} yet — drag a band here or use Add Slot</p>
+                      )}
+                      <div className="space-y-2">
+                        {daySlots.map((slot, di) => (
+                          <SlotRow
+                            key={slot.id}
+                            slot={slot}
+                            calcTime={calcTimes[dayIndices[di]]}
+                            bands={rawBands}
+                            eventId={eventId!}
+                            isRecital={isRecital}
+                            isTwoDay={true}
+                            onUpdate={handleUpdate}
+                            onDelete={handleDelete}
+                            onSendInvite={handleSendInvite}
+                            onSendConfirmation={handleSendConfirmation}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
                 <div className="space-y-2">
                   {slots.map((slot, i) => (
                     <SlotRow
@@ -1103,7 +1205,7 @@ export function LineupSheet({ event, open, onClose }: {
                       bands={rawBands}
                       eventId={eventId!}
                       isRecital={isRecital}
-                      isTwoDay={event?.isTwoDay}
+                      isTwoDay={false}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
                       onSendInvite={handleSendInvite}
@@ -1111,8 +1213,8 @@ export function LineupSheet({ event, open, onClose }: {
                     />
                   ))}
                 </div>
-              </SortableContext>
-            </DndContext>
+              )}
+            </SortableContext>
 
             {slots.length > 0 && (() => {
               const lastTime = calcTimes[calcTimes.length - 1];
@@ -1127,8 +1229,9 @@ export function LineupSheet({ event, open, onClose }: {
                 </div>
               );
             })()}
-          </div>
+          </DroppableShowOrder>
         </div>
+        </DndContext>
       </SheetContent>
 
       {/* Add Band Dialog */}

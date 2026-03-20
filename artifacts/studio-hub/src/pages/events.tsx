@@ -1583,7 +1583,7 @@ export default function Events() {
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string; isTwoDay?: boolean } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
-  const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
+  const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean } | null>(null);
   const [inviteEvent, setInviteEvent] = useState<{ id: number; title: string; startDate?: string | null; location?: string | null; signupToken?: string | null } | null>(null);
   const [overviewEvent, setOverviewEvent] = useState<any | null>(null);
   const searchStr = useSearch();
@@ -2433,7 +2433,7 @@ export default function Events() {
                                 variant="ghost"
                                 title="Staff schedule"
                                 className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10"
-                                onClick={() => setStaffSlotsEvent({ id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate, location: event.location })}
+                                onClick={() => setStaffSlotsEvent({ id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate, location: event.location, isTwoDay: event.isTwoDay ?? false })}
                               >
                                 <Users2 className="h-3.5 w-3.5" />
                               </Button>
@@ -2995,7 +2995,7 @@ export default function Events() {
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
           onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl }),
           onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type, isTwoDay: ev.isTwoDay ?? false }),
-          onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
+          onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location, isTwoDay: ev.isTwoDay ?? false }),
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
           onInvite: (ev) => setInviteEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, location: ev.location, signupToken: ev.signupToken }),
           onPacking: (ev) => setPackingEvent({ id: ev.id, title: ev.title, type: ev.type }),

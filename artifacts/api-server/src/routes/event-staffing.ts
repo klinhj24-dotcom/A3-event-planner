@@ -251,6 +251,7 @@ const SLOT_SELECT = {
   endTime: eventStaffSlotsTable.endTime,
   notes: eventStaffSlotsTable.notes,
   confirmed: eventStaffSlotsTable.confirmed,
+  eventDay: eventStaffSlotsTable.eventDay,
   isAutoCreated: eventStaffSlotsTable.isAutoCreated,
   createdAt: eventStaffSlotsTable.createdAt,
 };
@@ -277,7 +278,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay } = req.body;
 
     const [slot] = await db.insert(eventStaffSlotsTable)
       .values({
@@ -287,6 +288,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
         startTime: startTime ? new Date(startTime) : null,
         endTime: endTime ? new Date(endTime) : null,
         notes: notes || null,
+        eventDay: eventDay ? Number(eventDay) : 1,
         isAutoCreated: isAutoCreated ?? false,
       })
       .returning();
@@ -318,7 +320,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay } = req.body;
 
     const [prev] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
     if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -337,6 +339,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         ...(startTime !== undefined ? { startTime: startTime ? new Date(startTime) : null } : {}),
         ...(endTime !== undefined ? { endTime: endTime ? new Date(endTime) : null } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
+        ...(eventDay !== undefined ? { eventDay: Number(eventDay) } : {}),
         ...(assigneeChanged ? { confirmed: false, confirmationToken: null, weekReminderSent: false, dayReminderSent: false } : {}),
         updatedAt: new Date(),
       })

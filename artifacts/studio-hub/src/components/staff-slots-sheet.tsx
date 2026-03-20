@@ -29,10 +29,10 @@ interface StaffSlot {
   roleTypeId?: number | null; roleName?: string | null; roleColor?: string | null;
   assignedEmployeeId?: number | null; assignedEmployeeName?: string | null; assignedEmployeeRole?: string | null;
   startTime?: string | null; endTime?: string | null; notes?: string | null;
-  confirmed?: boolean | null; isAutoCreated?: boolean | null;
+  confirmed?: boolean | null; isAutoCreated?: boolean | null; eventDay?: number | null;
 }
 interface EventMeta {
-  id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null;
+  id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -125,10 +125,11 @@ function CategoryFilter({ value, onChange }: { value: EmpCategory; onChange: (v:
 
 // ── SlotCard ─────────────────────────────────────────────────────────────────
 function SlotCard({
-  slot, employees, onUpdate, onDelete,
+  slot, employees, isTwoDay, onUpdate, onDelete,
 }: {
   slot: StaffSlot;
   employees: Employee[];
+  isTwoDay?: boolean;
   onUpdate: (id: number, data: Record<string, unknown>) => void;
   onDelete: (id: number) => void;
 }) {
@@ -139,6 +140,7 @@ function SlotCard({
     startTime: toLocalInput(slot.startTime),
     endTime: toLocalInput(slot.endTime),
     notes: slot.notes ?? "",
+    eventDay: slot.eventDay ?? 1,
   });
 
   const filled = !!slot.assignedEmployeeId;
@@ -149,6 +151,7 @@ function SlotCard({
       startTime: form.startTime || null,
       endTime: form.endTime || null,
       notes: form.notes || null,
+      eventDay: form.eventDay,
     });
     setEditing(false);
   }
@@ -185,6 +188,24 @@ function SlotCard({
           <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Notes</label>
           <Textarea className="rounded-lg text-xs min-h-[48px]" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes…" />
         </div>
+        {/* Day selector for two-day events */}
+        {isTwoDay && (
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex-1">Day</span>
+            <div className="flex gap-1.5">
+              {[1, 2].map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, eventDay: d }))}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${form.eventDay === d ? d === 1 ? "bg-sky-500/20 text-sky-400 border-sky-500/30" : "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-transparent text-muted-foreground border-border/40 hover:border-border"}`}
+                >
+                  Day {d}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg" onClick={() => setEditing(false)}><X className="h-3 w-3 mr-1" />Cancel</Button>
           <Button size="sm" className="h-7 text-xs rounded-lg gap-1" onClick={save}><Check className="h-3 w-3" />Save</Button>
@@ -208,11 +229,16 @@ function SlotCard({
               ? <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"><Check className="h-2.5 w-2.5" />Confirmed</span>
               : <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Pending</span>
           )}
+          {isTwoDay && (
+            <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${(slot.eventDay ?? 1) === 2 ? "bg-orange-500/15 text-orange-400" : "bg-sky-500/15 text-sky-400"}`}>
+              Day {slot.eventDay ?? 1}
+            </span>
+          )}
         </div>
         <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "" }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
+        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1 }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
           <Pencil className="h-3 w-3" />
         </button>
         <button onClick={() => onDelete(slot.id)} className="text-muted-foreground hover:text-destructive p-1">
@@ -264,10 +290,10 @@ export function StaffSlotsSheet({
   const [addCategory, setAddCategory] = useState<EmpCategory>("all");
   const [addForm, setAddForm] = useState({
     roleTypeId: "", assignedEmployeeId: "unassigned",
-    startDate: "", startTime: "", endDate: "", endTime: "", notes: "",
+    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1,
   });
 
-  function openAddDialog(presetRoleTypeId?: string) {
+  function openAddDialog(presetRoleTypeId?: string, presetDay?: number) {
     const sd = toDatePart(event?.startDate);
     const st = toTimePart(event?.startDate);
     const ed = toDatePart(event?.endDate) || sd;
@@ -276,7 +302,7 @@ export function StaffSlotsSheet({
     setAddForm({
       roleTypeId: presetRoleTypeId || "",
       assignedEmployeeId: "unassigned",
-      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "",
+      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1,
     });
     setAddOpen(true);
   }
@@ -289,7 +315,7 @@ export function StaffSlotsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
-      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "" });
+      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1 });
       setAddOpen(false);
       toast({ title: "Slot added" });
     },
@@ -376,64 +402,85 @@ export function StaffSlotsSheet({
               </div>
             ) : (
               <>
-                {/* Auto-created slots (no role) from simple employee assignment */}
-                {unroledSlots.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-muted-foreground/40" />
-                      <span className="text-sm font-semibold">Assigned Staff</span>
-                      <span className="text-xs text-muted-foreground">
-                        {unroledSlots.filter(s => s.assignedEmployeeId).length}/{unroledSlots.length} filled
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/50 italic ml-1">auto-scheduled</span>
-                    </div>
-                    <div className="space-y-2">
-                      {unroledSlots.map(slot => (
-                        <SlotCard
-                          key={slot.id}
-                          slot={slot}
-                          employees={employees}
-                          onUpdate={(id, data) => updateSlot({ id, data })}
-                          onDelete={deleteSlot}
-                        />
+                {/* Render all slots — optionally wrapped in Day 1 / Day 2 sections */}
+                {(event.isTwoDay ? [1, 2] : [0]).map(day => {
+                  const dayLabel = day === 1 ? "Day 1" : day === 2 ? "Day 2" : null;
+                  const filterByDay = (s: StaffSlot) => day === 0 || (s.eventDay ?? 1) === day;
+
+                  const dayUnroled = unroledSlots.filter(filterByDay);
+                  const dayGrouped = grouped
+                    .map(g => ({ ...g, slots: g.slots.filter(filterByDay) }))
+                    .filter(g => g.slots.length > 0);
+
+                  if (dayLabel && dayUnroled.length === 0 && dayGrouped.length === 0) return null;
+
+                  return (
+                    <div key={day}>
+                      {dayLabel && (
+                        <div className={`flex items-center gap-3 mb-3 ${day === 2 ? "mt-2" : ""}`}>
+                          <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
+                          <span className={`text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${day === 1 ? "text-sky-400 bg-sky-500/10" : "text-orange-400 bg-orange-500/10"}`}>
+                            {dayLabel}
+                          </span>
+                          <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
+                          <button
+                            className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                            onClick={() => openAddDialog(undefined, day)}
+                          >
+                            <Plus className="h-2.5 w-2.5" /> Add Slot
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Auto-created slots (no role) */}
+                      {dayUnroled.length > 0 && (
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-muted-foreground/40" />
+                            <span className="text-sm font-semibold">Assigned Staff</span>
+                            <span className="text-xs text-muted-foreground">
+                              {dayUnroled.filter(s => s.assignedEmployeeId).length}/{dayUnroled.length} filled
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/50 italic ml-1">auto-scheduled</span>
+                          </div>
+                          <div className="space-y-2">
+                            {dayUnroled.map(slot => (
+                              <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Role-grouped slots */}
+                      {dayGrouped.map(({ roleType, slots: roleSlots }) => (
+                        <div key={roleType.id} className="mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: roleType.color ?? "#7250ef" }} />
+                              <span className="text-sm font-semibold">{roleType.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {roleSlots.filter(s => s.assignedEmployeeId).length}/{roleSlots.length} filled
+                              </span>
+                            </div>
+                            <button
+                              className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                              onClick={() => openAddDialog(String(roleType.id), day || undefined)}
+                            >
+                              <Plus className="h-3 w-3" /> slot
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {roleSlots.map(slot => (
+                              <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
-                {/* Role-grouped slots */}
-                {grouped.map(({ roleType, slots: roleSlots }) => (
-                  <div key={roleType.id}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-block w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: roleType.color ?? "#7250ef" }}
-                        />
-                        <span className="text-sm font-semibold">{roleType.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {roleSlots.filter(s => s.assignedEmployeeId).length}/{roleSlots.length} filled
-                        </span>
-                      </div>
-                      <button
-                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
-                        onClick={() => openAddDialog(String(roleType.id))}
-                      >
-                        <Plus className="h-3 w-3" /> slot
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {roleSlots.map(slot => (
-                        <SlotCard
-                          key={slot.id}
-                          slot={slot}
-                          employees={employees}
-                          onUpdate={(id, data) => updateSlot({ id, data })}
-                          onDelete={deleteSlot}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
@@ -497,6 +544,24 @@ export function StaffSlotsSheet({
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Notes</label>
               <Textarea className="rounded-xl min-h-[60px]" value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} placeholder="Setup instructions, parking info, etc." />
             </div>
+
+            {event.isTwoDay && (
+              <div className="flex items-center gap-3 rounded-xl border border-border/40 px-4 py-2.5">
+                <p className="text-sm font-medium flex-1">Which day?</p>
+                <div className="flex gap-2">
+                  {[1, 2].map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setAddForm(f => ({ ...f, eventDay: d }))}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${addForm.eventDay === d ? d === 1 ? "bg-sky-500/20 text-sky-400 border-sky-500/30" : "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-transparent text-muted-foreground border-border/40 hover:border-border"}`}
+                    >
+                      Day {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setAddOpen(false)}>Cancel</Button>
@@ -507,6 +572,7 @@ export function StaffSlotsSheet({
                 startTime: addForm.startDate && addForm.startTime ? `${addForm.startDate}T${addForm.startTime}:00` : null,
                 endTime: addForm.endDate && addForm.endTime ? `${addForm.endDate}T${addForm.endTime}:00` : null,
                 notes: addForm.notes || null,
+                eventDay: addForm.eventDay,
               })}>
               Add Slot
             </Button>

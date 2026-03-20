@@ -29,6 +29,7 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   weekReminderSent: boolean("week_reminder_sent").notNull().default(false),
   dayReminderSent: boolean("day_reminder_sent").notNull().default(false),
   googleCalendarEventId: text("google_calendar_event_id"),
+  eventDay: integer("event_day").notNull().default(1),
   isAutoCreated: boolean("is_auto_created").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
