@@ -98,8 +98,8 @@ function CommTasksSheet({
 
   if (!event) return null;
 
-  // Exclude interns from the "who completed this?" dropdown
-  const eligibleEmployees = employees.filter((e: any) => e.role?.toLowerCase() !== "intern");
+  // Only staff can be credited for completing a comm task (no interns, no teachers)
+  const eligibleEmployees = employees.filter((e: any) => e.role?.toLowerCase() === "staff");
 
   const sorted = [...tasks].sort((a, b) => {
     if (!a.dueDate) return 1;
