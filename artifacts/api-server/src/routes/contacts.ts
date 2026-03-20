@@ -77,10 +77,12 @@ router.get("/contacts", async (req, res) => {
         id: contactsTable.id,
         name: contactsTable.name,
         email: contactsTable.email,
+        email2: contactsTable.email2,
         phone: contactsTable.phone,
         organization: contactsTable.organization,
         type: contactsTable.type,
         notes: contactsTable.notes,
+        outreachWindowMonths: contactsTable.outreachWindowMonths,
         lastOutreachAt: contactsTable.lastOutreachAt,
         followUpAt: contactsTable.followUpAt,
         createdAt: contactsTable.createdAt,
@@ -172,10 +174,21 @@ router.put("/contacts/:id", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const id = parseInt(req.params.id);
-    const { name, email, phone, organization, type, notes, followUpAt, outreachWindowMonths } = req.body;
+    const { name, email, email2, phone, organization, type, notes, followUpAt, outreachWindowMonths } = req.body;
     const [contact] = await db
       .update(contactsTable)
-      .set({ name, email, phone, organization, type, notes, followUpAt: followUpAt ? new Date(followUpAt) : null, outreachWindowMonths: outreachWindowMonths !== undefined ? (outreachWindowMonths ? parseInt(outreachWindowMonths) : null) : undefined, updatedAt: new Date() })
+      .set({
+        ...(name !== undefined ? { name } : {}),
+        ...(email !== undefined ? { email: email || null } : {}),
+        ...(email2 !== undefined ? { email2: email2 || null } : {}),
+        ...(phone !== undefined ? { phone: phone || null } : {}),
+        ...(organization !== undefined ? { organization: organization || null } : {}),
+        ...(type !== undefined ? { type } : {}),
+        ...(notes !== undefined ? { notes: notes || null } : {}),
+        ...(followUpAt !== undefined ? { followUpAt: followUpAt ? new Date(followUpAt) : null } : {}),
+        ...(outreachWindowMonths !== undefined ? { outreachWindowMonths: outreachWindowMonths ? parseInt(outreachWindowMonths) : null } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(contactsTable.id, id))
       .returning();
     if (!contact) {

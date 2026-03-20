@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useListContacts, useCreateContact, useLogOutreach, useGetContactOutreach } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon,
-  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck
+  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck, Pencil
 } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -45,6 +45,17 @@ import {
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional(),
+  organization: z.string().optional(),
+  type: z.string().min(1, "Type is required"),
+  notes: z.string().optional(),
+  outreachWindowMonths: z.string().optional(),
+});
+
+const editContactSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  email2: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
   organization: z.string().optional(),
   type: z.string().min(1, "Type is required"),
@@ -206,6 +217,8 @@ export default function Contacts() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editContactId, setEditContactId] = useState<number | null>(null);
 
   const { mutate: createContact, isPending: isCreating } = useCreateContact({
     mutation: {
@@ -248,6 +261,45 @@ export default function Contacts() {
     resolver: zodResolver(outreachSchema),
     defaultValues: { method: "email", notes: "" }
   });
+
+  const editForm = useForm<z.infer<typeof editContactSchema>>({
+    resolver: zodResolver(editContactSchema),
+    defaultValues: { name: "", type: "event_coordinator", email: "", email2: "", phone: "", organization: "", notes: "", outreachWindowMonths: "" },
+  });
+
+  const { mutate: updateContact, isPending: isUpdating } = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const r = await fetch(`/api/contacts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) throw new Error("Failed to update contact");
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      setEditOpen(false);
+      toast({ title: "Contact updated" });
+    },
+    onError: () => toast({ title: "Failed to update contact", variant: "destructive" }),
+  });
+
+  function openEdit(contact: any) {
+    setEditContactId(contact.id);
+    editForm.reset({
+      name: contact.name ?? "",
+      email: contact.email ?? "",
+      email2: contact.email2 ?? "",
+      phone: contact.phone ?? "",
+      organization: contact.organization ?? "",
+      type: contact.type ?? "event_coordinator",
+      notes: contact.notes ?? "",
+      outreachWindowMonths: contact.outreachWindowMonths ? String(contact.outreachWindowMonths) : "",
+    });
+    setEditOpen(true);
+  }
 
   const filteredContacts = contacts?.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -420,6 +472,7 @@ export default function Contacts() {
                       <TableCell>
                         <div className="space-y-1 text-sm text-muted-foreground">
                           {contact.email && <div className="flex items-center"><Mail className="h-3.5 w-3.5 mr-2 opacity-70" />{contact.email}</div>}
+                          {(contact as any).email2 && <div className="flex items-center"><Mail className="h-3.5 w-3.5 mr-2 opacity-50" /><span className="opacity-80">{(contact as any).email2}</span></div>}
                           {contact.phone && <div className="flex items-center"><Phone className="h-3.5 w-3.5 mr-2 opacity-70" />{contact.phone}</div>}
                         </div>
                       </TableCell>
@@ -452,6 +505,15 @@ export default function Contacts() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="rounded-lg h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            title="Edit contact"
+                            onClick={() => openEdit(contact)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                           <Button 
                             variant="secondary" 
                             size="sm" 
@@ -532,6 +594,108 @@ export default function Contacts() {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Contact Dialog */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="sm:max-w-[520px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-display text-2xl">Edit Contact</DialogTitle>
+              <DialogDescription>Update contact details and outreach settings.</DialogDescription>
+            </DialogHeader>
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit((data) => {
+                if (!editContactId) return;
+                const { outreachWindowMonths, email2, ...rest } = data;
+                const window = outreachWindowMonths && outreachWindowMonths !== "__none__" ? parseInt(outreachWindowMonths) : null;
+                updateContact({ id: editContactId, data: { ...rest, email2: email2 || null, outreachWindowMonths: window } });
+              })} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={editForm.control} name="name" render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Full Name *</FormLabel>
+                      <FormControl><Input placeholder="Jane Doe" className="rounded-xl" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="type" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contact Type *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent position="popper">
+                          {CONTACT_TYPES.map(t => (
+                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="organization" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization</FormLabel>
+                      <FormControl><Input placeholder="High School Band" className="rounded-xl" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Primary Email</FormLabel>
+                      <FormControl><Input placeholder="contact@example.com" type="email" className="rounded-xl" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="email2" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Second Email</FormLabel>
+                      <FormControl><Input placeholder="alt@example.com" type="email" className="rounded-xl" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="phone" render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl><Input placeholder="(555) 123-4567" className="rounded-xl" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="outreachWindowMonths" render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Outreach Window</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="rounded-xl"><SelectValue placeholder="No window" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent position="popper">
+                          {OUTREACH_WINDOWS.map(w => (
+                            <SelectItem key={w.value} value={w.value === "" ? "__none__" : w.value}>{w.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Alert when this contact hasn't been reached out to within the window.</p>
+                    </FormItem>
+                  )}/>
+                  <FormField control={editForm.control} name="notes" render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl><Textarea placeholder="Any relevant notes…" className="rounded-xl resize-none h-20" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+                </div>
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setEditOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={isUpdating} className="rounded-xl">
+                    {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
         {/* Gmail Compose Modal */}
         {activeContact && (
           <GmailComposeModal
@@ -551,6 +715,7 @@ export default function Contacts() {
                   <Building2 className="h-4 w-4 mr-2" /> {activeContact?.organization || "No organization"}
                 </span>
                 {activeContact?.email && <span className="flex items-center"><Mail className="h-4 w-4 mr-2" /> {activeContact.email}</span>}
+                {(activeContact as any)?.email2 && <span className="flex items-center text-muted-foreground"><Mail className="h-4 w-4 mr-2 opacity-60" /> {(activeContact as any).email2}</span>}
                 {activeContact?.phone && <span className="flex items-center"><Phone className="h-4 w-4 mr-2" /> {activeContact.phone}</span>}
                 {activeContact?.type && (
                   <Badge variant="outline" className="w-fit capitalize text-xs">

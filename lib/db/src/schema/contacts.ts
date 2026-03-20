@@ -10,6 +10,7 @@ export const contactsTable = pgTable("contacts", {
   organization: text("organization"),
   type: text("type").notNull(),
   notes: text("notes"),
+  email2: text("email2"),
   lastOutreachAt: timestamp("last_outreach_at", { withTimezone: true }),
   followUpAt: timestamp("follow_up_at", { withTimezone: true }),
   outreachWindowMonths: integer("outreach_window_months"),
