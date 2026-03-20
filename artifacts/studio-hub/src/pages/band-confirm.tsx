@@ -71,6 +71,7 @@ export default function BandConfirmPage() {
   const alreadyDeclinedBy = data?.alreadyDeclinedBy;
   const eventWindow = data?.eventWindow;
   const performanceDayLabel = data?.performanceDayLabel ?? eventWindow;
+  const memberName = data?.memberName ?? null;
   const allowGuestList = event?.allowGuestList;
   const policy = event?.guestListPolicy ?? "students_only"; // "students_only" | "plus_one" | "plus_two"
 
@@ -174,17 +175,20 @@ export default function BandConfirmPage() {
 
                 {/* Event details */}
                 <div className="rounded-xl bg-muted/40 border border-border/40 p-4 space-y-1.5 text-sm">
-                  <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Event:</span><span className="text-muted-foreground">{event?.title ?? "TBD"}</span></div>
-                  <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Date:</span><span className="text-muted-foreground">{performanceDayLabel ?? "TBD"}</span></div>
-                  <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Location:</span><span className="text-muted-foreground">{event?.location ?? "TBD"}</span></div>
+                  {memberName && (
+                    <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Performer:</span><span className="text-muted-foreground">{memberName}</span></div>
+                  )}
+                  <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Event:</span><span className="text-muted-foreground">{event?.title ?? "TBD"}</span></div>
+                  <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Date:</span><span className="text-muted-foreground">{performanceDayLabel ?? "TBD"}</span></div>
+                  <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Location:</span><span className="text-muted-foreground">{event?.location ?? "TBD"}</span></div>
                   {slot?.startTime && (
                     <div className="flex gap-2">
-                      <span className="font-medium w-20 shrink-0">Set Time:</span>
-                      <span className="text-muted-foreground">{fmt12(slot.startTime)}{slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}</span>
+                      <span className="font-medium w-24 shrink-0">Est. Set Time:</span>
+                      <span className="text-muted-foreground">{fmt12(slot.startTime)}{slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} <span className="text-xs opacity-60">— subject to change</span></span>
                     </div>
                   )}
-                  {!slot?.startTime && invite.staffNote && (
-                    <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Notes:</span><span className="text-muted-foreground">{invite.staffNote}</span></div>
+                  {invite.staffNote && (
+                    <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Notes:</span><span className="text-muted-foreground">{invite.staffNote}</span></div>
                   )}
                 </div>
 

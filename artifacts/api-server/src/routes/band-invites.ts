@@ -74,7 +74,7 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
     const [slot] = await db
-      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay })
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, slotId));
@@ -125,6 +125,8 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
 
       const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
       const performanceDate = formatPerformanceDay(event, slot.eventDay);
+      const fmt12Invite = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+      const estSetTimeLine = slot.startTime ? `Est. Set Time: ${fmt12Invite(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
 
       const emailBody = `Hi ${contact.name},
 
@@ -132,9 +134,9 @@ The Music Space would like to invite ${slot.bandName ?? "your band"} to perform 
 
 ${performerLine}Event: ${event.title}
 Date: ${performanceDate}
-Location: ${event.location ?? "TBD"}
+${estSetTimeLine}Location: ${event.location ?? "TBD"}
 
-${noteToSend ? `Estimated Time Slot Note from our team:\n"${noteToSend}"\n\n(This is an estimate — final times are confirmed closer to the event.)\n` : ""}To confirm this booking or let us know about any day-of schedule conflicts, please click the link below:
+${noteToSend ? `Additional note from our team:\n"${noteToSend}"\n\n` : ""}To confirm this booking or let us know about any day-of schedule conflicts, please click the link below:
 
 ${confirmUrl}
 
@@ -201,7 +203,7 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
 
     // Get all act slots with bands that haven't been invited yet
     const slots = await db
-      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay })
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.type, "act"), eq(eventLineupTable.inviteStatus, "not_sent")));
@@ -242,6 +244,8 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
         const member = members.find(m => m.id === contact.memberId);
         const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
         const performanceDate = formatPerformanceDay(event, slot.eventDay);
+        const fmt12Bulk = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+        const estSetTimeLine = slot.startTime ? `Est. Set Time: ${fmt12Bulk(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
 
         const emailBody = `Hi ${contact.name},
 
@@ -249,7 +253,7 @@ The Music Space would like to invite ${slot.bandName ?? "your band"} to perform 
 
 ${performerLine}Event: ${event.title}
 Date: ${performanceDate}
-Location: ${event.location ?? "TBD"}
+${estSetTimeLine}Location: ${event.location ?? "TBD"}
 
 ${slot.staffNote ? `Estimated Time Slot Note:\n"${slot.staffNote}"\n\n(This is an estimate — final times are confirmed closer to the event.)\n` : ""}Please confirm your participation or share any day-of scheduling notes by clicking the link below:
 
@@ -416,6 +420,12 @@ router.get("/band-confirm/:token", async (req, res) => {
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
 
+    let memberName: string | null = null;
+    if (invite.memberId) {
+      const [member] = await db.select({ name: bandMembersTable.name }).from(bandMembersTable).where(eq(bandMembersTable.id, invite.memberId));
+      memberName = member?.name ?? null;
+    }
+
     // Find if another contact for the same MEMBER already responded
     const siblingInvites = await db.select().from(eventBandInvitesTable)
       .where(and(eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId), eq(eventBandInvitesTable.memberId!, invite.memberId!)));
@@ -439,6 +449,7 @@ router.get("/band-confirm/:token", async (req, res) => {
       slot: slot ?? null,
       eventWindow,
       performanceDayLabel,
+      memberName,
       alreadyConfirmedBy: alreadyConfirmed?.contactName ?? null,
       alreadyDeclinedBy: alreadyDeclined?.contactName ?? null,
       guestEntry,
