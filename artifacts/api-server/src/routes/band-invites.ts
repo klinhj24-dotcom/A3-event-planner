@@ -43,6 +43,48 @@ function formatPerformanceDay(event: any, eventDay: number | null | undefined): 
   return `${dayStr} (Day ${eventDay})`;
 }
 
+// ── Time calculation helpers (mirrors frontend computeTimes logic) ──────────────
+function addMinutesStr(t: string, mins: number): string {
+  const [h, m] = t.split(":").map(Number);
+  const total = h * 60 + m + mins;
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+type SlotForCalc = { id: number; startTime: string | null; durationMinutes: number | null; bufferMinutes: number | null; isOverlapping: boolean; type: string; position: number };
+
+function computeCalcTime(slots: SlotForCalc[], targetId: number): string | null {
+  const sorted = [...slots].sort((a, b) => a.position - b.position);
+  const times: (string | null)[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const s = sorted[i];
+    if (s.type === "group-header") { times.push(times[i - 1] ?? null); continue; }
+    if (s.startTime) { times.push(s.startTime); continue; }
+    if (i === 0) { times.push(null); continue; }
+    if (s.isOverlapping) { times.push(times[i - 1]); continue; }
+    let prevIdx = i - 1;
+    while (prevIdx >= 0 && sorted[prevIdx].type === "group-header") prevIdx--;
+    if (prevIdx < 0) { times.push(null); continue; }
+    const prev = sorted[prevIdx];
+    const prevT = times[prevIdx];
+    if (!prevT || !prev.durationMinutes) { times.push(null); continue; }
+    times.push(addMinutesStr(prevT, prev.durationMinutes + (prev.bufferMinutes ?? 0)));
+  }
+  const idx = sorted.findIndex(s => s.id === targetId);
+  return idx >= 0 ? times[idx] : null;
+}
+
+async function getAllSlotsForCalc(eventId: number): Promise<SlotForCalc[]> {
+  return db.select({
+    id: eventLineupTable.id,
+    startTime: eventLineupTable.startTime,
+    durationMinutes: eventLineupTable.durationMinutes,
+    bufferMinutes: eventLineupTable.bufferMinutes,
+    isOverlapping: eventLineupTable.isOverlapping,
+    type: eventLineupTable.type,
+    position: eventLineupTable.position,
+  }).from(eventLineupTable).where(eq(eventLineupTable.eventId, eventId));
+}
+
 // ── Get invite status for a lineup slot ────────────────────────────────────────
 router.get("/events/:eventId/lineup/:slotId/invites", async (req, res) => {
   if (!requireAuth(req, res)) return;
@@ -108,6 +150,12 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
     const from = sender.googleEmail ?? sender.email ?? "";
     const eventWindow = formatEventWindow(event);
 
+    const fmt12Invite = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+    const allSlotsForCalc = await getAllSlotsForCalc(eventId);
+    const slotCalcTime = computeCalcTime(allSlotsForCalc, slotId);
+    const effectiveTime = slot.startTime ?? slotCalcTime;
+    const performanceDate = formatPerformanceDay(event, slot.eventDay);
+
     let sent = 0;
     const newInvites: any[] = [];
 
@@ -124,9 +172,7 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
       const member = members.find(m => m.id === contact.memberId);
 
       const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
-      const performanceDate = formatPerformanceDay(event, slot.eventDay);
-      const fmt12Invite = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
-      const estSetTimeLine = slot.startTime ? `Est. Set Time: ${fmt12Invite(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
+      const estSetTimeLine = effectiveTime ? `Est. Set Time: ${fmt12Invite(effectiveTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
 
       const admissionsLines = (() => {
         if (event.allowGuestList) {
@@ -244,12 +290,18 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
     const from = sender.googleEmail ?? sender.email ?? "";
     const eventWindow = formatEventWindow(event);
 
+    const fmt12Bulk = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+    const allSlotsForCalc = await getAllSlotsForCalc(eventId);
+
     let totalSent = 0;
     let slotsSent = 0;
 
     for (const slot of uninvitedSlots) {
       const contacts = await db.select().from(bandContactsTable).where(eq(bandContactsTable.bandId, slot.bandId!));
       const members = await db.select().from(bandMembersTable).where(eq(bandMembersTable.bandId, slot.bandId!));
+      const slotCalcTime = computeCalcTime(allSlotsForCalc, slot.id);
+      const slotEffectiveTime = slot.startTime ?? slotCalcTime;
+      const performanceDate = formatPerformanceDay(event, slot.eventDay);
       let sentForSlot = 0;
 
       for (const contact of contacts) {
@@ -259,9 +311,7 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
         const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
         const member = members.find(m => m.id === contact.memberId);
         const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
-        const performanceDate = formatPerformanceDay(event, slot.eventDay);
-        const fmt12Bulk = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
-        const estSetTimeLine = slot.startTime ? `Est. Set Time: ${fmt12Bulk(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
+        const estSetTimeLine = slotEffectiveTime ? `Est. Set Time: ${fmt12Bulk(slotEffectiveTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
 
         const bulkAdmissionsLines = (() => {
           if (event.allowGuestList) {
@@ -452,6 +502,9 @@ router.get("/band-confirm/:token", async (req, res) => {
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
 
+    const allSlotsCalc = await getAllSlotsForCalc(invite.eventId);
+    const calcStartTime = computeCalcTime(allSlotsCalc, invite.lineupSlotId);
+
     let memberName: string | null = null;
     if (invite.memberId) {
       const [member] = await db.select({ name: bandMembersTable.name }).from(bandMembersTable).where(eq(bandMembersTable.id, invite.memberId));
@@ -478,7 +531,7 @@ router.get("/band-confirm/:token", async (req, res) => {
     res.json({
       invite,
       event: event ?? null,
-      slot: slot ?? null,
+      slot: slot ? { ...slot, calcStartTime } : null,
       eventWindow,
       performanceDayLabel,
       memberName,

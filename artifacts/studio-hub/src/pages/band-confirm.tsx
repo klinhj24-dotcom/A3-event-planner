@@ -203,10 +203,10 @@ export default function BandConfirmPage() {
                   <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Event:</span><span className="text-muted-foreground">{event?.title ?? "TBD"}</span></div>
                   <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Date:</span><span className="text-muted-foreground">{performanceDayLabel ?? "TBD"}</span></div>
                   <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Location:</span><span className="text-muted-foreground">{event?.location ?? "TBD"}</span></div>
-                  {slot?.startTime && (
+                  {(slot?.startTime || slot?.calcStartTime) && (
                     <div className="flex gap-2">
                       <span className="font-medium w-24 shrink-0">Est. Set Time:</span>
-                      <span className="text-muted-foreground">{fmt12(slot.startTime)}{slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} <span className="text-xs opacity-60">— subject to change</span></span>
+                      <span className="text-muted-foreground">{fmt12(slot.startTime ?? slot.calcStartTime!)}{slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} <span className="text-xs opacity-60">— subject to change</span></span>
                     </div>
                   )}
                   {invite.staffNote && (
