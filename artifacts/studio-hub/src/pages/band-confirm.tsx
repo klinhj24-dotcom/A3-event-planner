@@ -116,13 +116,28 @@ export default function BandConfirmPage() {
                     ? `Thanks, ${result.contactName}! We've recorded your confirmation for ${result.bandName} at ${result.eventTitle}. We'll be in touch with more details soon.`
                     : `Thanks for letting us know. We've noted that ${result.bandName} won't be able to make it. If this was a mistake, please contact us directly.`}
                 </p>
-                {result.confirmed && result.guestListSubmitted && (
-                  <div className="mt-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                    <Users className="h-4 w-4 shrink-0" />
-                    Your guest list has been submitted.
+                {result.confirmed && event?.allowGuestList && (
+                  <div className="mt-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-left space-y-1">
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                      <Users className="h-4 w-4 shrink-0" />
+                      You're on the performer guest list
+                    </div>
+                    <p className="text-emerald-700 dark:text-emerald-300 text-xs">
+                      {event.guestListPolicy === "plus_two"
+                        ? "You and up to 2 guests get complimentary admission — no ticket needed."
+                        : event.guestListPolicy === "plus_one"
+                        ? "You and 1 additional guest get complimentary admission — no ticket needed."
+                        : "You get complimentary admission as a performer — no ticket needed."}
+                    </p>
+                    {event.ticketsUrl && (
+                      <p className="text-xs text-emerald-700/70 dark:text-emerald-300/70 pt-1">
+                        Additional family &amp; friends beyond your guest list allowance must purchase general admission tickets:
+                        {" "}<a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="underline break-all">{event.ticketsUrl}</a>
+                      </p>
+                    )}
                   </div>
                 )}
-                {result.confirmed && event?.ticketsUrl && (
+                {result.confirmed && !event?.allowGuestList && event?.ticketsUrl && (
                   <div className="mt-4 rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 text-sm text-left">
                     <p className="font-medium mb-1">General Admission Tickets</p>
                     <p className="text-muted-foreground text-xs mb-2">Share this link with family and friends who want to attend:</p>

@@ -548,7 +548,24 @@ router.post("/band-confirm/:token", async (req, res) => {
             body += `\n`;
           }
           if (conflictNote?.trim()) body += `\nYour note: ${conflictNote.trim()}\n`;
-          if (event?.ticketsUrl) body += `\nGeneral Admission Tickets: ${event.ticketsUrl}\n`;
+
+          // Guest list section
+          if (event?.allowGuestList) {
+            body += `\nGUEST LIST\n`;
+            const policyDesc = event.guestListPolicy === "plus_two"
+              ? "you and up to 2 guests are"
+              : event.guestListPolicy === "plus_one"
+              ? "you and 1 additional guest are"
+              : "you are";
+            body += `As a performer, ${policyDesc} on the complimentary performer guest list — no ticket needed for admission.\n`;
+            if (event.ticketsUrl) {
+              body += `\nFor any family or friends beyond your guest list allowance, general admission tickets are available here:\n${event.ticketsUrl}\n`;
+            }
+          } else if (event?.ticketsUrl) {
+            body += `\nGeneral Admission Tickets\n`;
+            body += `Share this link with family and friends who want to attend:\n${event.ticketsUrl}\n`;
+          }
+
           body += `\nIf anything changes or you have questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;
 
           const html = buildHtmlEmail({ recipientName: invite.contactName ?? "there", body });
