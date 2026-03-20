@@ -1936,10 +1936,27 @@ export default function Events() {
                         </div>
                         <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2</p>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-3 gap-3">
+                            <FormField control={form.control} name="endDate" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Day 2 Date</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="date"
+                                    className="rounded-xl"
+                                    value={field.value ? field.value.split("T")[0] : ""}
+                                    onChange={e => {
+                                      const timePart = field.value ? (field.value.split("T")[1] ?? "").slice(0, 5) : "00:00";
+                                      field.onChange(e.target.value ? `${e.target.value}T${timePart}` : "");
+                                    }}
+                                    onBlur={field.onBlur}
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )} />
                             <FormField control={form.control} name="day2StartTime" render={({ field }) => (
                               <FormItem>
-                                <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
+                                <FormLabel className="text-xs">Start Time</FormLabel>
                                 <Select value={field.value ?? ""} onValueChange={field.onChange}>
                                   <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
                                   <SelectContent position="popper" className="max-h-60 overflow-y-auto">
@@ -1950,8 +1967,20 @@ export default function Events() {
                             )} />
                             <FormField control={form.control} name="endDate" render={({ field }) => (
                               <FormItem>
-                                <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
-                                <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
+                                <FormLabel className="text-xs">End Time</FormLabel>
+                                <Select
+                                  value={field.value ? (field.value.split("T")[1] ?? "").slice(0, 5) : ""}
+                                  onValueChange={t => {
+                                    const datePart = field.value ? field.value.split("T")[0] : "";
+                                    field.onChange(datePart ? `${datePart}T${t}` : "");
+                                    field.onBlur?.();
+                                  }}
+                                >
+                                  <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
+                                  <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                                    {EVENT_TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
                               </FormItem>
                             )} />
                           </div>
@@ -2535,10 +2564,27 @@ export default function Events() {
                   </div>
                   <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <FormField control={editForm.control} name="endDate" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Day 2 Date</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              className="rounded-xl"
+                              value={field.value ? field.value.split("T")[0] : ""}
+                              onChange={e => {
+                                const timePart = field.value ? (field.value.split("T")[1] ?? "").slice(0, 5) : "00:00";
+                                field.onChange(e.target.value ? `${e.target.value}T${timePart}` : "");
+                              }}
+                              onBlur={field.onBlur}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )} />
                       <FormField control={editForm.control} name="day2StartTime" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Day 2 Start Time</FormLabel>
+                          <FormLabel className="text-xs">Start Time</FormLabel>
                           <Select value={field.value ?? ""} onValueChange={field.onChange}>
                             <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
                             <SelectContent position="popper" className="max-h-60 overflow-y-auto">
@@ -2549,8 +2595,20 @@ export default function Events() {
                       )} />
                       <FormField control={editForm.control} name="endDate" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Day 2 Date & End Time</FormLabel>
-                          <FormControl><DateTimeSplit value={field.value} onChange={field.onChange} onBlur={field.onBlur} /></FormControl>
+                          <FormLabel className="text-xs">End Time</FormLabel>
+                          <Select
+                            value={field.value ? (field.value.split("T")[1] ?? "").slice(0, 5) : ""}
+                            onValueChange={t => {
+                              const datePart = field.value ? field.value.split("T")[0] : "";
+                              field.onChange(datePart ? `${datePart}T${t}` : "");
+                              field.onBlur?.();
+                            }}
+                          >
+                            <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select time…" /></SelectTrigger></FormControl>
+                            <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                              {EVENT_TIME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </FormItem>
                       )} />
                     </div>
