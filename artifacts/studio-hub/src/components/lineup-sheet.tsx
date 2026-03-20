@@ -167,8 +167,22 @@ function SlotRow({
     eventDay: slot.eventDay ?? 1,
   });
 
-  // Sync draft staffNote when slot changes
-  useEffect(() => { setDraft(d => ({ ...d, staffNote: slot.staffNote ?? "" })); }, [slot.staffNote]);
+  // Sync draft when slot data changes from server (after save+refetch)
+  useEffect(() => {
+    setDraft({
+      label: slot.label ?? "",
+      startTime: slot.startTime ?? "",
+      duration: slot.durationMinutes ? String(slot.durationMinutes) : "",
+      buffer: slot.bufferMinutes !== null && slot.bufferMinutes !== undefined ? String(slot.bufferMinutes) : "15",
+      isOverlapping: slot.isOverlapping,
+      notes: slot.notes ?? "",
+      bandId: slot.bandId ? String(slot.bandId) : "",
+      groupName: slot.groupName ?? "",
+      staffNote: slot.staffNote ?? "",
+      eventDay: slot.eventDay ?? 1,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slot.id, slot.startTime, slot.durationMinutes, slot.bufferMinutes, slot.bandId, slot.label, slot.notes, slot.staffNote, slot.eventDay]);
 
   // Load invites when expanded and slot has a band
   const { data: invites = [], refetch: refetchInvites } = useQuery<BandInvite[]>({
@@ -892,13 +906,13 @@ export function LineupSheet({ event, open, onClose }: {
       const r = await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
       return r.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] }); setLocalSlots([]); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] }); setLocalSlots(null); },
     onError: () => toast({ title: "Failed to update slot", variant: "destructive" }),
   });
 
   const { mutate: deleteSlot } = useMutation({
     mutationFn: async (id: number) => { await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "DELETE", credentials: "include" }); },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] }); setLocalSlots([]); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] }); setLocalSlots(null); },
   });
 
   const { mutate: reorderSlots } = useMutation({
