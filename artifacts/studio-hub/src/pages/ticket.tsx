@@ -124,7 +124,11 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
 
   const ticketCount = parseInt(form.watch("ticketCount") as any) || 0;
   const ticketType = form.watch("ticketType");
-  const ticketPrice = event?.ticketPrice ? parseFloat(event.ticketPrice) : null;
+
+  const resolvedPriceRaw = isTwoDay && ticketType
+    ? ticketType === "day1" ? event?.day1Price : ticketType === "day2" ? event?.day2Price : event?.ticketPrice
+    : event?.ticketPrice;
+  const ticketPrice = resolvedPriceRaw ? parseFloat(resolvedPriceRaw) : null;
   const total = ticketPrice && ticketCount > 0 ? (ticketPrice * ticketCount).toFixed(2) : null;
 
   const { mutate: submit, isPending } = useMutation({
@@ -205,9 +209,9 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="both">Both Days — one ticket covers the full event</SelectItem>
-                  <SelectItem value="day1">Day 1 Only</SelectItem>
-                  <SelectItem value="day2">Day 2 Only</SelectItem>
+                  <SelectItem value="both">Both Days{event?.ticketPrice ? ` — $${parseFloat(event.ticketPrice).toFixed(2)}/ticket` : ""}</SelectItem>
+                  <SelectItem value="day1">Day 1 Only{event?.day1Price ? ` — $${parseFloat(event.day1Price).toFixed(2)}/ticket` : ""}</SelectItem>
+                  <SelectItem value="day2">Day 2 Only{event?.day2Price ? ` — $${parseFloat(event.day2Price).toFixed(2)}/ticket` : ""}</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

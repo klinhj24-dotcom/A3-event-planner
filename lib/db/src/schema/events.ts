@@ -29,6 +29,8 @@ export const eventsTable = pgTable("events", {
   ctaLabel: text("cta_label").default("TICKETS"),
   ticketFormType: text("ticket_form_type").default("none"), // "none" | "general" | "recital"
   ticketPrice: decimal("ticket_price", { precision: 10, scale: 2 }),
+  day1Price: decimal("day1_price", { precision: 10, scale: 2 }),
+  day2Price: decimal("day2_price", { precision: 10, scale: 2 }),
   hasBandLineup: boolean("has_band_lineup").default(false),
   hasStaffSchedule: boolean("has_staff_schedule").default(false),
   hasCallSheet: boolean("has_call_sheet").default(false),

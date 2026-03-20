@@ -210,7 +210,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -241,6 +241,8 @@ router.post("/events", async (req, res) => {
         ctaLabel: resolvedCtaLabel,
         ticketFormType: ticketFormType ?? "none",
         ticketPrice: ticketPrice != null ? ticketPrice.toString() : null,
+        day1Price: day1Price != null ? day1Price.toString() : null,
+        day2Price: day2Price != null ? day2Price.toString() : null,
         hasBandLineup: hasBandLineup ?? false,
         hasStaffSchedule: hasStaffSchedule ?? false,
         hasCallSheet: hasCallSheet ?? false,
@@ -302,7 +304,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -337,6 +339,8 @@ router.put("/events/:id", async (req, res) => {
         ctaLabel: resolvedCtaLabel,
         ticketFormType: ticketFormType !== undefined ? ticketFormType : undefined,
         ticketPrice: ticketPrice !== undefined ? (ticketPrice != null ? ticketPrice.toString() : null) : undefined,
+        day1Price: day1Price !== undefined ? (day1Price != null ? day1Price.toString() : null) : undefined,
+        day2Price: day2Price !== undefined ? (day2Price != null ? day2Price.toString() : null) : undefined,
         hasBandLineup: hasBandLineup !== undefined ? hasBandLineup : undefined,
         hasStaffSchedule: hasStaffSchedule !== undefined ? hasStaffSchedule : undefined,
         hasCallSheet: hasCallSheet !== undefined ? hasCallSheet : undefined,

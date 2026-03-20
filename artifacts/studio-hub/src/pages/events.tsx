@@ -712,6 +712,8 @@ const eventSchema = z.object({
   ctaLabel: z.string().optional(),
   ticketFormType: z.string().optional(),
   ticketPrice: z.coerce.number().min(0).optional(),
+  day1Price: z.coerce.number().min(0).optional(),
+  day2Price: z.coerce.number().min(0).optional(),
   hasBandLineup: z.boolean().default(false),
   hasStaffSchedule: z.boolean().default(false),
   hasCallSheet: z.boolean().default(false),
@@ -1759,6 +1761,8 @@ export default function Events() {
       ctaLabel: isInternal ? "REGISTER" : (ev.ctaLabel ?? ""),
       ticketFormType: ev.ticketFormType ?? "none",
       ticketPrice: ev.ticketPrice ? Number(ev.ticketPrice) : undefined,
+      day1Price: (ev as any).day1Price ? Number((ev as any).day1Price) : undefined,
+      day2Price: (ev as any).day2Price ? Number((ev as any).day2Price) : undefined,
       hasBandLineup: ev.hasBandLineup ?? false,
       hasStaffSchedule: ev.hasStaffSchedule ?? false,
       hasCallSheet: ev.hasCallSheet ?? false,
@@ -2164,17 +2168,38 @@ export default function Events() {
                             </FormItem>
                           )} />
                           {form.watch("ticketFormType") === "general" && (
-                            <FormField control={form.control} name="ticketPrice" render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
-                                <FormControl>
-                                  <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
-                                    <Input type="number" min="0" step="0.01" placeholder="15.00" className="rounded-xl h-9 pl-6" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            )} />
+                            form.watch("isTwoDay") ? (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ticket Prices <span className="normal-case font-normal">(optional)</span></p>
+                                <div className="grid grid-cols-3 gap-2">
+                                  {([["day1Price", "Day 1"], ["day2Price", "Day 2"], ["ticketPrice", "Both Days"]] as const).map(([name, label]) => (
+                                    <FormField key={name} control={form.control} name={name} render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel className="text-xs">{label}</FormLabel>
+                                        <FormControl>
+                                          <div className="relative">
+                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                            <Input type="number" min="0" step="0.01" placeholder="0.00" className="rounded-xl h-9 pl-5 text-xs" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
+                                          </div>
+                                        </FormControl>
+                                      </FormItem>
+                                    )} />
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <FormField control={form.control} name="ticketPrice" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                                  <FormControl>
+                                    <div className="relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                      <Input type="number" min="0" step="0.01" placeholder="15.00" className="rounded-xl h-9 pl-6" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
+                                    </div>
+                                  </FormControl>
+                                </FormItem>
+                              )} />
+                            )
                           )}
                           <p className="text-[10px] text-muted-foreground">A shareable registration link will be created automatically. The website calendar will show a REGISTER button pointing to it.</p>
                         </div>
@@ -2802,17 +2827,38 @@ export default function Events() {
                       </FormItem>
                     )} />
                     {editForm.watch("ticketFormType") === "general" && (
-                      <FormField control={editForm.control} name="ticketPrice" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
-                              <Input type="number" min="0" step="0.01" placeholder="15.00" className="rounded-xl h-9 pl-6" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
-                            </div>
-                          </FormControl>
-                        </FormItem>
-                      )} />
+                      editForm.watch("isTwoDay") ? (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ticket Prices <span className="normal-case font-normal">(optional)</span></p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([["day1Price", "Day 1"], ["day2Price", "Day 2"], ["ticketPrice", "Both Days"]] as const).map(([name, label]) => (
+                              <FormField key={name} control={editForm.control} name={name} render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">{label}</FormLabel>
+                                  <FormControl>
+                                    <div className="relative">
+                                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                      <Input type="number" min="0" step="0.01" placeholder="0.00" className="rounded-xl h-9 pl-5 text-xs" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
+                                    </div>
+                                  </FormControl>
+                                </FormItem>
+                              )} />
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <FormField control={editForm.control} name="ticketPrice" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                <Input type="number" min="0" step="0.01" placeholder="15.00" className="rounded-xl h-9 pl-6" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} />
+                              </div>
+                            </FormControl>
+                          </FormItem>
+                        )} />
+                      )
                     )}
                     <p className="text-[10px] text-muted-foreground">The website calendar will show a REGISTER button linking to your registration form automatically.</p>
                   </div>

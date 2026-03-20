@@ -21,6 +21,8 @@ router.get("/ticket/:token", async (req, res) => {
         ticketFormType: eventsTable.ticketFormType,
         ticketsUrl: eventsTable.ticketsUrl,
         ticketPrice: eventsTable.ticketPrice,
+        day1Price: eventsTable.day1Price,
+        day2Price: eventsTable.day2Price,
         isTwoDay: eventsTable.isTwoDay,
         day1EndTime: eventsTable.day1EndTime,
         day2StartTime: eventsTable.day2StartTime,
@@ -193,8 +195,11 @@ router.post("/ticket/:token/submit", async (req, res) => {
             const dayLabel = ticketType === "day1" ? "Day 1 Only" : ticketType === "day2" ? "Day 2 Only" : "Both Days";
             bodyText += `Days: ${dayLabel}\n`;
           }
-          if (event.ticketPrice) {
-            const price = parseFloat(event.ticketPrice);
+          const resolvedPrice = event.isTwoDay && ticketType
+            ? ticketType === "day1" ? event.day1Price : ticketType === "day2" ? event.day2Price : event.ticketPrice
+            : event.ticketPrice;
+          if (resolvedPrice) {
+            const price = parseFloat(resolvedPrice);
             const total = price * Number(ticketCount);
             bodyText += `Price: $${price.toFixed(2)} per ticket · Total: $${total.toFixed(2)}\n`;
           }
