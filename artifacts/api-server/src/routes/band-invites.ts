@@ -123,16 +123,16 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
       const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
       const member = members.find(m => m.id === contact.memberId);
 
-      const dayLine = event.isTwoDay && slot.eventDay ? `Performance Day: Day ${slot.eventDay}\n` : "";
       const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
+      const performanceDate = formatPerformanceDay(event, slot.eventDay);
 
       const emailBody = `Hi ${contact.name},
 
 The Music Space would like to invite ${slot.bandName ?? "your band"} to perform at an upcoming event.
 
 ${performerLine}Event: ${event.title}
-Date: ${eventWindow}
-${dayLine}Location: ${event.location ?? "TBD"}
+Date: ${performanceDate}
+Location: ${event.location ?? "TBD"}
 
 ${noteToSend ? `Estimated Time Slot Note from our team:\n"${noteToSend}"\n\n(This is an estimate — final times are confirmed closer to the event.)\n` : ""}To confirm this booking or let us know about any day-of schedule conflicts, please click the link below:
 
@@ -240,16 +240,16 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
         const token = randomUUID();
         const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
         const member = members.find(m => m.id === contact.memberId);
-        const dayLine = event.isTwoDay && slot.eventDay ? `Performance Day: Day ${slot.eventDay}\n` : "";
         const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
+        const performanceDate = formatPerformanceDay(event, slot.eventDay);
 
         const emailBody = `Hi ${contact.name},
 
 The Music Space would like to invite ${slot.bandName ?? "your band"} to perform at an upcoming event.
 
 ${performerLine}Event: ${event.title}
-Date: ${eventWindow}
-${dayLine}Location: ${event.location ?? "TBD"}
+Date: ${performanceDate}
+Location: ${event.location ?? "TBD"}
 
 ${slot.staffNote ? `Estimated Time Slot Note:\n"${slot.staffNote}"\n\n(This is an estimate — final times are confirmed closer to the event.)\n` : ""}Please confirm your participation or share any day-of scheduling notes by clicking the link below:
 
