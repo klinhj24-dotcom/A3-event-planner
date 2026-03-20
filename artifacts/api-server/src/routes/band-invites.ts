@@ -109,7 +109,7 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
       if (existing) continue;
 
       const token = randomUUID();
-      const confirmUrl = `${BASE_URL}/api/band-confirm/${token}`;
+      const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
       const member = members.find(m => m.id === contact.memberId);
 
       const emailBody = `Hi ${contact.name},
@@ -224,7 +224,7 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
         if (!contact.email) continue;
 
         const token = randomUUID();
-        const confirmUrl = `${BASE_URL}/api/band-confirm/${token}`;
+        const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
 
         const emailBody = `Hi ${contact.name},
 
