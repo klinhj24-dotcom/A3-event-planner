@@ -1,5 +1,5 @@
-import { db, eventBandInvitesTable, eventLineupTable, bandsTable, eventsTable, usersTable } from "@workspace/db";
-import { and, eq, gte, lte, isNotNull } from "drizzle-orm";
+import { db, eventBandInvitesTable, eventLineupTable, bandsTable, eventsTable, usersTable, eventGuestListTable } from "@workspace/db";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
 
@@ -88,6 +88,29 @@ export async function runBandReminders() {
         ? `\nEstimated Slot: ${slot.staffNote}`
         : "";
 
+      // Guest list section
+      let guestListSection = "";
+      if (event.allowGuestList && invite.memberId) {
+        const [guestEntry] = await db.select().from(eventGuestListTable)
+          .where(and(eq(eventGuestListTable.eventId, invite.eventId), eq(eventGuestListTable.bandMemberId, invite.memberId)));
+        if (guestEntry) {
+          const names = [guestEntry.studentName, guestEntry.guestOneName, guestEntry.guestTwoName].filter(Boolean);
+          const nameList = names.length === 1
+            ? names[0]
+            : names.length === 2
+            ? `${names[0]} and ${names[1]}`
+            : `${names[0]}, ${names[1]}, and ${names[2]}`;
+          guestListSection = `\n\nGUEST LIST\n${nameList} ${names.length === 1 ? "is" : "are"} on the performer guest list at the door — no ticket needed for admission.`;
+          if (event.ticketsUrl) {
+            guestListSection += `\n\nIf additional tickets are still needed, use this link:\n${event.ticketsUrl}`;
+          }
+        } else if (event.ticketsUrl) {
+          guestListSection = `\n\nTICKETS\nIf additional tickets are needed for family and friends, use this link:\n${event.ticketsUrl}`;
+        }
+      } else if (event.ticketsUrl) {
+        guestListSection = `\n\nTICKETS\nIf additional tickets are needed for family and friends, use this link:\n${event.ticketsUrl}`;
+      }
+
       const emailBody = `Hi ${invite.contactName ?? "there"},
 
 This is a 3-day reminder that ${bandName ?? "your band"} is confirmed to perform at ${event.title}!
@@ -98,7 +121,7 @@ Location: ${event.location ?? "TBD"}${slotLine}
 
 Please make sure everyone is ready to go. Arrive early for soundcheck.
 
-If anything has changed or you have concerns, reply to this email right away.
+If anything has changed or you have concerns, reply to this email right away.${guestListSection}
 
 See you there!
 
