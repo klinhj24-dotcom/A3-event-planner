@@ -292,7 +292,7 @@ function RuleDialog({
 export default function CommSchedule() {
   const { data: rules = [], isLoading } = useCommRules();
   const { mutate: updateRule } = useUpdateCommRule();
-  const { mutate: deleteRule } = useDeleteCommRule();
+  const { mutate: deleteRule, isPending: deleting } = useDeleteCommRule();
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [showInactive, setShowInactive] = useState(false);
