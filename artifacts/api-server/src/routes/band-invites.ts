@@ -32,6 +32,17 @@ function formatEventWindow(event: any): string {
   return start ?? "TBD";
 }
 
+// e.g. "Friday, April 17 (Day 1)" for two-day events; falls back to full window for single-day
+function formatPerformanceDay(event: any, eventDay: number | null | undefined): string {
+  if (!event.isTwoDay || !eventDay) return formatEventWindow(event);
+  const dateObj = eventDay === 2 ? event.endDate : event.startDate;
+  if (!dateObj) return formatEventWindow(event);
+  const dayStr = new Date(dateObj).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", timeZone: "America/New_York",
+  });
+  return `${dayStr} (Day ${eventDay})`;
+}
+
 // ── Get invite status for a lineup slot ────────────────────────────────────────
 router.get("/events/:eventId/lineup/:slotId/invites", async (req, res) => {
   if (!requireAuth(req, res)) return;
@@ -303,7 +314,7 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
     const [slot] = await db
-      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, staffNote: eventLineupTable.staffNote })
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, slotId));
@@ -339,7 +350,7 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
     });
     const gmail = google.gmail({ version: "v1", auth });
     const from = sender.googleEmail ?? sender.email ?? "";
-    const eventWindow = formatEventWindow(event);
+    const performanceDay = formatPerformanceDay(event, slot.eventDay);
 
     const fmt12 = (t: string) => {
       const [h, m] = t.split(":").map(Number);
@@ -354,7 +365,7 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
 Great news — ${slot.bandName ?? "your band"} is confirmed for ${event.title}!
 
 Event: ${event.title}
-Date: ${eventWindow}
+Performance Date: ${performanceDay}
 Location: ${event.location ?? "TBD"}${slotTimeLine}
 
 Please arrive early for soundcheck and setup. We'll be in touch with any additional details closer to the event.
@@ -400,7 +411,7 @@ router.get("/band-confirm/:token", async (req, res) => {
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, invite.eventId));
     const [slot] = await db
-      .select({ bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes })
+      .select({ bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, eventDay: eventLineupTable.eventDay })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
@@ -420,12 +431,14 @@ router.get("/band-confirm/:token", async (req, res) => {
     }
 
     const eventWindow = event ? formatEventWindow(event) : "TBD";
+    const performanceDayLabel = event ? formatPerformanceDay(event, slot?.eventDay) : "TBD";
 
     res.json({
       invite,
       event: event ?? null,
       slot: slot ?? null,
       eventWindow,
+      performanceDayLabel,
       alreadyConfirmedBy: alreadyConfirmed?.contactName ?? null,
       alreadyDeclinedBy: alreadyDeclined?.contactName ?? null,
       guestEntry,
@@ -463,7 +476,7 @@ router.post("/band-confirm/:token", async (req, res) => {
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, invite.eventId));
     const [slot] = await db
-      .select({ bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes })
+      .select({ bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, eventDay: eventLineupTable.eventDay })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
@@ -509,14 +522,14 @@ router.post("/band-confirm/:token", async (req, res) => {
             const [h, m] = t.split(":").map(Number);
             return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
           };
-          const eventWindow = event ? formatEventWindow(event) : "TBD";
+          const performanceDay = event ? formatPerformanceDay(event, slot?.eventDay) : "TBD";
           const bandName = slot?.bandName ?? "your band";
           const subject = `Booking Confirmed — ${bandName} at ${event?.title ?? "The Music Space"}`;
 
           let body = `Hi ${invite.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
           body += `EVENT DETAILS\n`;
           body += `Event: ${event?.title ?? "TBD"}\n`;
-          body += `Date: ${eventWindow}\n`;
+          body += `Performance Date: ${performanceDay}\n`;
           if (event?.location) body += `Location: ${event.location}\n`;
           if (slot?.startTime) {
             body += `Set Time: ${fmt12(slot.startTime)}`;

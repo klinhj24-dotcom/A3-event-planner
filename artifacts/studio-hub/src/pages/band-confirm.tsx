@@ -70,6 +70,7 @@ export default function BandConfirmPage() {
   const alreadyConfirmedBy = data?.alreadyConfirmedBy;
   const alreadyDeclinedBy = data?.alreadyDeclinedBy;
   const eventWindow = data?.eventWindow;
+  const performanceDayLabel = data?.performanceDayLabel ?? eventWindow;
   const allowGuestList = event?.allowGuestList;
   const policy = event?.guestListPolicy ?? "students_only"; // "students_only" | "plus_one" | "plus_two"
 
@@ -174,7 +175,7 @@ export default function BandConfirmPage() {
                 {/* Event details */}
                 <div className="rounded-xl bg-muted/40 border border-border/40 p-4 space-y-1.5 text-sm">
                   <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Event:</span><span className="text-muted-foreground">{event?.title ?? "TBD"}</span></div>
-                  <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Date:</span><span className="text-muted-foreground">{eventWindow ?? "TBD"}</span></div>
+                  <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Date:</span><span className="text-muted-foreground">{performanceDayLabel ?? "TBD"}</span></div>
                   <div className="flex gap-2"><span className="font-medium w-20 shrink-0">Location:</span><span className="text-muted-foreground">{event?.location ?? "TBD"}</span></div>
                   {slot?.startTime && (
                     <div className="flex gap-2">
