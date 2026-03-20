@@ -21,7 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
   Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
-  Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe,
+  Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe, Loader2,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ function SlotRow({
   onUpdate, onDelete, onSendInvite, onSendConfirmation,
 }: {
   slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean;
-  onUpdate: (id: number, data: Partial<LineupSlot>) => void;
+  onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
   onDelete: (id: number) => void;
   onSendInvite: (slotId: number, staffNote: string) => void;
   onSendConfirmation: (slotId: number) => void;
@@ -154,6 +154,7 @@ function SlotRow({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   const [expanded, setExpanded] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [draft, setDraft] = useState({
     label: slot.label ?? "",
     startTime: slot.startTime ?? "",
@@ -206,19 +207,26 @@ function SlotRow({
   const declinedCount = invites.filter(i => i.status === "declined").length;
   const pendingCount = invites.filter(i => i.status === "pending").length;
 
-  function save() {
-    onUpdate(slot.id, {
-      label: draft.label || null,
-      startTime: draft.startTime || null,
-      durationMinutes: draft.duration ? Number(draft.duration) : null,
-      bufferMinutes: Number(draft.buffer) || 15,
-      isOverlapping: draft.isOverlapping,
-      notes: draft.notes || null,
-      bandId: draft.bandId ? Number(draft.bandId) : null,
-      groupName: draft.groupName || null,
-      staffNote: draft.staffNote || null,
-      eventDay: draft.eventDay,
-    });
+  async function save() {
+    setSaveState("saving");
+    try {
+      await onUpdate(slot.id, {
+        label: draft.label || null,
+        startTime: draft.startTime || null,
+        durationMinutes: draft.duration ? Number(draft.duration) : null,
+        bufferMinutes: Number(draft.buffer) || 15,
+        isOverlapping: draft.isOverlapping,
+        notes: draft.notes || null,
+        bandId: draft.bandId ? Number(draft.bandId) : null,
+        groupName: draft.groupName || null,
+        staffNote: draft.staffNote || null,
+        eventDay: draft.eventDay,
+      });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 2000);
+    } catch {
+      setSaveState("idle");
+    }
   }
 
   async function handleSendInvite() {
@@ -425,8 +433,16 @@ function SlotRow({
             </div>
           )}
 
-          <Button size="sm" className="w-full rounded-lg h-8 text-xs" onClick={save}>
-            <Save className="h-3 w-3 mr-1.5" /> Save Changes
+          <Button
+            size="sm"
+            className={`w-full rounded-lg h-8 text-xs transition-colors ${saveState === "saved" ? "bg-emerald-600 hover:bg-emerald-600 text-white" : ""}`}
+            onClick={save}
+            disabled={saveState === "saving"}
+          >
+            {saveState === "saving" && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+            {saveState === "saved" && <CheckCircle2 className="h-3 w-3 mr-1.5" />}
+            {saveState === "idle" && <Save className="h-3 w-3 mr-1.5" />}
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved!" : "Save Changes"}
           </Button>
 
           {/* ── Band Leader Attendance (act slots where band has a leader) ─── */}
@@ -927,7 +943,7 @@ export function LineupSheet({ event, open, onClose }: {
     },
   });
 
-  const { mutate: updateSlot } = useMutation({
+  const { mutateAsync: updateSlot } = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       const r = await fetch(`/api/events/${eventId}/lineup/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
       return r.json();
@@ -1056,7 +1072,7 @@ export function LineupSheet({ event, open, onClose }: {
   const isRecital = event?.type === "Recital";
   const calcTimes = computeTimes(slots);
 
-  const handleUpdate = useCallback((id: number, data: Partial<LineupSlot>) => { updateSlot({ id, data }); }, [updateSlot]);
+  const handleUpdate = useCallback(async (id: number, data: Partial<LineupSlot>) => { await updateSlot({ id, data }); }, [updateSlot]);
   const handleDelete = useCallback((id: number) => { deleteSlot(id); }, [deleteSlot]);
 
   // Invite stats for header
