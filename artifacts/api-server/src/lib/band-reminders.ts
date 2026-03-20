@@ -73,9 +73,14 @@ export async function runBandReminders() {
         return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
       };
 
-      const eventDate = event.startDate
-        ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-        : "TBD";
+      const fmtDate = (d: Date) => d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+      let eventDate = "TBD";
+      if (event.isTwoDay && slot.eventDay) {
+        const dateObj = slot.eventDay === 2 ? event.endDate : event.startDate;
+        eventDate = dateObj ? `${fmtDate(new Date(dateObj))} (Day ${slot.eventDay} of 2)` : "TBD";
+      } else if (event.startDate) {
+        eventDate = fmtDate(new Date(event.startDate));
+      }
 
       const slotLine = slot.startTime
         ? `\nYour Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
