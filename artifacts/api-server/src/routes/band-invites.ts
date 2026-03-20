@@ -63,7 +63,7 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
     const [slot] = await db
-      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus })
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, slotId));
@@ -112,13 +112,16 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
       const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
       const member = members.find(m => m.id === contact.memberId);
 
+      const dayLine = event.isTwoDay && slot.eventDay ? `Performance Day: Day ${slot.eventDay}\n` : "";
+      const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
+
       const emailBody = `Hi ${contact.name},
 
 The Music Space would like to invite ${slot.bandName ?? "your band"} to perform at an upcoming event.
 
-Event: ${event.title}
+${performerLine}Event: ${event.title}
 Date: ${eventWindow}
-Location: ${event.location ?? "TBD"}
+${dayLine}Location: ${event.location ?? "TBD"}
 
 ${noteToSend ? `Estimated Time Slot Note from our team:\n"${noteToSend}"\n\n(This is an estimate — final times are confirmed closer to the event.)\n` : ""}To confirm this booking or let us know about any day-of schedule conflicts, please click the link below:
 
@@ -187,7 +190,7 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
 
     // Get all act slots with bands that haven't been invited yet
     const slots = await db
-      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote })
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, inviteStatus: eventLineupTable.inviteStatus, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.type, "act"), eq(eventLineupTable.inviteStatus, "not_sent")));
@@ -225,14 +228,17 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
 
         const token = randomUUID();
         const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
+        const member = members.find(m => m.id === contact.memberId);
+        const dayLine = event.isTwoDay && slot.eventDay ? `Performance Day: Day ${slot.eventDay}\n` : "";
+        const performerLine = member?.name ? `Performer: ${member.name}\n` : "";
 
         const emailBody = `Hi ${contact.name},
 
 The Music Space would like to invite ${slot.bandName ?? "your band"} to perform at an upcoming event.
 
-Event: ${event.title}
+${performerLine}Event: ${event.title}
 Date: ${eventWindow}
-Location: ${event.location ?? "TBD"}
+${dayLine}Location: ${event.location ?? "TBD"}
 
 ${slot.staffNote ? `Estimated Time Slot Note:\n"${slot.staffNote}"\n\n(This is an estimate — final times are confirmed closer to the event.)\n` : ""}Please confirm your participation or share any day-of scheduling notes by clicking the link below:
 
