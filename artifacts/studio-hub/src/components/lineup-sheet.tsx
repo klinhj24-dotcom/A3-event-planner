@@ -9,9 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
   useDraggable, useDroppable,
-  type DragEndEvent,
+  type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable,
@@ -772,6 +772,30 @@ function DroppableShowOrder({ children, isEmpty }: { children: React.ReactNode; 
   );
 }
 
+// ── Droppable per-day zone (two-day events) ───────────────────────────────────
+function DroppableDayZone({ day, children, isDragging }: { day: number; children: React.ReactNode; isDragging: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `day-zone-${day}` });
+  const isDay1 = day === 1;
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border-2 transition-all duration-150 ${
+        isOver
+          ? isDay1
+            ? "border-sky-400 bg-sky-500/8 shadow-[0_0_0_3px_rgba(56,189,248,0.15)]"
+            : "border-orange-400 bg-orange-500/8 shadow-[0_0_0_3px_rgba(251,146,60,0.15)]"
+          : isDragging
+            ? isDay1
+              ? "border-sky-500/40 border-dashed"
+              : "border-orange-500/40 border-dashed"
+            : "border-transparent"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ── Main sheet ─────────────────────────────────────────────────────────────────
 export function LineupSheet({ event, open, onClose }: {
   event: { id: number; title: string; type?: string; isTwoDay?: boolean } | null;
@@ -803,6 +827,8 @@ export function LineupSheet({ event, open, onClose }: {
   const [localSlots, setLocalSlots] = useState<LineupSlot[] | null>(null);
   const slots = localSlots ?? rawSlots;
   useEffect(() => { setLocalSlots(null); }, [rawSlots, eventId]);
+
+  const [activeDragBand, setActiveDragBand] = useState<Band | null>(null);
 
   // ── Band mutations ─────────────────────────────────────────────────────────
   const [newBandName, setNewBandName] = useState("");
@@ -977,16 +1003,30 @@ export function LineupSheet({ event, open, onClose }: {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  function handleDragStart(event: DragStartEvent) {
+    const activeId = String(event.active.id);
+    if (activeId.startsWith("band-")) {
+      const bandId = Number(activeId.replace("band-", ""));
+      setActiveDragBand(rawBands.find(b => b.id === bandId) ?? null);
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    setActiveDragBand(null);
     if (!over) return;
 
-    // Band card dropped onto show order → create act slot
+    // Band card dropped onto show order or a day zone → create act slot
     const activeId = String(active.id);
+    const overId = String(over.id);
     if (activeId.startsWith("band-")) {
       const bandId = Number(activeId.replace("band-", ""));
       const band = rawBands.find(b => b.id === bandId);
       if (band) {
+        // Determine which day zone was dropped on
+        let eventDay = newSlot.eventDay;
+        if (overId === "day-zone-1") eventDay = 1;
+        else if (overId === "day-zone-2") eventDay = 2;
         addSlot({
           type: "act",
           bandId,
@@ -996,7 +1036,7 @@ export function LineupSheet({ event, open, onClose }: {
           durationMinutes: null,
           bufferMinutes: 15,
           isOverlapping: false,
-          eventDay: newSlot.eventDay,
+          eventDay,
           position: slots.length,
         });
       }
@@ -1078,7 +1118,7 @@ export function LineupSheet({ event, open, onClose }: {
           </div>
         </SheetHeader>
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-hidden">
           {/* ── Left: Bands panel ─────────────────────────────────────────────── */}
           {!isRecital && <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
@@ -1161,7 +1201,7 @@ export function LineupSheet({ event, open, onClose }: {
               </div>
             </div>
 
-            {slots.length === 0 && (
+            {slots.length === 0 && !event?.isTwoDay && (
               <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-border/50 text-center">
                 <Music className="h-10 w-10 text-muted-foreground/20 mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">{isRecital ? "No performers added yet" : "No acts added yet"}</p>
@@ -1173,39 +1213,44 @@ export function LineupSheet({ event, open, onClose }: {
 
             <SortableContext items={slots.map(s => s.id)} strategy={verticalListSortingStrategy}>
               {event?.isTwoDay ? (
-                // Day 1 / Day 2 sections
+                // Day 1 / Day 2 sections — each is its own drop zone
                 [1, 2].map(day => {
                   const daySlots = slots.filter(s => (s.eventDay ?? 1) === day);
                   const dayIndices = daySlots.map(ds => slots.indexOf(ds));
                   return (
-                    <div key={day} className="space-y-2">
-                      <div className={`flex items-center gap-3 ${day === 2 ? "mt-4" : ""}`}>
+                    <div key={day} className={day === 2 ? "mt-4" : ""}>
+                      <div className={`flex items-center gap-3 mb-2`}>
                         <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
                         <span className={`text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${day === 1 ? "text-sky-400 bg-sky-500/10" : "text-orange-400 bg-orange-500/10"}`}>
                           Day {day}
                         </span>
                         <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
                       </div>
-                      {daySlots.length === 0 && (
-                        <p className="text-xs text-muted-foreground/50 text-center py-3 italic">No slots for Day {day} yet — drag a band here or use Add Slot</p>
-                      )}
-                      <div className="space-y-2">
-                        {daySlots.map((slot, di) => (
-                          <SlotRow
-                            key={slot.id}
-                            slot={slot}
-                            calcTime={calcTimes[dayIndices[di]]}
-                            bands={rawBands}
-                            eventId={eventId!}
-                            isRecital={isRecital}
-                            isTwoDay={true}
-                            onUpdate={handleUpdate}
-                            onDelete={handleDelete}
-                            onSendInvite={handleSendInvite}
-                            onSendConfirmation={handleSendConfirmation}
-                          />
-                        ))}
-                      </div>
+                      <DroppableDayZone day={day} isDragging={!!activeDragBand}>
+                        {daySlots.length === 0 ? (
+                          <p className={`text-xs text-center py-4 italic transition-colors ${activeDragBand ? (day === 1 ? "text-sky-400/60" : "text-orange-400/60") : "text-muted-foreground/40"}`}>
+                            {activeDragBand ? `Drop here to add to Day ${day}` : `No slots for Day ${day} yet — drag a band here or use Add Slot`}
+                          </p>
+                        ) : (
+                          <div className="space-y-2 py-1">
+                            {daySlots.map((slot, di) => (
+                              <SlotRow
+                                key={slot.id}
+                                slot={slot}
+                                calcTime={calcTimes[dayIndices[di]]}
+                                bands={rawBands}
+                                eventId={eventId!}
+                                isRecital={isRecital}
+                                isTwoDay={true}
+                                onUpdate={handleUpdate}
+                                onDelete={handleDelete}
+                                onSendInvite={handleSendInvite}
+                                onSendConfirmation={handleSendConfirmation}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </DroppableDayZone>
                     </div>
                   );
                 })
@@ -1245,6 +1290,21 @@ export function LineupSheet({ event, open, onClose }: {
             })()}
           </DroppableShowOrder>
         </div>
+
+        {/* Floating drag overlay — band card travels with cursor */}
+        <DragOverlay dropAnimation={{ duration: 150, easing: "ease" }}>
+          {activeDragBand && (
+            <div className="rounded-xl bg-background border border-primary/40 shadow-2xl shadow-black/40 px-3 py-2.5 w-60 rotate-1 scale-105 pointer-events-none">
+              <div className="flex items-center gap-2">
+                <Music className="h-3.5 w-3.5 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{activeDragBand.name}</p>
+                  {activeDragBand.genre && <p className="text-[10px] text-muted-foreground truncate">{activeDragBand.genre}</p>}
+                </div>
+              </div>
+            </div>
+          )}
+        </DragOverlay>
         </DndContext>
       </SheetContent>
 
