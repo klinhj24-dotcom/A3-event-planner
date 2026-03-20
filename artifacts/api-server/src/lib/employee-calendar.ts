@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { createAuthedClient } from "./google";
 
 export const EMPLOYEE_CALENDAR_ID = "themusicspace.com_8v2lr83mb7i3lcuc8u9dcabn3c@group.calendar.google.com";
+export const INTERN_CALENDAR_ID = "c_10ad4ea412f2a389f03b41cf94f5471878717080b034166e1a5f7f871b8edcd6@group.calendar.google.com";
 
 async function getAuthedCal() {
   const users = await db.select().from(usersTable);
@@ -30,6 +31,7 @@ export interface EmployeeCalPushOptions {
   eventStartDate?: Date | null;
   eventEndDate?: Date | null;
   employeeName: string;
+  employeeRole?: string | null;
   role?: string | null;
   shiftStart?: Date | null;
   shiftEnd?: Date | null;
@@ -65,16 +67,18 @@ export async function pushToEmployeeCalendar(opts: EmployeeCalPushOptions): Prom
       end: { dateTime: (end ?? new Date(start.getTime() + 3_600_000)).toISOString() },
     };
 
+    const calId = opts.employeeRole === "intern" ? INTERN_CALENDAR_ID : EMPLOYEE_CALENDAR_ID;
+
     if (opts.existingCalEventId) {
       try {
-        await cal.events.update({ calendarId: EMPLOYEE_CALENDAR_ID, eventId: opts.existingCalEventId, requestBody: calEvent });
+        await cal.events.update({ calendarId: calId, eventId: opts.existingCalEventId, requestBody: calEvent });
         return opts.existingCalEventId;
       } catch {
         // Fall through to insert if update fails (e.g. event was manually deleted)
       }
     }
 
-    const result = await cal.events.insert({ calendarId: EMPLOYEE_CALENDAR_ID, requestBody: calEvent });
+    const result = await cal.events.insert({ calendarId: calId, requestBody: calEvent });
     return result.data.id ?? null;
   } catch (err) {
     console.warn("[employee-calendar] Push failed (non-fatal):", err);
@@ -82,12 +86,14 @@ export async function pushToEmployeeCalendar(opts: EmployeeCalPushOptions): Prom
   }
 }
 
-/** Removes a previously pushed calendar event. Silently ignores failures. */
+/** Removes a previously pushed calendar event. Tries both calendars silently. */
 export async function removeFromEmployeeCalendar(calEventId: string): Promise<void> {
   try {
     const cal = await getAuthedCal();
     if (!cal) return;
-    await cal.events.delete({ calendarId: EMPLOYEE_CALENDAR_ID, eventId: calEventId });
+    for (const calId of [EMPLOYEE_CALENDAR_ID, INTERN_CALENDAR_ID]) {
+      try { await cal.events.delete({ calendarId: calId, eventId: calEventId }); } catch { /* not in this calendar */ }
+    }
   } catch (err) {
     console.warn("[employee-calendar] Remove failed (non-fatal):", err);
   }

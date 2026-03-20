@@ -97,13 +97,14 @@ async function sendStaffNotificationEmail(
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
     console.log(`[staffing] Sent assignment notification to ${recipientEmail}`);
 
-    // Push to employee calendar
+    // Push to employee calendar (interns → intern calendar, everyone else → staff calendar)
     const calEventId = await pushToEmployeeCalendar({
       eventTitle: event?.title ?? "Event",
       eventLocation: event?.location,
       eventStartDate: event?.startDate,
       eventEndDate: event?.endDate,
       employeeName: employee.name,
+      employeeRole: employee.role,
       role: roleType?.name,
       shiftStart: startTime ?? undefined,
       shiftEnd: endTime ?? undefined,
