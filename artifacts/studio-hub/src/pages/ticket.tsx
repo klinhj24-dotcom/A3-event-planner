@@ -15,28 +15,77 @@ import { motion } from "framer-motion";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
 import { PublicFooter } from "@/components/public-footer";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const generalSchema = z.object({
-  contactFirstName: z.string().min(1, "First name is required"),
-  contactLastName: z.string().min(1, "Last name is required"),
-  contactEmail: z.string().email("Valid email is required"),
-  ticketCount: z.coerce.number().min(1, "Enter at least 1 ticket"),
-});
+function fmt12(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
 
-const recitalSchema = z.object({
-  studentFirstName: z.string().min(1, "Required"),
-  studentLastName: z.string().min(1, "Required"),
-  contactFirstName: z.string().min(1, "Required"),
-  contactLastName: z.string().min(1, "Required"),
-  contactEmail: z.string().email("Valid email is required"),
-  instrument: z.string().min(1, "Required"),
-  recitalSong: z.string().optional(),
-  teacher: z.string().min(1, "Required"),
-  specialConsiderations: z.string().optional(),
-});
+function formatDay(date: Date) {
+  return format(date, "EEEE, MMMM d, yyyy");
+}
 
-type GeneralForm = z.infer<typeof generalSchema>;
-type RecitalForm = z.infer<typeof recitalSchema>;
+function formatTime(date: Date) {
+  return format(date, "h:mm a");
+}
+
+// ─── Event date display ───────────────────────────────────────────────────────
+
+function EventDateDisplay({ event }: { event: any }) {
+  const startDate = event.startDate ? new Date(event.startDate) : null;
+  const endDate = event.endDate ? new Date(event.endDate) : null;
+
+  if (!startDate) return null;
+
+  if (event.isTwoDay) {
+    // Day 1: startDate → day1EndTime
+    // Day 2: endDate (date) from day2StartTime → endDate time
+    const day1Start = formatTime(startDate);
+    const day1End = event.day1EndTime ? fmt12(event.day1EndTime) : null;
+    const day2Date = endDate;
+    const day2Start = event.day2StartTime ? fmt12(event.day2StartTime) : null;
+    const day2End = endDate ? formatTime(endDate) : null;
+
+    return (
+      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+        <Calendar className="h-4 w-4 text-primary/70 shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <div>
+            <span className="font-medium text-foreground">Day 1:</span>{" "}
+            {formatDay(startDate)}
+            {day1Start !== "12:00 AM" && (
+              <> · {day1Start}{day1End ? ` – ${day1End}` : ""}</>
+            )}
+          </div>
+          {day2Date && (
+            <div>
+              <span className="font-medium text-foreground">Day 2:</span>{" "}
+              {formatDay(day2Date)}
+              {day2Start && <> · {day2Start}{day2End ? ` – ${day2End}` : ""}</>}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Single-day
+  const startTime = format(startDate, "HH:mm") !== "00:00" ? formatTime(startDate) : null;
+  const endTime = endDate && format(endDate, "HH:mm") !== "00:00" ? formatTime(endDate) : null;
+
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
+      <span>
+        {formatDay(startDate)}
+        {startTime && <> · {startTime}{endTime ? ` – ${endTime}` : ""}</>}
+      </span>
+    </div>
+  );
+}
+
+// ─── Already submitted card ───────────────────────────────────────────────────
 
 function AlreadySubmittedCard() {
   return (
@@ -52,11 +101,29 @@ function AlreadySubmittedCard() {
   );
 }
 
+// ─── General Ticket Form ──────────────────────────────────────────────────────
+
+const generalSchema = z.object({
+  contactFirstName: z.string().min(1, "First name is required"),
+  contactLastName: z.string().min(1, "Last name is required"),
+  contactEmail: z.string().email("Valid email is required"),
+  ticketCount: z.coerce.number().min(1, "Enter at least 1 ticket"),
+  ticketType: z.string().optional(),
+});
+type GeneralForm = z.infer<typeof generalSchema>;
+
 function GeneralTicketForm({ event, token }: { event: any; token: string }) {
   const [submitted, setSubmitted] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
-  const form = useForm<GeneralForm>({ resolver: zodResolver(generalSchema) });
+
+  const isTwoDay = !!event?.isTwoDay;
+  const form = useForm<GeneralForm>({
+    resolver: zodResolver(generalSchema),
+    defaultValues: { ticketType: isTwoDay ? "both" : undefined },
+  });
+
   const ticketCount = parseInt(form.watch("ticketCount") as any) || 0;
+  const ticketType = form.watch("ticketType");
   const ticketPrice = event?.ticketPrice ? parseFloat(event.ticketPrice) : null;
   const total = ticketPrice && ticketCount > 0 ? (ticketPrice * ticketCount).toFixed(2) : null;
 
@@ -79,6 +146,9 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
   if (alreadySubmitted) return <AlreadySubmittedCard />;
 
   if (submitted) {
+    const dayLabel = isTwoDay
+      ? ticketType === "day1" ? " (Day 1)" : ticketType === "day2" ? " (Day 2)" : " (Both Days)"
+      : "";
     return (
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center text-center gap-4 py-8">
         <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
@@ -86,7 +156,10 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
         </div>
         <div>
           <h2 className="text-xl font-semibold text-foreground">Request Received!</h2>
-          <p className="text-muted-foreground mt-1 text-sm">We'll send a confirmation to your email. Your card on file will be charged on the next open business day.</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            We'll send a confirmation to your email.{dayLabel ? ` Tickets${dayLabel}.` : ""}
+            {" "}Your card on file will be charged on the next open business day.
+          </p>
         </div>
       </motion.div>
     );
@@ -111,13 +184,37 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
             </FormItem>
           )} />
         </div>
+
         <FormField control={form.control} name="contactEmail" render={({ field }) => (
           <FormItem>
             <FormLabel>Email Address <span className="text-destructive">*</span></FormLabel>
-            <FormControl><Input className="rounded-xl" type="email" placeholder="rigby@themusicspace.com" {...field} /></FormControl>
+            <FormControl><Input className="rounded-xl" type="email" placeholder="you@example.com" {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
+
+        {/* Day selector — two-day events only */}
+        {isTwoDay && (
+          <FormField control={form.control} name="ticketType" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Which day(s)? <span className="text-destructive">*</span></FormLabel>
+              <Select onValueChange={field.onChange} value={field.value ?? "both"}>
+                <FormControl>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Select days…" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="both">Both Days — one ticket covers the full event</SelectItem>
+                  <SelectItem value="day1">Day 1 Only</SelectItem>
+                  <SelectItem value="day2">Day 2 Only</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )} />
+        )}
+
         <FormField control={form.control} name="ticketCount" render={({ field }) => (
           <FormItem>
             <FormLabel>Number of Tickets <span className="text-destructive">*</span></FormLabel>
@@ -125,12 +222,17 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
             <FormMessage />
           </FormItem>
         )} />
+
+        {/* Price + charge notice */}
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2.5 text-sm text-amber-700 dark:text-amber-400">
           <CreditCard className="h-4 w-4 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             {ticketPrice != null ? (
               <>
-                <p><strong>${ticketPrice.toFixed(2)}</strong> per ticket{total ? <> · <strong>Total: ${total}</strong></> : ""}</p>
+                <p>
+                  <strong>${ticketPrice.toFixed(2)}</strong> per ticket
+                  {total ? <> · <strong>Total: ${total}</strong></> : ""}
+                </p>
                 <p className="text-xs opacity-80">Your card on file will be charged on the next open business day.</p>
               </>
             ) : (
@@ -138,6 +240,7 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
             )}
           </div>
         </div>
+
         <Button type="submit" disabled={isPending} className="w-full rounded-xl">
           {isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : "Request Tickets"}
         </Button>
@@ -145,6 +248,21 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
     </Form>
   );
 }
+
+// ─── Recital Registration Form ────────────────────────────────────────────────
+
+const recitalSchema = z.object({
+  studentFirstName: z.string().min(1, "Required"),
+  studentLastName: z.string().min(1, "Required"),
+  contactFirstName: z.string().min(1, "Required"),
+  contactLastName: z.string().min(1, "Required"),
+  contactEmail: z.string().email("Valid email is required"),
+  instrument: z.string().min(1, "Required"),
+  recitalSong: z.string().optional(),
+  teacher: z.string().min(1, "Required"),
+  specialConsiderations: z.string().optional(),
+});
+type RecitalForm = z.infer<typeof recitalSchema>;
 
 function RecitalRegistrationForm({ event, token }: { event: any; token: string }) {
   const [submitted, setSubmitted] = useState(false);
@@ -259,7 +377,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
           <FormField control={form.control} name="contactEmail" render={({ field }) => (
             <FormItem>
               <FormLabel>Contact Email <span className="text-destructive">*</span></FormLabel>
-              <FormControl><Input className="rounded-xl" type="email" placeholder="rigby@themusicspace.com" {...field} /></FormControl>
+              <FormControl><Input className="rounded-xl" type="email" placeholder="you@example.com" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
@@ -284,6 +402,8 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function TicketForm() {
   const params = useParams();
   const token = (params as any).token || "";
@@ -298,12 +418,8 @@ export default function TicketForm() {
     enabled: !!token,
   });
 
-  const startDate = event?.startDate ? new Date(event.startDate) : null;
-  const endDate = event?.endDate ? new Date(event.endDate) : null;
-
   return (
     <div className="min-h-screen bg-background flex flex-col items-center py-8 px-4">
-      {/* Logo / Brand */}
       <div className="mb-6">
         <img src={tmsLogoWhite} alt="The Music Space" className="h-16 w-auto object-contain" />
       </div>
@@ -334,17 +450,7 @@ export default function TicketForm() {
               )}
               <div className="p-5 space-y-3">
                 <h1 className="font-display text-2xl font-bold leading-tight">{event.title}</h1>
-                {startDate && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
-                    <span>
-                      {format(startDate, "EEEE, MMMM d, yyyy")}
-                      {format(startDate, "HH:mm") !== "00:00" && (
-                        <> · {format(startDate, "h:mm a")}{endDate && format(endDate, "HH:mm") !== "00:00" ? ` – ${format(endDate, "h:mm a")}` : ""}</>
-                      )}
-                    </span>
-                  </div>
-                )}
+                <EventDateDisplay event={event} />
                 {event.location && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4 text-primary/70 shrink-0" />

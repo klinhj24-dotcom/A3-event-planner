@@ -68,6 +68,7 @@ export const eventTicketRequestsTable = pgTable("event_ticket_requests", {
   contactLastName: text("contact_last_name").notNull(),
   contactEmail: text("contact_email").notNull(),
   ticketCount: integer("ticket_count"),
+  ticketType: text("ticket_type"), // "both" | "day1" | "day2" — for two-day events; null = single-day
   // Recital-only fields
   studentFirstName: text("student_first_name"),
   studentLastName: text("student_last_name"),

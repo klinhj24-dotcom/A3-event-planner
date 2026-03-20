@@ -20,6 +20,10 @@ router.get("/ticket/:token", async (req, res) => {
         imageUrl: eventsTable.imageUrl,
         ticketFormType: eventsTable.ticketFormType,
         ticketsUrl: eventsTable.ticketsUrl,
+        ticketPrice: eventsTable.ticketPrice,
+        isTwoDay: eventsTable.isTwoDay,
+        day1EndTime: eventsTable.day1EndTime,
+        day2StartTime: eventsTable.day2StartTime,
       })
       .from(eventsTable)
       .where(eq(eventsTable.signupToken, req.params.token));
@@ -64,7 +68,7 @@ router.post("/ticket/:token/submit", async (req, res) => {
     }
 
     const {
-      contactFirstName, contactLastName, contactEmail, ticketCount,
+      contactFirstName, contactLastName, contactEmail, ticketCount, ticketType,
       studentFirstName, studentLastName, instrument, recitalSong, teacher, specialConsiderations,
     } = req.body;
 
@@ -108,6 +112,7 @@ router.post("/ticket/:token/submit", async (req, res) => {
         contactLastName,
         contactEmail,
         ticketCount: ticketCount ? Number(ticketCount) : null,
+        ticketType: ticketType ?? null,
         studentFirstName: studentFirstName ?? null,
         studentLastName: studentLastName ?? null,
         instrument: instrument ?? null,
@@ -172,6 +177,15 @@ router.post("/ticket/:token/submit", async (req, res) => {
           bodyText += `\nRecital fee: $${recitalFee} per performer — this nonrefundable fee will be charged to the card on file on the next open business day.\n`;
         } else {
           bodyText += `Tickets Requested: ${ticketCount}\n`;
+          if (ticketType && event.isTwoDay) {
+            const dayLabel = ticketType === "day1" ? "Day 1 Only" : ticketType === "day2" ? "Day 2 Only" : "Both Days";
+            bodyText += `Days: ${dayLabel}\n`;
+          }
+          if (event.ticketPrice) {
+            const price = parseFloat(event.ticketPrice);
+            const total = price * Number(ticketCount);
+            bodyText += `Price: $${price.toFixed(2)} per ticket · Total: $${total.toFixed(2)}\n`;
+          }
           bodyText += `\nYour card on file will be charged on the next open business day.\n`;
         }
 
