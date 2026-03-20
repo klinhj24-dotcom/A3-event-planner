@@ -90,6 +90,39 @@ function shiftLabel(startTime: string | null | undefined, endTime: string | null
   return `${fmtTime(startTime)} – ${fmtTime(endTime)}`;
 }
 
+// ── Category filter helper ────────────────────────────────────────────────────
+type EmpCategory = "all" | "staff" | "intern" | "teacher";
+
+function filterEmployeesByCategory(employees: Employee[], category: EmpCategory): Employee[] {
+  if (category === "all") return employees;
+  if (category === "intern") return employees.filter(e => e.role?.toLowerCase().includes("intern"));
+  if (category === "teacher") return employees.filter(e => e.role?.toLowerCase().includes("teacher"));
+  return employees.filter(e => !e.role?.toLowerCase().includes("intern") && !e.role?.toLowerCase().includes("teacher"));
+}
+
+const CATEGORY_BTNS: { value: EmpCategory; label: string }[] = [
+  { value: "staff",   label: "Staff"   },
+  { value: "intern",  label: "Intern"  },
+  { value: "teacher", label: "Teacher" },
+];
+
+function CategoryFilter({ value, onChange }: { value: EmpCategory; onChange: (v: EmpCategory) => void }) {
+  return (
+    <div className="flex gap-1">
+      {CATEGORY_BTNS.map(b => (
+        <button
+          key={b.value}
+          type="button"
+          onClick={() => onChange(value === b.value ? "all" : b.value)}
+          className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors ${value === b.value ? "bg-primary text-primary-foreground border-primary" : "bg-transparent text-muted-foreground border-border/40 hover:border-border"}`}
+        >
+          {b.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── SlotCard ─────────────────────────────────────────────────────────────────
 function SlotCard({
   slot, employees, onUpdate, onDelete,
@@ -100,6 +133,7 @@ function SlotCard({
   onDelete: (id: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [editCategory, setEditCategory] = useState<EmpCategory>("all");
   const [form, setForm] = useState({
     assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned",
     startTime: toLocalInput(slot.startTime),
@@ -122,13 +156,16 @@ function SlotCard({
   if (editing) {
     return (
       <div className="rounded-xl border border-primary/40 bg-muted/20 p-3 space-y-3">
-        <div className="space-y-1">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Assign To</label>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Assign To</label>
+            <CategoryFilter value={editCategory} onChange={setEditCategory} />
+          </div>
           <Select value={form.assignedEmployeeId} onValueChange={v => setForm(f => ({ ...f, assignedEmployeeId: v }))}>
             <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Leave unassigned…" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               <SelectItem value="unassigned">Unassigned</SelectItem>
-              {employees.map(e => (
+              {filterEmployeesByCategory(employees, editCategory).map(e => (
                 <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
               ))}
             </SelectContent>
@@ -224,6 +261,7 @@ export function StaffSlotsSheet({
 
   // ── Add slot dialog ────────────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
+  const [addCategory, setAddCategory] = useState<EmpCategory>("all");
   const [addForm, setAddForm] = useState({
     roleTypeId: "", assignedEmployeeId: "unassigned",
     startDate: "", startTime: "", endDate: "", endTime: "", notes: "",
@@ -234,6 +272,7 @@ export function StaffSlotsSheet({
     const st = toTimePart(event?.startDate);
     const ed = toDatePart(event?.endDate) || sd;
     const et = toTimePart(event?.endDate) || st;
+    setAddCategory("all");
     setAddForm({
       roleTypeId: presetRoleTypeId || "",
       assignedEmployeeId: "unassigned",
@@ -425,13 +464,16 @@ export function StaffSlotsSheet({
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Assign To (optional)</label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Assign To (optional)</label>
+                <CategoryFilter value={addCategory} onChange={setAddCategory} />
+              </div>
               <Select value={addForm.assignedEmployeeId} onValueChange={v => setAddForm(f => ({ ...f, assignedEmployeeId: v }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue placeholder="Leave unassigned for now…" /></SelectTrigger>
                 <SelectContent position="popper" className="max-h-60 overflow-y-auto">
                   <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {employees.map(e => (
+                  {filterEmployeesByCategory(employees, addCategory).map(e => (
                     <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
                   ))}
                 </SelectContent>
