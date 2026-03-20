@@ -1580,7 +1580,7 @@ export default function Events() {
   const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
-  const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string } | null>(null);
+  const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string; isTwoDay?: boolean } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
   const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
@@ -2392,7 +2392,7 @@ export default function Events() {
                                 variant="ghost"
                                 title="Band lineup builder"
                                 className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                onClick={() => setLineupEvent({ id: event.id, title: event.title })}
+                                onClick={() => setLineupEvent({ id: event.id, title: event.title, type: event.type, isTwoDay: event.isTwoDay ?? false })}
                               >
                                 <Music className="h-3.5 w-3.5" />
                               </Button>
@@ -2936,7 +2936,7 @@ export default function Events() {
           onEdit: (ev) => openEdit(ev),
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
           onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl }),
-          onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type }),
+          onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type, isTwoDay: ev.isTwoDay ?? false }),
           onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),
           onInvite: (ev) => setInviteEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, location: ev.location, signupToken: ev.signupToken }),

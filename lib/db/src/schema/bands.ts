@@ -72,6 +72,8 @@ export const eventLineupTable = pgTable("event_lineup", {
   type: text("type").notNull().default("act"),
   groupName: text("group_name"),
   notes: text("notes"),
+  // Two-day event support
+  eventDay: integer("event_day").notNull().default(1), // 1 or 2 — which day of a two-day event this slot is on
   // Invite tracking
   staffNote: text("staff_note"),                            // staff's estimated slot note sent with invite
   inviteStatus: text("invite_status").notNull().default("not_sent"), // not_sent | sent | confirmed | declined

@@ -309,6 +309,7 @@ const LINEUP_SELECT = {
   confirmed: eventLineupTable.confirmed,
   type: eventLineupTable.type,
   notes: eventLineupTable.notes,
+  eventDay: eventLineupTable.eventDay,
   staffNote: eventLineupTable.staffNote,
   inviteStatus: eventLineupTable.inviteStatus,
   confirmationSent: eventLineupTable.confirmationSent,
@@ -342,7 +343,7 @@ router.post("/events/:id/lineup", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position, staffNote } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position, staffNote, eventDay } = req.body;
     const [slot] = await db.insert(eventLineupTable)
       .values({
         eventId,
@@ -357,6 +358,7 @@ router.post("/events/:id/lineup", async (req, res) => {
         type: type ?? "act",
         notes,
         staffNote: staffNote || null,
+        eventDay: eventDay ? Number(eventDay) : 1,
         position: position ?? 0,
       })
       .returning();
@@ -390,7 +392,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent, leaderAttending } = req.body;
+    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent, leaderAttending, eventDay } = req.body;
 
     // Handle leader attending toggle
     let leaderUpdates: { leaderAttending?: boolean; leaderStaffSlotId?: number | null } = {};
@@ -420,6 +422,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
         ...(type !== undefined ? { type } : {}),
         ...(notes !== undefined ? { notes } : {}),
         ...(staffNote !== undefined ? { staffNote: staffNote || null } : {}),
+        ...(eventDay !== undefined ? { eventDay: Number(eventDay) } : {}),
         ...(inviteStatus !== undefined ? { inviteStatus } : {}),
         ...(confirmationSent !== undefined ? { confirmationSent } : {}),
         ...(leaderUpdates.leaderAttending !== undefined ? { leaderAttending: leaderUpdates.leaderAttending } : {}),

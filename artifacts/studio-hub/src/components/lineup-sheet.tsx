@@ -54,6 +54,7 @@ interface LineupSlot {
   durationMinutes?: number | null; bufferMinutes?: number | null;
   isOverlapping: boolean; confirmed: boolean; type: string;
   groupName?: string | null; notes?: string | null;
+  eventDay: number;
   staffNote?: string | null; inviteStatus: string;
   confirmationSent: boolean; reminderSent: boolean;
   // Band leader attendance
@@ -138,10 +139,10 @@ function InviteRow({ invite }: { invite: BandInvite }) {
 
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
-  slot, calcTime, bands, eventId, isRecital,
+  slot, calcTime, bands, eventId, isRecital, isTwoDay,
   onUpdate, onDelete, onSendInvite, onSendConfirmation,
 }: {
-  slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean;
+  slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => void;
   onDelete: (id: number) => void;
   onSendInvite: (slotId: number, staffNote: string) => void;
@@ -162,6 +163,7 @@ function SlotRow({
     bandId: slot.bandId ? String(slot.bandId) : "",
     groupName: slot.groupName ?? "",
     staffNote: slot.staffNote ?? "",
+    eventDay: slot.eventDay ?? 1,
   });
 
   // Sync draft staffNote when slot changes
@@ -200,6 +202,7 @@ function SlotRow({
       bandId: draft.bandId ? Number(draft.bandId) : null,
       groupName: draft.groupName || null,
       staffNote: draft.staffNote || null,
+      eventDay: draft.eventDay,
     });
   }
 
@@ -267,6 +270,13 @@ function SlotRow({
           {slot.groupName && <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>}
           {slot.isOverlapping && <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps with previous</span>}
         </div>
+
+        {/* Day badge for two-day events */}
+        {isTwoDay && (
+          <Badge variant="outline" className={`text-[10px] shrink-0 rounded-full px-2 font-semibold ${slot.eventDay === 2 ? "bg-orange-500/15 text-orange-400 border-orange-500/20" : "bg-sky-500/15 text-sky-400 border-sky-500/20"}`}>
+            Day {slot.eventDay ?? 1}
+          </Badge>
+        )}
 
         {/* Invite status badge (acts with bands only) */}
         {slot.type === "act" && slot.bandId && (
@@ -380,6 +390,25 @@ function SlotRow({
               placeholder="MC script, announcement text, setup notes…"
             />
           </div>
+
+          {/* Day selector for two-day events */}
+          {isTwoDay && (
+            <div className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2">
+              <p className="text-xs font-medium flex-1">Which day does this slot occur?</p>
+              <div className="flex gap-1.5">
+                {[1, 2].map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDraft(dr => ({ ...dr, eventDay: d }))}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${draft.eventDay === d ? d === 1 ? "bg-sky-500/20 text-sky-400 border-sky-500/30" : "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-transparent text-muted-foreground border-border/40 hover:border-border"}`}
+                  >
+                    Day {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Button size="sm" className="w-full rounded-lg h-8 text-xs" onClick={save}>
             <Save className="h-3 w-3 mr-1.5" /> Save Changes
@@ -701,7 +730,7 @@ function BandMembersDialog({ band, open, onClose }: { band: Band | null; open: b
 
 // ── Main sheet ─────────────────────────────────────────────────────────────────
 export function LineupSheet({ event, open, onClose }: {
-  event: { id: number; title: string; type?: string } | null;
+  event: { id: number; title: string; type?: string; isTwoDay?: boolean } | null;
   open: boolean;
   onClose: () => void;
 }) {
@@ -811,7 +840,7 @@ export function LineupSheet({ event, open, onClose }: {
   // ── Lineup mutations ───────────────────────────────────────────────────────
   const [addSlotOpen, setAddSlotOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
-    type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false,
+    type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false, eventDay: 1,
   });
 
   const { mutate: addSlot, isPending: addingSlot } = useMutation({
@@ -936,6 +965,7 @@ export function LineupSheet({ event, open, onClose }: {
       durationMinutes: newSlot.duration ? Number(newSlot.duration) : null,
       bufferMinutes: Number(newSlot.buffer) || 15,
       isOverlapping: newSlot.isOverlapping,
+      eventDay: newSlot.eventDay,
       position: slots.length,
     });
   }
@@ -1073,6 +1103,7 @@ export function LineupSheet({ event, open, onClose }: {
                       bands={rawBands}
                       eventId={eventId!}
                       isRecital={isRecital}
+                      isTwoDay={event?.isTwoDay}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
                       onSendInvite={handleSendInvite}
@@ -1217,6 +1248,23 @@ export function LineupSheet({ event, open, onClose }: {
               </div>
             </div>
           </div>
+          {event?.isTwoDay && (
+            <div className="flex items-center gap-3 rounded-xl border border-border/40 px-4 py-2.5 mx-0">
+              <p className="text-sm font-medium flex-1">Which day?</p>
+              <div className="flex gap-2">
+                {[1, 2].map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setNewSlot(s => ({ ...s, eventDay: d }))}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${newSlot.eventDay === d ? d === 1 ? "bg-sky-500/20 text-sky-400 border-sky-500/30" : "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-transparent text-muted-foreground border-border/40 hover:border-border"}`}
+                  >
+                    Day {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setAddSlotOpen(false)}>Cancel</Button>
             <Button className="rounded-xl" disabled={addingSlot} onClick={submitAddSlot}>Add Slot</Button>
