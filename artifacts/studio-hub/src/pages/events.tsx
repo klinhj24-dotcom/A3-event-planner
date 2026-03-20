@@ -151,7 +151,7 @@ function CommTasksSheet({
           toast({ title: "No rules matched", description: data.message, variant: "destructive" });
           return;
         }
-        toast({ title: `${data?.pushed} comm tasks generated & pushed to calendar` });
+        toast({ title: data?.pushed > 0 ? `${data.pushed} new tasks added & pushed to calendar` : "No new tasks — all rules already covered" });
       },
       onError: () => toast({ title: "Failed to push comms", variant: "destructive" }),
     });
@@ -209,7 +209,7 @@ function CommTasksSheet({
             {pushing
               ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
               : <Radio className="h-3.5 w-3.5 mr-2" />}
-            {total > 0 ? "Regenerate & push to Comms Calendar" : "Generate & push to Comms Calendar"}
+            {total > 0 ? "Sync new tasks to Comms Calendar" : "Generate & push to Comms Calendar"}
           </Button>
 
           {employees.length > 0 && (

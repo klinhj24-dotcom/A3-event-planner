@@ -436,12 +436,22 @@ router.post("/comm-schedule/tasks/generate", async (req, res) => {
       return;
     }
 
-    // Delete any existing auto-generated tasks first
-    await db.delete(commTasksTable).where(eq(commTasksTable.eventId, eventId));
+    // Find which rules already have a task for this event so we don't overwrite progress
+    const existingTasks = await db
+      .select({ ruleId: commTasksTable.ruleId })
+      .from(commTasksTable)
+      .where(eq(commTasksTable.eventId, eventId));
+    const existingRuleIds = new Set(existingTasks.map(t => t.ruleId));
+
+    const newRules = rules.filter(r => !existingRuleIds.has(r.id));
+
+    if (newRules.length === 0) {
+      res.status(201).json({ generated: 0, tasks: [] });
+      return;
+    }
 
     const eventDate = new Date(event.startDate);
-    const newTasks = rules.map((rule) => {
-      // timingDays < 0 = before event, > 0 = after event
+    const newTasks = newRules.map((rule) => {
       const dueDate = rule.timingDays < 0
         ? subDays(eventDate, Math.abs(rule.timingDays))
         : addDays(eventDate, rule.timingDays);
