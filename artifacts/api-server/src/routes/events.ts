@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable, eventStaffSlotsTable } from "@workspace/db";
-import { eq, desc, gte, and } from "drizzle-orm";
+import { eq, desc, gte, and, ilike } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
@@ -8,6 +8,45 @@ import { createAuthedClient, makeHtmlEmail, makeRawEmail, buildHtmlEmail } from 
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
 
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
+
+/**
+ * If a POC name/email is provided, ensure they exist in the contacts table
+ * (matched by email). Creates a new event_coordinator contact if none found.
+ * Also links them to the event via eventContactsTable if not already linked.
+ */
+async function upsertPocContact(eventId: number, pocName: string | null | undefined, pocEmail: string | null | undefined, pocPhone: string | null | undefined) {
+  if (!pocName && !pocEmail) return;
+  try {
+    let contactId: number | null = null;
+
+    if (pocEmail?.trim()) {
+      const [existing] = await db
+        .select({ id: contactsTable.id })
+        .from(contactsTable)
+        .where(ilike(contactsTable.email, pocEmail.trim()));
+      contactId = existing?.id ?? null;
+    }
+
+    if (!contactId) {
+      const [created] = await db
+        .insert(contactsTable)
+        .values({ name: pocName?.trim() || pocEmail!.trim(), email: pocEmail?.trim() || null, phone: pocPhone?.trim() || null, type: "event_coordinator" })
+        .returning({ id: contactsTable.id });
+      contactId = created.id;
+    }
+
+    // Link to the event if not already linked
+    const [alreadyLinked] = await db
+      .select({ id: eventContactsTable.id })
+      .from(eventContactsTable)
+      .where(and(eq(eventContactsTable.eventId, eventId), eq(eventContactsTable.contactId, contactId)));
+    if (!alreadyLinked) {
+      await db.insert(eventContactsTable).values({ eventId, contactId });
+    }
+  } catch (err) {
+    console.error("[events] upsertPocContact failed (non-fatal):", err);
+  }
+}
 
 function getAppDomain() {
   // Prefer the stable REPLIT_DOMAINS (works in both dev and deployed) over the
@@ -214,6 +253,9 @@ router.post("/events", async (req, res) => {
       })
       .returning();
 
+    // Auto-add POC to contacts database
+    upsertPocContact(event.id, pocName, pocEmail, pocPhone).catch(() => {});
+
     // Auto-push to Google Calendar + generate comm tasks when status is confirmed
     if (event.status === "confirmed") {
       const userId = (req.user as any)?.id;
@@ -311,6 +353,11 @@ router.put("/events/:id", async (req, res) => {
     if (!event) {
       res.status(404).json({ error: "Event not found" });
       return;
+    }
+
+    // Auto-add POC to contacts database (only when POC fields are being set)
+    if (pocName !== undefined || pocEmail !== undefined) {
+      upsertPocContact(event.id, event.pocName, event.pocEmail, event.pocPhone).catch(() => {});
     }
 
     // Auto-sync to Google Calendar when status is confirmed (create or update)
