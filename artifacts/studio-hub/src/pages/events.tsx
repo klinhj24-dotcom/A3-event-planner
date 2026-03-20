@@ -2232,27 +2232,39 @@ export default function Events() {
 
                     {/* Staff assignment */}
                     {allEmployees && allEmployees.length > 0 && (
-                      <div className="pt-1">
-                        <div className="flex items-center gap-2 mb-2">
+                      <div className="pt-1 space-y-3">
+                        <div className="flex items-center gap-2">
                           <Users2 className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm font-medium">Assign Staff <span className="text-muted-foreground font-normal text-xs">optional</span></span>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {allEmployees.map((emp: any) => {
-                            const selected = createStaff.includes(emp.id);
-                            return (
-                              <button
-                                type="button"
-                                key={emp.id}
-                                onClick={() => setCreateStaff(s => selected ? s.filter(x => x !== emp.id) : [...s, emp.id])}
-                                className={`px-3 py-1.5 rounded-xl text-xs border transition-all ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground'}`}
-                              >
-                                {selected && <span className="mr-1">✓</span>}
-                                {emp.name}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {Object.entries(
+                          (allEmployees as any[]).reduce((acc: Record<string, any[]>, emp) => {
+                            const role = emp.role ?? "staff";
+                            if (!acc[role]) acc[role] = [];
+                            acc[role].push(emp);
+                            return acc;
+                          }, {})
+                        ).sort(([a], [b]) => a.localeCompare(b)).map(([role, emps]) => (
+                          <div key={role} className="space-y-1.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{role}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {(emps as any[]).map((emp) => {
+                                const selected = createStaff.includes(emp.id);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={emp.id}
+                                    onClick={() => setCreateStaff(s => selected ? s.filter(x => x !== emp.id) : [...s, emp.id])}
+                                    className={`px-3 py-1.5 rounded-xl text-xs border transition-all ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground'}`}
+                                  >
+                                    {selected && <span className="mr-1">✓</span>}
+                                    {emp.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
 
