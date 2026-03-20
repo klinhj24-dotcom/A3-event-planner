@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { google } from "googleapis";
-import { db, eventsTable, eventLineupTable, bandsTable, bandMembersTable, bandContactsTable, eventBandInvitesTable, usersTable } from "@workspace/db";
+import { db, eventsTable, eventLineupTable, bandsTable, bandMembersTable, bandContactsTable, eventBandInvitesTable, eventGuestListTable, usersTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { format } from "date-fns";
@@ -411,6 +411,14 @@ router.get("/band-confirm/:token", async (req, res) => {
     const alreadyConfirmed = siblingInvites.find(s => s.status === "confirmed" && s.id !== invite.id);
     const alreadyDeclined = siblingInvites.find(s => s.status === "declined" && s.id !== invite.id);
 
+    // Existing guest list entry for this member at this event
+    let guestEntry = null;
+    if (invite.memberId && event?.allowGuestList) {
+      const [existing] = await db.select().from(eventGuestListTable)
+        .where(and(eq(eventGuestListTable.eventId, invite.eventId), eq(eventGuestListTable.bandMemberId, invite.memberId)));
+      guestEntry = existing ?? null;
+    }
+
     const eventWindow = event ? formatEventWindow(event) : "TBD";
 
     res.json({
@@ -420,6 +428,7 @@ router.get("/band-confirm/:token", async (req, res) => {
       eventWindow,
       alreadyConfirmedBy: alreadyConfirmed?.contactName ?? null,
       alreadyDeclinedBy: alreadyDeclined?.contactName ?? null,
+      guestEntry,
     });
   } catch (err) {
     console.error("band-confirm GET error:", err);
@@ -431,7 +440,7 @@ router.get("/band-confirm/:token", async (req, res) => {
 router.post("/band-confirm/:token", async (req, res) => {
   try {
     const { token } = req.params;
-    const { action, conflictNote } = req.body; // action: "confirm" | "decline"
+    const { action, conflictNote, guestOneName, guestTwoName } = req.body; // action: "confirm" | "decline"
 
     const [invite] = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.token, token));
     if (!invite) { res.status(404).json({ error: "Invalid token." }); return; }
@@ -459,12 +468,44 @@ router.post("/band-confirm/:token", async (req, res) => {
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
 
+    // Handle guest list — only when confirming and event allows it
+    if (newStatus === "confirmed" && invite.memberId && event?.allowGuestList) {
+      const [member] = await db.select().from(bandMembersTable).where(eq(bandMembersTable.id, invite.memberId));
+      const studentName = member?.name ?? invite.contactName ?? "Unknown";
+      const [existing] = await db.select().from(eventGuestListTable)
+        .where(and(eq(eventGuestListTable.eventId, invite.eventId), eq(eventGuestListTable.bandMemberId, invite.memberId)));
+      if (existing) {
+        await db.update(eventGuestListTable).set({
+          guestOneName: guestOneName?.trim() || null,
+          guestTwoName: guestTwoName?.trim() || null,
+          submitted: true,
+          submittedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(eventGuestListTable.id, existing.id));
+      } else {
+        await db.insert(eventGuestListTable).values({
+          eventId: invite.eventId,
+          bandMemberId: invite.memberId,
+          studentName,
+          bandName: slot?.bandName ?? null,
+          token: randomUUID(),
+          contactEmail: invite.contactEmail,
+          contactName: invite.contactName,
+          guestOneName: guestOneName?.trim() || null,
+          guestTwoName: guestTwoName?.trim() || null,
+          submitted: true,
+          submittedAt: new Date(),
+        });
+      }
+    }
+
     res.json({
       submitted: true,
       confirmed: newStatus === "confirmed",
       contactName: invite.contactName ?? "there",
       bandName: slot?.bandName ?? "your band",
       eventTitle: event?.title ?? "the event",
+      guestListSubmitted: newStatus === "confirmed" && !!event?.allowGuestList,
     });
   } catch (err) {
     console.error("band-confirm POST error:", err);
