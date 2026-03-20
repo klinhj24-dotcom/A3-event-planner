@@ -178,6 +178,54 @@ async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsT
   }
 }
 
+/** Fire-and-forget: shift all comm task due dates by the same delta as the event date change. */
+async function shiftCommTaskDates(eventId: number, oldStartDate: Date, newStartDate: Date, userId: number) {
+  try {
+    const shiftMs = newStartDate.getTime() - oldStartDate.getTime();
+    const tasks = await db.select().from(commTasksTable).where(eq(commTasksTable.eventId, eventId));
+    if (tasks.length === 0) return;
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    const hasCalendar = !!(user?.googleAccessToken && user?.googleRefreshToken);
+    let cal: ReturnType<typeof google.calendar> | null = null;
+    if (hasCalendar) {
+      const auth = createAuthedClient(user.googleAccessToken!, user.googleRefreshToken!, user.googleTokenExpiry);
+      cal = google.calendar({ version: "v3", auth });
+    }
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+
+    for (const task of tasks) {
+      if (!task.dueDate) continue;
+      const newDueDate = new Date(new Date(task.dueDate).getTime() + shiftMs);
+      const newDueDateStr = newDueDate.toISOString().split("T")[0];
+
+      await db.update(commTasksTable)
+        .set({ dueDate: newDueDate })
+        .where(eq(commTasksTable.id, task.id));
+
+      // Update Google Calendar event if it exists
+      if (cal && task.googleCalendarEventId && event) {
+        try {
+          await cal.events.patch({
+            calendarId: TMS_COMMS_CALENDAR_ID,
+            eventId: task.googleCalendarEventId,
+            requestBody: {
+              start: { date: newDueDateStr },
+              end: { date: newDueDateStr },
+            },
+          });
+        } catch (calErr) {
+          console.warn(`Failed to update calendar event for task ${task.id} (non-fatal):`, calErr);
+        }
+      }
+    }
+    console.log(`Shifted ${tasks.length} comm tasks for event ${eventId} by ${shiftMs / 86400000} days`);
+  } catch (err) {
+    console.warn("shiftCommTaskDates (non-fatal):", err);
+  }
+}
+
 const router = Router();
 
 router.get("/events", async (req, res) => {
@@ -362,6 +410,16 @@ router.put("/events/:id", async (req, res) => {
     // Auto-add POC to contacts database (only when POC fields are being set)
     if (pocName !== undefined || pocEmail !== undefined) {
       upsertPocContact(event.id, event.pocName, event.pocEmail, event.pocPhone).catch(() => {});
+    }
+
+    // Shift comm task due dates when the event start date changes
+    if (
+      startDate !== undefined &&
+      existing?.startDate &&
+      event.startDate &&
+      existing.startDate.getTime() !== event.startDate.getTime()
+    ) {
+      shiftCommTaskDates(event.id, existing.startDate, event.startDate, (req.user as any)?.id).catch(() => {});
     }
 
     // Auto-sync to Google Calendar when status is confirmed (create or update)

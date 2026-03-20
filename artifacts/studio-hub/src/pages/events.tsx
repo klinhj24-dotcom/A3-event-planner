@@ -73,7 +73,7 @@ function CommTasksSheet({
   const [pendingCompletedBy, setPendingCompletedBy] = useState<string>("");
   const { mutate: pushComms, isPending: pushing } = useMutation({
     mutationFn: () =>
-      fetch(`/api/calendar/push-comms/${event!.id}`, { method: "POST", credentials: "include" }).then(r => r.json()),
+      fetch(`/api/calendar/sync-comms/${event!.id}`, { method: "POST", credentials: "include" }).then(r => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, event?.id] }),
   });
   const { mutate: bulkAssign, isPending: bulkAssigning } = useMutation({
@@ -147,13 +147,19 @@ function CommTasksSheet({
     pushComms(undefined, {
       onSuccess: (data: any) => {
         if (data?.error) { toast({ title: data.error, variant: "destructive" }); return; }
-        if (data?.pushed === 0 && data?.message) {
-          toast({ title: "No rules matched", description: data.message, variant: "destructive" });
+        if (data?.total === 0 && data?.message) {
+          toast({ title: "No comm tasks found", description: "Comm tasks are auto-generated when an event is confirmed.", variant: "destructive" });
           return;
         }
-        toast({ title: data?.pushed > 0 ? `${data.pushed} new tasks added & pushed to calendar` : "No new tasks — all rules already covered" });
+        const synced = data?.synced ?? 0;
+        const skipped = data?.skipped ?? 0;
+        if (synced === 0) {
+          toast({ title: "All tasks already on calendar", description: `${skipped} task${skipped !== 1 ? "s" : ""} were already synced — nothing to do.` });
+        } else {
+          toast({ title: `${synced} task${synced !== 1 ? "s" : ""} pushed to Comms Calendar`, description: skipped > 0 ? `${skipped} were already synced and left untouched.` : undefined });
+        }
       },
-      onError: () => toast({ title: "Failed to push comms", variant: "destructive" }),
+      onError: () => toast({ title: "Failed to sync comms to calendar", variant: "destructive" }),
     });
   }
 
@@ -195,7 +201,7 @@ function CommTasksSheet({
             </div>
           ) : (
             <div className="mt-4 text-sm text-muted-foreground">
-              No comm tasks yet — push to generate them.
+              Comm tasks auto-generate when this event is confirmed.
             </div>
           )}
 
@@ -209,8 +215,11 @@ function CommTasksSheet({
             {pushing
               ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
               : <Radio className="h-3.5 w-3.5 mr-2" />}
-            {total > 0 ? "Sync new tasks to Comms Calendar" : "Generate & push to Comms Calendar"}
+            Sync to Comms Calendar
           </Button>
+          <p className="text-xs text-muted-foreground mt-1.5 text-center leading-snug">
+            Only pushes tasks missing a calendar entry — existing ones are never touched.
+          </p>
 
           {employees.length > 0 && (
             <div className="mt-3 flex items-center gap-2">
@@ -243,7 +252,7 @@ function CommTasksSheet({
           ) : sorted.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground space-y-2">
               <ClipboardList className="h-10 w-10 mx-auto opacity-20" />
-              <p className="text-sm">No tasks yet. Hit the button above to generate them.</p>
+              <p className="text-sm">No comm tasks yet — they'll appear here once the event is confirmed.</p>
             </div>
           ) : (
             sorted.map(task => {

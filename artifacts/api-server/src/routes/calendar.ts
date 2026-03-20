@@ -129,66 +129,46 @@ router.post("/calendar/push/:eventId", async (req, res) => {
   }
 });
 
-// Generate comm tasks from rules + push all to the Comms Google Calendar
-router.post("/calendar/push-comms/:eventId", async (req, res) => {
+// Non-destructive sync: push any comm tasks that are missing a Google Calendar event ID
+router.post("/calendar/sync-comms/:eventId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const eventId = parseInt(req.params.eventId);
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
-    if (!event.startDate) { res.status(400).json({ error: "Event has no start date" }); return; }
+    if (!event.startDate) { res.status(400).json({ error: "Event has no start date set" }); return; }
 
     const calendar = await getCalendarClient(req.user.id);
 
-    // Match rules to this event type
-    const rules = await db
-      .select()
-      .from(commScheduleRulesTable)
-      .where(
-        and(
-          eq(commScheduleRulesTable.isActive, true),
-          eq(commScheduleRulesTable.eventType, event.type)
-        )
-      );
+    const tasks = await db.select().from(commTasksTable).where(eq(commTasksTable.eventId, eventId));
 
-    if (rules.length === 0) {
-      res.json({ pushed: 0, message: `No comm rules found for event type "${event.type}"` });
+    if (tasks.length === 0) {
+      res.json({ synced: 0, skipped: 0, total: 0, message: "No comm tasks found for this event" });
       return;
     }
 
-    // Wipe existing tasks for clean regeneration
-    await db.delete(commTasksTable).where(eq(commTasksTable.eventId, eventId));
+    let synced = 0;
+    let skipped = 0;
 
-    const eventDate = new Date(event.startDate);
-    const results: { taskId: number; calendarEventId: string | null; messageName: string | null; dueDate: string }[] = [];
-    let pushed = 0;
+    for (const task of tasks) {
+      // Skip tasks already pushed to calendar
+      if (task.googleCalendarEventId) {
+        skipped++;
+        continue;
+      }
+      // Skip tasks with no due date
+      if (!task.dueDate) {
+        skipped++;
+        continue;
+      }
 
-    for (const rule of rules) {
-      const dueDate = rule.timingDays < 0
-        ? subDays(eventDate, Math.abs(rule.timingDays))
-        : addDays(eventDate, rule.timingDays);
-
-      // Insert task record
-      const [task] = await db.insert(commTasksTable).values({
-        eventId,
-        ruleId: rule.id,
-        commType: rule.commType,
-        messageName: rule.messageName,
-        channel: rule.channel,
-        dueDate,
-        status: "pending",
-      }).returning();
-
-      // Build calendar event title
+      const dueDateStr = new Date(task.dueDate).toISOString().split("T")[0];
       const taskTitle = [
         event.title,
-        rule.messageName || rule.commType,
-        rule.channel ? `(${rule.channel})` : null,
+        task.messageName || task.commType,
+        task.channel ? `(${task.channel})` : null,
       ].filter(Boolean).join(" — ");
 
-      const dueDateStr = dueDate.toISOString().split("T")[0];
-
-      let calendarEventId: string | null = null;
       try {
         const calResult = await calendar.events.insert({
           calendarId: TMS_COMMS_CALENDAR_ID,
@@ -196,36 +176,32 @@ router.post("/calendar/push-comms/:eventId", async (req, res) => {
             summary: taskTitle,
             description: [
               `Event: ${event.title}`,
-              `Comm type: ${rule.commType}`,
-              rule.channel ? `Channel: ${rule.channel}` : null,
-              rule.notes ? `Notes: ${rule.notes}` : null,
-              `Timing: ${rule.timingDays < 0 ? `${Math.abs(rule.timingDays)} days before` : rule.timingDays === 0 ? "Day of event" : `${rule.timingDays} days after`}`,
+              `Comm type: ${task.commType}`,
+              task.channel ? `Channel: ${task.channel}` : null,
             ].filter(Boolean).join("\n"),
             start: { date: dueDateStr },
             end: { date: dueDateStr },
           },
         });
-        calendarEventId = calResult.data.id ?? null;
-        pushed++;
+        if (calResult.data.id) {
+          await db.update(commTasksTable)
+            .set({ googleCalendarEventId: calResult.data.id })
+            .where(eq(commTasksTable.id, task.id));
+          synced++;
+        }
       } catch (calErr) {
-        console.error(`Failed to push task ${task.id} to calendar:`, calErr);
+        console.error(`Failed to sync task ${task.id} to calendar:`, calErr);
+        skipped++;
       }
-
-      // Update task with calendar event ID
-      await db.update(commTasksTable)
-        .set({ googleCalendarEventId: calendarEventId, status: calendarEventId ? "pending" : "pending" })
-        .where(eq(commTasksTable.id, task.id));
-
-      results.push({ taskId: task.id, calendarEventId, messageName: rule.messageName, dueDate: dueDateStr });
     }
 
-    res.json({ pushed, total: rules.length, results });
+    res.json({ synced, skipped, total: tasks.length });
   } catch (err: any) {
     if (err.message === "Google account not connected") {
       res.status(403).json({ error: "Google account not connected. Connect Gmail first in Settings." });
     } else {
-      console.error("Comms push error:", err);
-      res.status(500).json({ error: "Failed to push comm tasks to calendar" });
+      console.error("Comms sync error:", err);
+      res.status(500).json({ error: "Failed to sync comm tasks to calendar" });
     }
   }
 });
