@@ -71,10 +71,14 @@ export async function pushToEmployeeCalendar(opts: EmployeeCalPushOptions): Prom
 
     if (opts.existingCalEventId) {
       try {
-        await cal.events.update({ calendarId: calId, eventId: opts.existingCalEventId, requestBody: calEvent });
-        return opts.existingCalEventId;
+        const existing = await cal.events.get({ calendarId: calId, eventId: opts.existingCalEventId });
+        if (existing.data.status !== "cancelled") {
+          await cal.events.update({ calendarId: calId, eventId: opts.existingCalEventId, requestBody: calEvent });
+          return opts.existingCalEventId;
+        }
+        // Event is in trash — fall through to insert a fresh one
       } catch {
-        // Fall through to insert if update fails (e.g. event was manually deleted)
+        // Event not found — fall through to insert
       }
     }
 
