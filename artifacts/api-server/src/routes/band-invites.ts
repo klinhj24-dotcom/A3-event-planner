@@ -463,7 +463,7 @@ router.post("/band-confirm/:token", async (req, res) => {
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, invite.eventId));
     const [slot] = await db
-      .select({ bandName: bandsTable.name })
+      .select({ bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, invite.lineupSlotId));
@@ -496,6 +496,44 @@ router.post("/band-confirm/:token", async (req, res) => {
           submitted: true,
           submittedAt: new Date(),
         });
+      }
+    }
+
+    // Send confirmation email to the contact
+    if (newStatus === "confirmed" && invite.contactEmail) {
+      try {
+        const users = await db.select().from(usersTable);
+        const gmailUser = users.find(u => u.googleAccessToken && u.googleRefreshToken);
+        if (gmailUser) {
+          const fmt12 = (t: string) => {
+            const [h, m] = t.split(":").map(Number);
+            return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+          };
+          const eventWindow = event ? formatEventWindow(event) : "TBD";
+          const bandName = slot?.bandName ?? "your band";
+          const subject = `Booking Confirmed — ${bandName} at ${event?.title ?? "The Music Space"}`;
+
+          let body = `Hi ${invite.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
+          body += `EVENT DETAILS\n`;
+          body += `Event: ${event?.title ?? "TBD"}\n`;
+          body += `Date: ${eventWindow}\n`;
+          if (event?.location) body += `Location: ${event.location}\n`;
+          if (slot?.startTime) {
+            body += `Set Time: ${fmt12(slot.startTime)}`;
+            if (slot.durationMinutes) body += ` (${slot.durationMinutes} min)`;
+            body += `\n`;
+          }
+          if (conflictNote?.trim()) body += `\nYour note: ${conflictNote.trim()}\n`;
+          body += `\nIf anything changes or you have questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;
+
+          const html = buildHtmlEmail({ recipientName: invite.contactName ?? "there", body });
+          const auth = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
+          const gmail = google.gmail({ version: "v1", auth });
+          const raw = makeHtmlEmail({ to: invite.contactEmail, from: gmailUser.email || "", subject, html, cc: [TMS_CC] });
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        }
+      } catch (emailErr) {
+        console.error("Band confirm email failed (non-fatal):", emailErr);
       }
     }
 
