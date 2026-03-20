@@ -219,7 +219,7 @@ export default function BandConfirmPage() {
                   <label className="text-sm font-medium">Day-of scheduling notes or conflicts <span className="text-muted-foreground font-normal text-xs">(optional)</span></label>
                   <Textarea
                     className="rounded-xl min-h-[80px] resize-none"
-                    placeholder="e.g. We need a 30 min soundcheck window, or I can't arrive until 5pm…"
+                    placeholder=""
                     value={conflictNote}
                     onChange={e => setConflictNote(e.target.value)}
                   />
