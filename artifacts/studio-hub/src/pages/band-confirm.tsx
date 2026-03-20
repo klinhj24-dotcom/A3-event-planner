@@ -212,12 +212,6 @@ export default function BandConfirmPage() {
                   {invite.staffNote && (
                     <div className="flex gap-2"><span className="font-medium w-24 shrink-0">Notes:</span><span className="text-muted-foreground">{invite.staffNote}</span></div>
                   )}
-                  {event?.ticketsUrl && (
-                    <div className="flex gap-2 pt-1 border-t border-border/30 mt-1">
-                      <span className="font-medium w-24 shrink-0">Tickets:</span>
-                      <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs">{event.ticketsUrl}</a>
-                    </div>
-                  )}
                 </div>
 
                 {/* Conflict note */}
@@ -281,6 +275,30 @@ export default function BandConfirmPage() {
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Ticket / admissions callout */}
+                {event?.ticketsUrl && (
+                  <div className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-1.5 text-sm">
+                    <p className="font-semibold">Admissions</p>
+                    {allowGuestList ? (
+                      <>
+                        <p className="text-muted-foreground text-xs">
+                          {policy === "plus_two"
+                            ? "You and up to 2 guests are on the complimentary performer guest list — no ticket needed."
+                            : policy === "plus_one"
+                            ? "You and 1 additional guest are on the complimentary performer guest list — no ticket needed."
+                            : "You are on the complimentary performer guest list — no ticket needed."}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          Additional family &amp; friends beyond your guest list allowance must purchase general admission tickets:
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">General admission tickets for family and friends attending the event:</p>
+                    )}
+                    <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs block pt-0.5">{event.ticketsUrl}</a>
                   </div>
                 )}
 

@@ -128,6 +128,22 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
       const fmt12Invite = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
       const estSetTimeLine = slot.startTime ? `Est. Set Time: ${fmt12Invite(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
 
+      const admissionsLines = (() => {
+        if (event.allowGuestList) {
+          const policyDesc = event.guestListPolicy === "plus_two"
+            ? "you and up to 2 guests"
+            : event.guestListPolicy === "plus_one"
+            ? "you and 1 additional guest"
+            : "you";
+          let s = `ADMISSIONS\nAs a performer, ${policyDesc} will be on the complimentary performer guest list — no ticket needed for admission.`;
+          if (event.ticketsUrl) s += `\n\nFor family and friends beyond your guest list allowance, additional general admission tickets are available here:\n${event.ticketsUrl}`;
+          return `\n\n${s}`;
+        } else if (event.ticketsUrl) {
+          return `\n\nADMISSIONS\nGeneral admission tickets for family and friends attending the event are available here:\n${event.ticketsUrl}`;
+        }
+        return "";
+      })();
+
       const emailBody = `Hi ${contact.name},
 
 The Music Space would like to invite ${slot.bandName ?? "your band"} to perform at an upcoming event.
@@ -143,7 +159,7 @@ ${confirmUrl}
 If you have any questions, reply directly to this email.
 
 Thanks,
-The Music Space`;
+The Music Space${admissionsLines}`;
 
       const html = buildHtmlEmail({
         recipientName: contact.name,
@@ -247,6 +263,22 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
         const fmt12Bulk = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
         const estSetTimeLine = slot.startTime ? `Est. Set Time: ${fmt12Bulk(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""} — subject to change\n` : "";
 
+        const bulkAdmissionsLines = (() => {
+          if (event.allowGuestList) {
+            const policyDesc = event.guestListPolicy === "plus_two"
+              ? "you and up to 2 guests"
+              : event.guestListPolicy === "plus_one"
+              ? "you and 1 additional guest"
+              : "you";
+            let s = `ADMISSIONS\nAs a performer, ${policyDesc} will be on the complimentary performer guest list — no ticket needed for admission.`;
+            if (event.ticketsUrl) s += `\n\nFor family and friends beyond your guest list allowance, additional general admission tickets are available here:\n${event.ticketsUrl}`;
+            return `\n\n${s}`;
+          } else if (event.ticketsUrl) {
+            return `\n\nADMISSIONS\nGeneral admission tickets for family and friends attending the event are available here:\n${event.ticketsUrl}`;
+          }
+          return "";
+        })();
+
         const emailBody = `Hi ${contact.name},
 
 The Music Space would like to invite ${slot.bandName ?? "your band"} to perform at an upcoming event.
@@ -262,7 +294,7 @@ ${confirmUrl}
 Questions? Just reply to this email.
 
 Thanks,
-The Music Space`;
+The Music Space${bulkAdmissionsLines}`;
 
         const html = buildHtmlEmail({ recipientName: contact.name, body: emailBody, ctaLabel: "Confirm or Respond", ctaUrl: confirmUrl });
 
