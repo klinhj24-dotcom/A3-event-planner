@@ -78,6 +78,44 @@ function requireAdmin(req: any, res: any): boolean {
   return true;
 }
 
+// GET /comm-schedule/tasks/all — admin: all tasks across all events, enriched
+router.get("/comm-schedule/tasks/all", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const assignedEmp = alias(employeesTable, "assigned_emp");
+    const completedEmp = alias(employeesTable, "completed_emp");
+
+    const rows = await db
+      .select({
+        id: commTasksTable.id,
+        eventId: commTasksTable.eventId,
+        eventTitle: eventsTable.title,
+        eventStartDate: eventsTable.startDate,
+        commType: commTasksTable.commType,
+        messageName: commTasksTable.messageName,
+        channel: commTasksTable.channel,
+        dueDate: commTasksTable.dueDate,
+        status: commTasksTable.status,
+        notes: commTasksTable.notes,
+        assignedToEmployeeId: commTasksTable.assignedToEmployeeId,
+        assignedToName: assignedEmp.name,
+        completedByEmployeeId: commTasksTable.completedByEmployeeId,
+        completedByName: completedEmp.name,
+        completedAt: commTasksTable.completedAt,
+      })
+      .from(commTasksTable)
+      .innerJoin(eventsTable, eq(commTasksTable.eventId, eventsTable.id))
+      .leftJoin(assignedEmp, eq(commTasksTable.assignedToEmployeeId, assignedEmp.id))
+      .leftJoin(completedEmp, eq(commTasksTable.completedByEmployeeId, completedEmp.id))
+      .orderBy(desc(commTasksTable.dueDate));
+
+    res.json(rows);
+  } catch (err) {
+    console.error("allCommTasks error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /comm-schedule/rules — list all rules
 router.get("/comm-schedule/rules", async (req, res) => {
   if (!requireAuth(req, res)) return;

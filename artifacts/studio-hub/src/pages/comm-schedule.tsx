@@ -19,14 +19,19 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2, Search, CalendarDays, Radio, Mail, Instagram, Printer, Globe,
-  Plus, Pencil, Trash2, EyeOff, Eye, Receipt
+  Plus, Pencil, Trash2, EyeOff, Eye, Receipt, ChevronDown, CheckCircle2,
+  Clock, AlertTriangle, LayoutGrid
 } from "lucide-react";
 import {
   useCommRules, useCreateCommRule, useUpdateCommRule, useDeleteCommRule,
   type CommRule
 } from "@/hooks/use-team";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useToast } from "@/hooks/use-toast";
 
@@ -287,13 +292,26 @@ function RuleDialog({
 export default function CommSchedule() {
   const { data: rules = [], isLoading } = useCommRules();
   const { mutate: updateRule } = useUpdateCommRule();
-  const { mutate: deleteRule, isPending: deleting } = useDeleteCommRule();
+  const { mutate: deleteRule } = useDeleteCommRule();
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [showInactive, setShowInactive] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState("rules");
+  const [boardStatusFilter, setBoardStatusFilter] = useState("all");
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
   const { toast } = useToast();
+
+  const { data: allTasks = [], isLoading: tasksLoading } = useQuery({
+    queryKey: ["/api/comm-schedule/tasks/all"],
+    queryFn: async () => {
+      const res = await fetch("/api/comm-schedule/tasks/all", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: tab === "board",
+  });
 
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<CommRule | undefined>(undefined);
@@ -335,6 +353,10 @@ export default function CommSchedule() {
     });
   }
 
+  function toggleGroup(eventType: string) {
+    setOpenGroups(prev => ({ ...prev, [eventType]: !prev[eventType] }));
+  }
+
   const filtered = rules.filter(r => {
     const matchType = selectedType === "All" || r.eventType === selectedType;
     const matchActive = showInactive ? true : r.isActive;
@@ -355,6 +377,29 @@ export default function CommSchedule() {
   const activeCount = rules.filter(r => r.isActive).length;
   const inactiveCount = rules.length - activeCount;
 
+  const filteredTasks = (allTasks as any[]).filter(t =>
+    boardStatusFilter === "all" ? true : t.status === boardStatusFilter
+  );
+
+  const tasksByStaff = filteredTasks.reduce<Record<string, any[]>>((acc, task) => {
+    const key = task.completedByName ?? task.assignedToName ?? "Unassigned";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(task);
+    return acc;
+  }, {});
+
+  function statusIcon(status: string) {
+    if (status === "done") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
+    if (status === "late") return <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />;
+    return <Clock className="h-3.5 w-3.5 text-muted-foreground" />;
+  }
+
+  function statusCls(status: string) {
+    if (status === "done") return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+    if (status === "late") return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+    return "bg-muted/40 text-muted-foreground border-border/50";
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -369,7 +414,7 @@ export default function CommSchedule() {
               {inactiveCount > 0 && <span className="text-muted-foreground/60"> ({inactiveCount} inactive)</span>}
             </p>
           </div>
-          {isAdmin && (
+          {isAdmin && tab === "rules" && (
             <Button
               onClick={openCreate}
               className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
@@ -379,183 +424,298 @@ export default function CommSchedule() {
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search rules..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 rounded-xl border-border/60 bg-background h-9 text-sm"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {["All", "Email", "Social Media", "Open Mic", "Recital"].map(f => (
-              <Button
-                key={f}
-                variant={selectedType === f ? "default" : "outline"}
-                size="sm"
-                className="rounded-xl h-9 text-xs"
-                onClick={() => setSelectedType(f === selectedType && f !== "All" ? "All" : f)}
-              >
-                {f}
-              </Button>
-            ))}
-          </div>
-          {isAdmin && inactiveCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`rounded-xl h-9 text-xs gap-1.5 ${showInactive ? "text-foreground" : "text-muted-foreground"}`}
-              onClick={() => setShowInactive(v => !v)}
-            >
-              {showInactive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-              {showInactive ? "Hide inactive" : `Show ${inactiveCount} inactive`}
-            </Button>
-          )}
-        </div>
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="rounded-xl bg-muted/30 border border-border/40">
+            <TabsTrigger value="rules" className="rounded-lg text-sm">
+              <Radio className="h-3.5 w-3.5 mr-1.5" /> Rules
+            </TabsTrigger>
+            <TabsTrigger value="board" className="rounded-lg text-sm">
+              <LayoutGrid className="h-3.5 w-3.5 mr-1.5" /> Task Board
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Rules grouped by event type */}
-        {isLoading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : Object.keys(grouped).length === 0 ? (
-          <div className="text-center py-16 bg-muted/20 rounded-2xl border border-border/50 border-dashed">
-            <Radio className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
-            <p className="text-muted-foreground">No rules match your search.</p>
-            {isAdmin && (
-              <Button variant="outline" className="mt-4 rounded-xl" onClick={openCreate}>
-                <Plus className="h-4 w-4 mr-2" /> Add a Rule
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(grouped).map(([eventType, typeRules]) => (
-              <div key={eventType} className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm">
-                <div className="flex items-center justify-between p-4 border-b border-border/50 bg-muted/10">
-                  <div className="flex items-center gap-3">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                    <h2 className="font-semibold text-foreground">{eventType}</h2>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {typeRules[0]?.eventTagGroup && (
-                      <Badge variant="outline" className="text-xs rounded-lg text-muted-foreground">
-                        [{typeRules[0].eventTagGroup}]
-                      </Badge>
-                    )}
-                    {typeRules[0]?.eventTag && (
-                      <Badge variant="outline" className="text-xs rounded-lg text-muted-foreground">
-                        [{typeRules[0].eventTag}]
-                      </Badge>
-                    )}
-                    <Badge className="text-xs rounded-lg bg-primary/10 text-primary border-0">
-                      {typeRules.filter(r => r.isActive).length} active
-                    </Badge>
-                    {isAdmin && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 rounded-lg text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => openCreate(eventType)}
-                        title={`Add rule for ${eventType}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="bg-muted/20">
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="text-xs font-semibold">Timing</TableHead>
-                        <TableHead className="text-xs font-semibold">Type</TableHead>
-                        <TableHead className="text-xs font-semibold">Message / Purpose</TableHead>
-                        <TableHead className="text-xs font-semibold">Channel</TableHead>
-                        <TableHead className="text-xs font-semibold">Notes</TableHead>
-                        {isAdmin && <TableHead className="text-xs font-semibold text-right w-24">Actions</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {typeRules
-                        .sort((a, b) => a.timingDays - b.timingDays)
-                        .map((rule) => (
-                          <TableRow
-                            key={rule.id}
-                            className={`text-sm transition-colors ${!rule.isActive ? "opacity-40" : "hover:bg-muted/20"}`}
-                          >
-                            <TableCell className="py-3">
-                              <TimingBadge days={rule.timingDays} />
-                            </TableCell>
-                            <TableCell className="py-3">
-                              <Badge
-                                variant="outline"
-                                className={`text-xs rounded-lg ${COMM_TYPE_COLORS[rule.commType] || "bg-muted/40 text-muted-foreground border-border/50"}`}
-                              >
-                                {rule.commType}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="py-3 font-medium text-foreground/90">
-                              {rule.messageName || <span className="text-muted-foreground italic">—</span>}
-                            </TableCell>
-                            <TableCell className="py-3">
-                              {rule.channel ? (
-                                <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                                  {CHANNEL_ICONS[rule.channel]}
-                                  <span>{rule.channel}</span>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground/40 text-xs">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="py-3 text-xs text-muted-foreground max-w-xs">
-                              {rule.notes || <span className="opacity-40">—</span>}
-                            </TableCell>
-                            {isAdmin && (
-                              <TableCell className="py-3 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    title={rule.isActive ? "Deactivate" : "Activate"}
-                                    className={`h-7 w-7 p-0 rounded-lg ${rule.isActive ? "text-muted-foreground hover:text-amber-400" : "text-amber-400 hover:text-amber-300"}`}
-                                    onClick={() => toggleActive(rule)}
-                                  >
-                                    {rule.isActive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    title="Edit rule"
-                                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground"
-                                    onClick={() => openEdit(rule)}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    title="Delete rule"
-                                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-destructive"
-                                    onClick={() => setDeleteTarget(rule)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </div>
+          {/* ── Rules tab ── */}
+          <TabsContent value="rules" className="mt-5 space-y-4">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search rules..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 rounded-xl border-border/60 bg-background h-9 text-sm"
+                />
               </div>
-            ))}
-          </div>
-        )}
+              <div className="flex flex-wrap gap-2">
+                {["All", "Email", "Social Media", "Open Mic", "Recital"].map(f => (
+                  <Button
+                    key={f}
+                    variant={selectedType === f ? "default" : "outline"}
+                    size="sm"
+                    className="rounded-xl h-9 text-xs"
+                    onClick={() => setSelectedType(f === selectedType && f !== "All" ? "All" : f)}
+                  >
+                    {f}
+                  </Button>
+                ))}
+              </div>
+              {isAdmin && inactiveCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`rounded-xl h-9 text-xs gap-1.5 ${showInactive ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => setShowInactive(v => !v)}
+                >
+                  {showInactive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  {showInactive ? "Hide inactive" : `Show ${inactiveCount} inactive`}
+                </Button>
+              )}
+            </div>
+
+            {/* Rules grouped by event type */}
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : Object.keys(grouped).length === 0 ? (
+              <div className="text-center py-16 bg-muted/20 rounded-2xl border border-border/50 border-dashed">
+                <Radio className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-muted-foreground">No rules match your search.</p>
+                {isAdmin && (
+                  <Button variant="outline" className="mt-4 rounded-xl" onClick={openCreate}>
+                    <Plus className="h-4 w-4 mr-2" /> Add a Rule
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(grouped).map(([eventType, typeRules]) => {
+                  const isOpen = openGroups[eventType] ?? false;
+                  return (
+                    <Collapsible key={eventType} open={isOpen} onOpenChange={() => toggleGroup(eventType)}>
+                      <div className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm">
+                        <CollapsibleTrigger asChild>
+                          <button className="w-full flex items-center justify-between p-4 bg-muted/10 hover:bg-muted/20 transition-colors text-left">
+                            <div className="flex items-center gap-3">
+                              <CalendarDays className="h-4 w-4 text-primary" />
+                              <h2 className="font-semibold text-foreground">{eventType}</h2>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {typeRules[0]?.eventTagGroup && (
+                                <Badge variant="outline" className="text-xs rounded-lg text-muted-foreground">
+                                  [{typeRules[0].eventTagGroup}]
+                                </Badge>
+                              )}
+                              {typeRules[0]?.eventTag && (
+                                <Badge variant="outline" className="text-xs rounded-lg text-muted-foreground">
+                                  [{typeRules[0].eventTag}]
+                                </Badge>
+                              )}
+                              <Badge className="text-xs rounded-lg bg-primary/10 text-primary border-0">
+                                {typeRules.filter(r => r.isActive).length} active
+                              </Badge>
+                              {isAdmin && (
+                                <button
+                                  className="h-7 px-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors flex items-center"
+                                  onClick={(e) => { e.stopPropagation(); openCreate(eventType); }}
+                                  title={`Add rule for ${eventType}`}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              <ChevronDown
+                                className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                              />
+                            </div>
+                          </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="overflow-x-auto border-t border-border/40">
+                            <Table>
+                              <TableHeader className="bg-muted/20">
+                                <TableRow className="hover:bg-transparent">
+                                  <TableHead className="text-xs font-semibold">Timing</TableHead>
+                                  <TableHead className="text-xs font-semibold">Type</TableHead>
+                                  <TableHead className="text-xs font-semibold">Message / Purpose</TableHead>
+                                  <TableHead className="text-xs font-semibold">Channel</TableHead>
+                                  <TableHead className="text-xs font-semibold">Notes</TableHead>
+                                  {isAdmin && <TableHead className="text-xs font-semibold text-right w-24">Actions</TableHead>}
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {typeRules
+                                  .sort((a, b) => a.timingDays - b.timingDays)
+                                  .map((rule) => (
+                                    <TableRow
+                                      key={rule.id}
+                                      className={`text-sm transition-colors ${!rule.isActive ? "opacity-40" : "hover:bg-muted/20"}`}
+                                    >
+                                      <TableCell className="py-3">
+                                        <TimingBadge days={rule.timingDays} />
+                                      </TableCell>
+                                      <TableCell className="py-3">
+                                        <Badge
+                                          variant="outline"
+                                          className={`text-xs rounded-lg ${COMM_TYPE_COLORS[rule.commType] || "bg-muted/40 text-muted-foreground border-border/50"}`}
+                                        >
+                                          {rule.commType}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="py-3 font-medium text-foreground/90">
+                                        {rule.messageName || <span className="text-muted-foreground italic">—</span>}
+                                      </TableCell>
+                                      <TableCell className="py-3">
+                                        {rule.channel ? (
+                                          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                                            {CHANNEL_ICONS[rule.channel]}
+                                            <span>{rule.channel}</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground/40 text-xs">—</span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="py-3 text-xs text-muted-foreground max-w-xs">
+                                        {rule.notes || <span className="opacity-40">—</span>}
+                                      </TableCell>
+                                      {isAdmin && (
+                                        <TableCell className="py-3 text-right">
+                                          <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              title={rule.isActive ? "Deactivate" : "Activate"}
+                                              className={`h-7 w-7 p-0 rounded-lg ${rule.isActive ? "text-muted-foreground hover:text-amber-400" : "text-amber-400 hover:text-amber-300"}`}
+                                              onClick={() => toggleActive(rule)}
+                                            >
+                                              {rule.isActive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              title="Edit rule"
+                                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground"
+                                              onClick={() => openEdit(rule)}
+                                            >
+                                              <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              title="Delete rule"
+                                              className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-destructive"
+                                              onClick={() => setDeleteTarget(rule)}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      )}
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Task Board tab ── */}
+          <TabsContent value="board" className="mt-5 space-y-4">
+            {/* Status filter pills */}
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: "all", label: "All" },
+                { value: "done", label: "Done" },
+                { value: "pending", label: "Pending" },
+                { value: "late", label: "Late" },
+              ].map(f => (
+                <Button
+                  key={f.value}
+                  variant={boardStatusFilter === f.value ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-xl h-8 text-xs"
+                  onClick={() => setBoardStatusFilter(f.value)}
+                >
+                  {f.label}
+                </Button>
+              ))}
+              <span className="ml-auto text-xs text-muted-foreground self-center">
+                {filteredTasks.length} task{filteredTasks.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {tasksLoading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="text-center py-16 bg-muted/20 rounded-2xl border border-border/50 border-dashed">
+                <LayoutGrid className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-muted-foreground">No tasks found.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(tasksByStaff)
+                  .sort(([a], [b]) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b))
+                  .map(([person, tasks]) => (
+                    <div key={person} className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="flex items-center justify-between px-4 py-3 bg-muted/10 border-b border-border/40">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                            {person[0]}
+                          </div>
+                          <span className="font-semibold text-sm">{person}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="text-emerald-400">{tasks.filter((t: any) => t.status === "done").length} done</span>
+                          <span>·</span>
+                          <span>{tasks.filter((t: any) => t.status === "pending").length} pending</span>
+                          {tasks.filter((t: any) => t.status === "late").length > 0 && (
+                            <>
+                              <span>·</span>
+                              <span className="text-amber-400">{tasks.filter((t: any) => t.status === "late").length} late</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="divide-y divide-border/30">
+                        {tasks.map((task: any) => (
+                          <div key={task.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors">
+                            {statusIcon(task.status)}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground/90 truncate">
+                                {task.messageName || task.commType}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">{task.eventTitle}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {task.channel && (
+                                <span className="text-xs text-muted-foreground hidden sm:block">{task.channel}</span>
+                              )}
+                              <Badge variant="outline" className={`text-xs rounded-lg ${statusCls(task.status)}`}>
+                                {task.status}
+                              </Badge>
+                              {task.dueDate && (
+                                <span className="text-xs text-muted-foreground w-16 text-right">
+                                  {format(new Date(task.dueDate), "MMM d")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Create / Edit dialog */}
