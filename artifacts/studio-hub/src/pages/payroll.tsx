@@ -289,13 +289,13 @@ export default function Payroll() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="rounded-xl border overflow-hidden">
+          <div className="rounded-xl border overflow-hidden overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead>Employee</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Rate / hr</TableHead>
+                  <TableHead className="hidden sm:table-cell">Role</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">Rate / hr</TableHead>
                   <TableHead className="text-right">Hours</TableHead>
                   <TableHead className="text-right">Total Pay</TableHead>
                   <TableHead className="w-24" />
@@ -329,8 +329,8 @@ export default function Payroll() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground capitalize">{emp.role}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-muted-foreground capitalize hidden sm:table-cell">{emp.role}</TableCell>
+                      <TableCell className="text-right hidden sm:table-cell">
                         <button
                           onClick={(e) => { e.stopPropagation(); openRateEdit(emp); }}
                           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -469,7 +469,7 @@ export default function Payroll() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Work Date</Label>
                 <Input

@@ -186,7 +186,7 @@ function BandFormDialog({
               </Select>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs mb-1.5 block">Website</Label>
               <Input value={form.website} onChange={f("website")} placeholder="https://…" />
@@ -416,7 +416,7 @@ function MemberFormDialog({
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Primary Contact</p>
               <span className="text-[10px] text-muted-foreground ml-auto">(receives invites & updates)</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label className="text-xs mb-1.5 block">Contact Name</Label>
                 <Input value={primary.name} onChange={cf(setPrimary, "name")} placeholder="e.g. Sarah Riefler" />
@@ -453,7 +453,7 @@ function MemberFormDialog({
                   Remove
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <Label className="text-xs mb-1.5 block">Contact Name</Label>
                   <Input value={secondary.name} onChange={cf(setSecondary, "name")} placeholder="e.g. David Riefler" />

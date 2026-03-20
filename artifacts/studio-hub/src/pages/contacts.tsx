@@ -339,7 +339,7 @@ export default function Contacts() {
                   const window = outreachWindowMonths && outreachWindowMonths !== "__none__" ? parseInt(outreachWindowMonths) : null;
                   createContact({ data: { ...rest, outreachWindowMonths: window } as any });
                 })} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField control={form.control} name="name" render={({ field }) => (
                       <FormItem className="col-span-2">
                         <FormLabel>Full Name *</FormLabel>
@@ -443,9 +443,9 @@ export default function Contacts() {
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="font-semibold">Name</TableHead>
-                  <TableHead className="font-semibold">Organization</TableHead>
+                  <TableHead className="font-semibold hidden sm:table-cell">Organization</TableHead>
                   <TableHead className="font-semibold">Contact Info</TableHead>
-                  <TableHead className="font-semibold">Last Outreach</TableHead>
+                  <TableHead className="font-semibold hidden lg:table-cell">Last Outreach</TableHead>
                   <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -463,7 +463,7 @@ export default function Contacts() {
                           {typeLabel(contact.type)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="flex items-center text-sm text-muted-foreground">
                           <Building2 className="h-3.5 w-3.5 mr-2 opacity-70" />
                           {contact.organization || "—"}
@@ -476,7 +476,7 @@ export default function Contacts() {
                           {contact.phone && <div className="flex items-center"><Phone className="h-3.5 w-3.5 mr-2 opacity-70" />{contact.phone}</div>}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <div className="space-y-1">
                           {getOutreachStatus(contact) === "overdue" && (
                             <Badge className="bg-destructive/10 text-destructive border border-destructive/30 text-[10px] px-1.5 py-0.5 h-auto font-medium">
@@ -504,7 +504,7 @@ export default function Contacts() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -608,7 +608,7 @@ export default function Contacts() {
                 const window = outreachWindowMonths && outreachWindowMonths !== "__none__" ? parseInt(outreachWindowMonths) : null;
                 updateContact({ id: editContactId, data: { ...rest, email2: email2 || null, outreachWindowMonths: window } });
               })} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField control={editForm.control} name="name" render={({ field }) => (
                     <FormItem className="col-span-2">
                       <FormLabel>Full Name *</FormLabel>

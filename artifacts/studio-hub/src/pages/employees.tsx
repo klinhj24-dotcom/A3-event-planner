@@ -648,7 +648,7 @@ export default function Employees() {
           </DialogHeader>
           <Form {...portalForm}>
             <form onSubmit={portalForm.handleSubmit((data) => createPortalUser(data))} className="space-y-4 mt-1">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormField control={portalForm.control} name="firstName" render={({ field }) => (
                   <FormItem>
                     <FormLabel>First Name *</FormLabel>

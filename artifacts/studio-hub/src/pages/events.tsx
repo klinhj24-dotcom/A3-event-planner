@@ -1876,7 +1876,7 @@ export default function Events() {
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField control={form.control} name="type" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Type *</FormLabel>
@@ -1927,7 +1927,7 @@ export default function Events() {
                       <div className="space-y-3">
                         <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 1</p>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <FormField control={form.control} name="startDate" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
@@ -1949,7 +1949,7 @@ export default function Events() {
                         </div>
                         <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2</p>
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <FormField control={form.control} name="endDate" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Day 2 Date</FormLabel>
@@ -2000,7 +2000,7 @@ export default function Events() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField control={form.control} name="startDate" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Start Date & Time</FormLabel>
@@ -2032,7 +2032,7 @@ export default function Events() {
                           <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                         </FormItem>
                       )} />
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField control={form.control} name="revenue" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs">Revenue ($)</FormLabel>
@@ -2131,7 +2131,7 @@ export default function Events() {
                       {/* External link fields */}
                       {createTicketSource === "external" && (
                         <div className="space-y-3">
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <FormField control={form.control} name="ctaLabel" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs">Button Label</FormLabel>
@@ -2180,7 +2180,7 @@ export default function Events() {
                             form.watch("isTwoDay") ? (
                               <div className="space-y-2">
                                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ticket Prices <span className="normal-case font-normal">(optional)</span></p>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                   {([["day1Price", "Day 1"], ["day2Price", "Day 2"], ["ticketPrice", "Both Days"]] as const).map(([name, label]) => (
                                     <FormField key={name} control={form.control} name={name} render={({ field }) => (
                                       <FormItem>
@@ -2343,10 +2343,10 @@ export default function Events() {
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-semibold">Event</TableHead>
-                    <TableHead className="font-semibold">Date & Location</TableHead>
+                    <TableHead className="font-semibold hidden sm:table-cell">Date & Location</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
-                    <TableHead className="font-semibold">Financials</TableHead>
-                    <TableHead className="text-right font-semibold">Sync & Tasks</TableHead>
+                    <TableHead className="font-semibold hidden md:table-cell">Financials</TableHead>
+                    <TableHead className="text-right font-semibold hidden lg:table-cell">Sync & Tasks</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2379,7 +2379,7 @@ export default function Events() {
                             </div>
                           </button>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center text-foreground">
                               <CalendarCheck className="h-3.5 w-3.5 mr-2 text-primary/70" />
@@ -2398,7 +2398,7 @@ export default function Events() {
                             {event.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex items-center text-sm">
                             {event.isPaid ? (
                               <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold tracking-wide">PAID</Badge>
@@ -2412,7 +2412,7 @@ export default function Events() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right hidden lg:table-cell">
                           <div className="flex items-center justify-end gap-1">
                             {event.isTwoDay && (
                               <Badge variant="outline" className="text-[10px] font-semibold mr-1 border border-primary/30 bg-primary/10 text-primary">2-Day</Badge>
@@ -2546,7 +2546,7 @@ export default function Events() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField control={editForm.control} name="type" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type *</FormLabel>
@@ -2588,7 +2588,7 @@ export default function Events() {
                 <div className="space-y-3">
                   <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 1</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <FormField control={editForm.control} name="startDate" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 1 Date & Start Time</FormLabel>
@@ -2610,7 +2610,7 @@ export default function Events() {
                   </div>
                   <div className="rounded-xl border border-border/40 bg-muted/20 p-3 space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Day 2</p>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <FormField control={editForm.control} name="endDate" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Day 2 Date</FormLabel>
@@ -2661,7 +2661,7 @@ export default function Events() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField control={editForm.control} name="startDate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Start Date & Time</FormLabel>
@@ -2692,7 +2692,7 @@ export default function Events() {
                     <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                   </FormItem>
                 )} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField control={editForm.control} name="revenue" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Revenue ($)</FormLabel>
@@ -2790,7 +2790,7 @@ export default function Events() {
                 {/* External link fields */}
                 {editTicketSource === "external" && (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <FormField control={editForm.control} name="ctaLabel" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Button Label</FormLabel>
@@ -2839,7 +2839,7 @@ export default function Events() {
                       editForm.watch("isTwoDay") ? (
                         <div className="space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ticket Prices <span className="normal-case font-normal">(optional)</span></p>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             {([["day1Price", "Day 1"], ["day2Price", "Day 2"], ["ticketPrice", "Both Days"]] as const).map(([name, label]) => (
                               <FormField key={name} control={editForm.control} name={name} render={({ field }) => (
                                 <FormItem>
