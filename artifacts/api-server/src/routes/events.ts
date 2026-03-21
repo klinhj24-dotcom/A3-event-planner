@@ -62,8 +62,21 @@ function buildTicketUrl(signupToken: string) {
 async function trySyncToCalendar(userId: string, event: typeof eventsTable.$inferSelect): Promise<string | null> {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-    if (!user?.googleAccessToken || !user?.googleRefreshToken) return null;
+    if (!user?.googleAccessToken || !user?.googleRefreshToken) {
+      console.warn(`[calendar] trySyncToCalendar: user ${userId} has no Google tokens — skipping`);
+      return null;
+    }
     const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
+    // Save refreshed tokens back to DB so they don't go stale
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, userId));
+      }
+    });
     const cal = google.calendar({ version: "v3", auth });
 
     const descParts: string[] = [];
@@ -97,8 +110,10 @@ async function trySyncToCalendar(userId: string, event: typeof eventsTable.$infe
       const created = await cal.events.insert({ calendarId: TMS_CALENDAR_ID, requestBody: calEvent });
       return created.data.id ?? null;
     }
-  } catch (err) {
-    console.warn("trySyncToCalendar (non-fatal):", err);
+  } catch (err: any) {
+    const msg = err?.message ?? String(err);
+    const gcalErr = err?.errors?.[0]?.message ?? err?.response?.data?.error?.message ?? "";
+    console.warn(`[calendar] trySyncToCalendar failed for event "${event.title}": ${msg}${gcalErr ? ` — ${gcalErr}` : ""}`);
     return null;
   }
 }
@@ -124,6 +139,15 @@ async function tryAutoGenerateAndPushComms(userId: string, event: typeof eventsT
     let cal: ReturnType<typeof google.calendar> | null = null;
     if (hasCalendar) {
       const auth = createAuthedClient(user.googleAccessToken!, user.googleRefreshToken!, user.googleTokenExpiry);
+      auth.on("tokens", async (tokens) => {
+        if (tokens.access_token) {
+          await db.update(usersTable).set({
+            googleAccessToken: tokens.access_token,
+            googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
+            googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          }).where(eq(usersTable.id, userId));
+        }
+      });
       cal = google.calendar({ version: "v3", auth });
     }
 
