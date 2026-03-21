@@ -58,8 +58,8 @@ function buildTicketUrl(signupToken: string) {
   return `https://${getAppDomain()}/ticket/${signupToken}`;
 }
 
-/** Push/update a confirmed event to Google Calendar. Returns the gcal event ID (new or existing). */
-async function trySyncToCalendar(userId: number, event: typeof eventsTable.$inferSelect): Promise<string | null> {
+/** Push/update an event to Google Calendar. Returns the gcal event ID (new or existing). */
+async function trySyncToCalendar(userId: string, event: typeof eventsTable.$inferSelect): Promise<string | null> {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
     if (!user?.googleAccessToken || !user?.googleRefreshToken) return null;
@@ -106,7 +106,7 @@ async function trySyncToCalendar(userId: number, event: typeof eventsTable.$infe
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
 /** Fire-and-forget: generate comm tasks from rules and push them to the comms Google Calendar. */
-async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsTable.$inferSelect) {
+async function tryAutoGenerateAndPushComms(userId: string, event: typeof eventsTable.$inferSelect) {
   try {
     if (!event.startDate) return;
     const rules = await db
@@ -179,7 +179,7 @@ async function tryAutoGenerateAndPushComms(userId: number, event: typeof eventsT
 }
 
 /** Fire-and-forget: shift all comm task due dates by the same delta as the event date change. */
-async function shiftCommTaskDates(eventId: number, oldStartDate: Date, newStartDate: Date, userId: number) {
+async function shiftCommTaskDates(eventId: number, oldStartDate: Date, newStartDate: Date, userId: string) {
   try {
     const shiftMs = newStartDate.getTime() - oldStartDate.getTime();
     const tasks = await db.select().from(commTasksTable).where(eq(commTasksTable.eventId, eventId));
@@ -306,15 +306,17 @@ router.post("/events", async (req, res) => {
     // Auto-add POC to contacts database
     upsertPocContact(event.id, pocName, pocEmail, pocPhone).catch(() => {});
 
-    // Auto-push to Google Calendar + generate comm tasks when status is confirmed
-    if (event.status === "confirmed") {
-      const userId = (req.user as any)?.id;
+    // Auto-push to Google Calendar whenever the event has a start date
+    const userId = (req.user as any)?.id as string;
+    if (event.startDate) {
       const gcalId = await trySyncToCalendar(userId, event);
       const finalEvent = gcalId && gcalId !== event.googleCalendarEventId
         ? (await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, event.id)).returning())[0]
         : event;
-      // Fire-and-forget comm task generation + comms calendar push
-      tryAutoGenerateAndPushComms(userId, finalEvent);
+      // Fire-and-forget comm task generation + comms calendar push (confirmed events only)
+      if (event.status === "confirmed") {
+        tryAutoGenerateAndPushComms(userId, finalEvent);
+      }
       res.status(201).json(finalEvent);
       return;
     }
@@ -422,17 +424,19 @@ router.put("/events/:id", async (req, res) => {
       shiftCommTaskDates(event.id, existing.startDate, event.startDate, (req.user as any)?.id).catch(() => {});
     }
 
-    // Auto-sync to Google Calendar when status is confirmed (create or update)
-    if (event.status === "confirmed") {
-      const userId = (req.user as any)?.id;
+    // Auto-sync to Google Calendar whenever the event has a start date
+    const userId = (req.user as any)?.id as string;
+    if (event.startDate) {
       const gcalId = await trySyncToCalendar(userId, event);
       const finalEvent = gcalId && gcalId !== event.googleCalendarEventId
         ? (await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, id)).returning())[0]
         : event;
-      // Auto-generate comm tasks when transitioning to confirmed (or re-confirming with a start date)
-      const wasConfirmed = existing?.status === "confirmed";
-      if (!wasConfirmed || !event.googleCalendarEventId) {
-        tryAutoGenerateAndPushComms(userId, finalEvent);
+      // Auto-generate comm tasks when transitioning to confirmed (or re-confirming with no existing calId)
+      if (event.status === "confirmed") {
+        const wasConfirmed = existing?.status === "confirmed";
+        if (!wasConfirmed || !event.googleCalendarEventId) {
+          tryAutoGenerateAndPushComms(userId, finalEvent);
+        }
       }
       res.json(finalEvent);
       return;
