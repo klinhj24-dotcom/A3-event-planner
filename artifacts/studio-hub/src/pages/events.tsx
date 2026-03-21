@@ -1228,7 +1228,12 @@ function EventOverviewSheet({
               </h4>
               <div className="space-y-1.5 max-h-96 overflow-y-auto">
                 {ticketRequests.map((r: any, idx: number) => {
-                  const price = event.ticketPrice ? parseFloat(event.ticketPrice) : null;
+                  const resolvedPrice = (event as any).isTwoDay && r.ticketType
+                    ? r.ticketType === "day1" ? (event as any).day1Price
+                    : r.ticketType === "day2" ? (event as any).day2Price
+                    : event.ticketPrice
+                    : event.ticketPrice;
+                  const price = resolvedPrice ? parseFloat(resolvedPrice) : null;
                   const lineTotal = price && r.ticketCount ? (price * r.ticketCount).toFixed(2) : null;
                   const isRecitalEntry = r.formType === "recital" && r.studentFirstName;
                   return (
@@ -1282,6 +1287,11 @@ function EventOverviewSheet({
                           {r.ticketCount && (
                             <div className="text-muted-foreground">
                               {r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}
+                              {r.ticketType && (event as any).isTwoDay && (
+                                <span className="ml-1 text-muted-foreground/60">
+                                  · {r.ticketType === "day1" ? "Day 1" : r.ticketType === "day2" ? "Day 2" : "Both Days"}
+                                </span>
+                              )}
                               {lineTotal && <span className="ml-1 text-foreground font-semibold">${lineTotal}</span>}
                             </div>
                           )}
