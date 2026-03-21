@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ZmFD-AvCTpdYHxUrjj7gP"
+uri = "file://TMS_Admin_User_Manual.md"
+type = "text"
+title = "TMS Admin User Manual"
