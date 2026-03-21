@@ -1,7 +1,7 @@
 import app from "./app";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, eventLineupTable, eventBandInvitesTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, inArray } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
 import { seedEventTypes } from "./seeds/event-types";
 import { seedTeachers } from "./seeds/teachers";
@@ -51,7 +51,34 @@ async function initDb() {
   await seedTeachers();
 }
 
-initDb().then(() => {
+// Retroactively auto-confirm pending invites on slots that are already confirmed.
+// Handles invites sent before the auto-confirm-on-response logic was deployed.
+async function cleanupStaleInvites() {
+  try {
+    const confirmedSlots = await db
+      .select({ id: eventLineupTable.id })
+      .from(eventLineupTable)
+      .where(eq(eventLineupTable.inviteStatus, "confirmed"));
+    if (confirmedSlots.length === 0) return;
+    const confirmedSlotIds = confirmedSlots.map(s => s.id);
+    const updated = await db
+      .update(eventBandInvitesTable)
+      .set({ status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(eventBandInvitesTable.status, "pending"),
+        inArray(eventBandInvitesTable.lineupSlotId, confirmedSlotIds),
+      ))
+      .returning({ id: eventBandInvitesTable.id });
+    if (updated.length > 0) {
+      console.log(`[cleanup] Auto-confirmed ${updated.length} stale pending invite(s) on confirmed slots`);
+    }
+  } catch (err) {
+    console.error("[cleanup] cleanupStaleInvites failed:", err);
+  }
+}
+
+initDb().then(async () => {
+  await cleanupStaleInvites();
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startStaffReminderCron();
