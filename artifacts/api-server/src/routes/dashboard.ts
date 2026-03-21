@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, bandMembersTable } from "@workspace/db";
-import { count, gte, eq, desc, isNotNull, and, or, isNull, sql, ne } from "drizzle-orm";
+import { count, gte, eq, desc, isNotNull, and, or, isNull, sql, ne, notInArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -12,7 +12,7 @@ router.get("/dashboard/stats", async (req, res) => {
   try {
     const now = new Date();
 
-    const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList, [pendingChargesRow], pendingChargesList, [pendingInvitesCountRow], pendingInvitesList] =
+    const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList, [pendingChargesRow], pendingChargesList] =
       await Promise.all([
         db.select({ count: count() }).from(contactsTable),
         db.select({ count: count() }).from(eventsTable).where(gte(eventsTable.startDate, now)),
@@ -43,28 +43,41 @@ router.get("/dashboard/stats", async (req, res) => {
           .groupBy(eventsTable.id, eventsTable.title, eventsTable.startDate)
           .orderBy(eventsTable.startDate)
           .limit(10),
-        // Count of individual contacts who haven't responded yet
-        db.select({ count: count() }).from(eventBandInvitesTable)
-          .where(eq(eventBandInvitesTable.status, "pending")),
-        // List of individual pending contacts with student + event info
-        db.select({
-            inviteId: eventBandInvitesTable.id,
-            token: eventBandInvitesTable.token,
-            contactName: eventBandInvitesTable.contactName,
-            memberName: bandMembersTable.name,
-            bandName: bandsTable.name,
-            eventId: eventsTable.id,
-            eventTitle: eventsTable.title,
-            startDate: eventsTable.startDate,
-          })
-          .from(eventBandInvitesTable)
-          .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
-          .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
-          .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
-          .where(eq(eventBandInvitesTable.status, "pending"))
-          .orderBy(eventsTable.startDate)
-          .limit(25),
       ]);
+
+    // Pending invites where nobody on the same slot has confirmed yet.
+    // (If any contact confirmed for a student, the slot is done — don't surface the others.)
+    const confirmedSlots = await db
+      .select({ lineupSlotId: eventBandInvitesTable.lineupSlotId })
+      .from(eventBandInvitesTable)
+      .where(eq(eventBandInvitesTable.status, "confirmed"))
+      .groupBy(eventBandInvitesTable.lineupSlotId);
+    const confirmedSlotIds = confirmedSlots.map(s => s.lineupSlotId);
+
+    const pendingInvitesWhere = confirmedSlotIds.length > 0
+      ? and(eq(eventBandInvitesTable.status, "pending"), notInArray(eventBandInvitesTable.lineupSlotId, confirmedSlotIds))
+      : eq(eventBandInvitesTable.status, "pending");
+
+    const [pendingInvitesList, [pendingInvitesCountRow]] = await Promise.all([
+      db.select({
+          inviteId: eventBandInvitesTable.id,
+          token: eventBandInvitesTable.token,
+          contactName: eventBandInvitesTable.contactName,
+          memberName: bandMembersTable.name,
+          bandName: bandsTable.name,
+          eventId: eventsTable.id,
+          eventTitle: eventsTable.title,
+          startDate: eventsTable.startDate,
+        })
+        .from(eventBandInvitesTable)
+        .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
+        .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
+        .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
+        .where(pendingInvitesWhere)
+        .orderBy(eventsTable.startDate)
+        .limit(25),
+      db.select({ count: count() }).from(eventBandInvitesTable).where(pendingInvitesWhere),
+    ]);
 
     res.json({
       totalContacts: totalContactsRow?.count ?? 0,
