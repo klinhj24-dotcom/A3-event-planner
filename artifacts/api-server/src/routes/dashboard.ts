@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable } from "@workspace/db";
-import { count, gte, eq, desc, isNotNull, and, lt, or, isNull, sql } from "drizzle-orm";
+import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable } from "@workspace/db";
+import { count, gte, eq, desc, isNotNull, and, lt, or, isNull, sql, ne } from "drizzle-orm";
 
 const router = Router();
 
@@ -12,7 +12,7 @@ router.get("/dashboard/stats", async (req, res) => {
   try {
     const now = new Date();
 
-    const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList] =
+    const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList, [pendingChargesRow], pendingChargesList] =
       await Promise.all([
         db.select({ count: count() }).from(contactsTable),
         db.select({ count: count() }).from(eventsTable).where(gte(eventsTable.startDate, now)),
@@ -29,6 +29,20 @@ router.get("/dashboard/stats", async (req, res) => {
         ),
         db.select().from(outreachTable).orderBy(desc(outreachTable.outreachAt)).limit(5),
         db.select().from(eventsTable).where(gte(eventsTable.startDate, now)).orderBy(eventsTable.startDate).limit(5),
+        db.select({ count: count() }).from(eventTicketRequestsTable)
+          .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled"))),
+        db.select({
+            eventId: eventsTable.id,
+            eventTitle: eventsTable.title,
+            startDate: eventsTable.startDate,
+            pendingCount: count(eventTicketRequestsTable.id),
+          })
+          .from(eventTicketRequestsTable)
+          .innerJoin(eventsTable, eq(eventTicketRequestsTable.eventId, eventsTable.id))
+          .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled")))
+          .groupBy(eventsTable.id, eventsTable.title, eventsTable.startDate)
+          .orderBy(eventsTable.startDate)
+          .limit(10),
       ]);
 
     res.json({
@@ -39,6 +53,8 @@ router.get("/dashboard/stats", async (req, res) => {
       overdueContacts: overdueContactsRow?.count ?? 0,
       recentOutreach,
       upcomingEventsList,
+      pendingCharges: pendingChargesRow?.count ?? 0,
+      pendingChargesList,
     });
   } catch (err) {
     console.error("getDashboardStats error:", err);

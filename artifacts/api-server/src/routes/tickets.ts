@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, eventsTable, eventTicketRequestsTable, eventLineupTable, usersTable, employeesTable } from "@workspace/db";
-import { eq, desc, and, ne, count } from "drizzle-orm";
+import { db, eventsTable, eventTicketRequestsTable, eventLineupTable, usersTable, employeesTable, contactsTable } from "@workspace/db";
+import { eq, desc, and, ne, count, sql } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
@@ -103,6 +103,24 @@ router.post("/ticket/:token/submit", async (req, res) => {
     if (existing) {
       res.json({ alreadySubmitted: true, eventTitle: event.title });
       return;
+    }
+
+    // For recital forms: also block duplicate registrations for the same student, regardless of who submitted
+    if (event.ticketFormType === "recital" && studentFirstName && studentLastName) {
+      const [existingByStudent] = await db
+        .select()
+        .from(eventTicketRequestsTable)
+        .where(and(
+          eq(eventTicketRequestsTable.eventId, event.id),
+          sql`LOWER(${eventTicketRequestsTable.studentFirstName}) = LOWER(${studentFirstName.trim()})`,
+          sql`LOWER(${eventTicketRequestsTable.studentLastName}) = LOWER(${studentLastName.trim()})`,
+          ne(eventTicketRequestsTable.status, "cancelled"),
+        ))
+        .limit(1);
+      if (existingByStudent) {
+        res.json({ alreadySubmitted: true, eventTitle: event.title, studentAlreadyRegistered: true });
+        return;
+      }
     }
 
     const [request] = await db
@@ -289,6 +307,10 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
   try {
     const requestId = parseInt(req.params.requestId);
     const { status, adminNotes, charged } = req.body;
+
+    // Fetch current state before update so we know if charged is transitioning to true
+    const [before] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+
     const [updated] = await db
       .update(eventTicketRequestsTable)
       .set({
@@ -302,6 +324,47 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
       .where(eq(eventTicketRequestsTable.id, requestId))
       .returning();
     res.json(updated);
+
+    // Send charge confirmation email when charged flips to true
+    if (charged === true && before && !before.charged && updated?.contactEmail) {
+      try {
+        const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, updated.eventId));
+        const users = await db.select().from(usersTable);
+        const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+        if (event && sender) {
+          const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({
+                googleAccessToken: tokens.access_token,
+                googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+                googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+              }).where(eq(usersTable.id, sender.id));
+            }
+          });
+          const gmail = google.gmail({ version: "v1", auth });
+
+          // Build CC list: always desk; add email2 from contacts table if found
+          const cc: string[] = ["info@themusicspace.com"];
+          const [contact] = await db.select().from(contactsTable)
+            .where(sql`LOWER(${contactsTable.email}) = LOWER(${updated.contactEmail})`).limit(1);
+          if (contact?.email2) cc.push(contact.email2);
+
+          const isRecital = updated.formType === "recital";
+          const performerLine = isRecital && updated.studentFirstName
+            ? `\nPerformer: ${updated.studentFirstName} ${updated.studentLastName ?? ""}\n`
+            : "";
+
+          const bodyText = `Hi ${updated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for ${event.title}.${performerLine}\n\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
+          const html = buildHtmlEmail({ recipientName: updated.contactFirstName ?? "there", body: bodyText });
+          const subject = `Payment Confirmed — ${event.title}`;
+          const raw = makeHtmlEmail({ to: updated.contactEmail, from: sender.email || "", subject, html, cc });
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        }
+      } catch (emailErr) {
+        console.error("Charge confirmation email failed (non-fatal):", emailErr);
+      }
+    }
   } catch (err) {
     console.error("updateTicketRequest error:", err);
     res.status(500).json({ error: "Internal server error" });

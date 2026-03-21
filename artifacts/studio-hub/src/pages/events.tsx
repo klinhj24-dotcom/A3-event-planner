@@ -1063,6 +1063,10 @@ function EventOverviewSheet({
                 ) : (
                   <Badge variant="outline" className="text-xs text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
                 )}
+                <div className="flex items-center gap-1 ml-auto">
+                  <CalendarPushButton eventId={event.id} />
+                  <CommsPushButton eventId={event.id} eventTitle={event.title} />
+                </div>
               </div>
             </div>
           </div>
@@ -1224,9 +1228,18 @@ function EventOverviewSheet({
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Ticket className="h-3.5 w-3.5" /> {event.ticketFormType === "recital" ? "Recital Signups" : "Ticket Requests"}
-                <span className="ml-auto bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
+                <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
+                <span className="text-emerald-500/80 text-[10px] font-medium">
+                  {ticketRequests.filter((r: any) => r.charged).length}/{ticketRequests.length} charged
+                </span>
               </h4>
-              <div className="space-y-1.5 max-h-96 overflow-y-auto">
+              {/* Table header */}
+              <div className="grid grid-cols-[44px_1fr_auto] gap-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-2 pb-1 border-b border-border/20">
+                <span className="text-center">Chrgd</span>
+                <span>Name / Details</span>
+                <span className="text-right">Status</span>
+              </div>
+              <div className="space-y-1 max-h-[420px] overflow-y-auto">
                 {ticketRequests.map((r: any, idx: number) => {
                   const resolvedPrice = (event as any).isTwoDay && r.ticketType
                     ? r.ticketType === "day1" ? (event as any).day1Price
@@ -1237,73 +1250,68 @@ function EventOverviewSheet({
                   const lineTotal = price && r.ticketCount ? (price * r.ticketCount).toFixed(2) : null;
                   const isRecitalEntry = r.formType === "recital" && r.studentFirstName;
                   return (
-                  <div key={r.id} className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs transition-colors ${r.charged ? "bg-emerald-500/5 border-emerald-500/20" : "bg-muted/40 border-border/40"}`}>
-                    {/* Position number (recital) or charged checkbox (general) */}
-                    {isRecitalEntry ? (
-                      <div className="shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold mt-0.5">{idx + 1}</div>
-                    ) : (
+                  <div key={r.id} className={`grid grid-cols-[44px_1fr_auto] gap-0 items-start rounded-xl border transition-colors text-xs ${r.charged ? "bg-emerald-500/8 border-emerald-500/25" : "bg-muted/30 border-border/30 hover:border-border/50"}`}>
+                    {/* Big charge checkbox */}
+                    <div className="flex items-start justify-center pt-3 pb-2">
                       <button
                         onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
                         title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
-                        className={`shrink-0 mt-0.5 h-4 w-4 rounded border-2 flex items-center justify-center transition-all ${
-                          r.charged ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-emerald-500"
+                        className={`h-7 w-7 rounded-lg border-2 flex items-center justify-center transition-all shadow-sm ${
+                          r.charged
+                            ? "bg-emerald-500 border-emerald-500 text-white shadow-emerald-500/30"
+                            : "border-border/60 bg-background hover:border-emerald-500 hover:bg-emerald-500/5"
                         }`}
                       >
-                        {r.charged && <CheckCircle2 className="h-3 w-3" />}
+                        {r.charged && <CheckCircle2 className="h-4 w-4" />}
                       </button>
-                    )}
+                    </div>
 
-                    <div className="flex-1 min-w-0">
+                    {/* Name + details */}
+                    <div className="py-2.5 pr-2 min-w-0">
                       {isRecitalEntry ? (
                         <>
-                          <div className="font-semibold text-foreground text-[13px]">{r.studentFirstName} {r.studentLastName}</div>
-                          <div className="text-muted-foreground mt-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-primary/60 tabular-nums">#{idx + 1}</span>
+                            <span className="font-semibold text-foreground text-[13px] leading-tight">{r.studentFirstName} {r.studentLastName}</span>
+                          </div>
+                          <div className="text-muted-foreground text-[11px] mt-0.5">
                             {[r.instrument, r.recitalSong].filter(Boolean).join(" · ")}
                           </div>
-                          {r.teacher && <div className="text-muted-foreground">Teacher: {r.teacher}</div>}
+                          {r.teacher && <div className="text-muted-foreground text-[11px]">Teacher: {r.teacher}</div>}
                           {r.specialConsiderations && (
-                            <div className="text-amber-500/80 mt-0.5">Note: {r.specialConsiderations}</div>
+                            <div className="text-amber-500/80 text-[11px] mt-0.5">⚠ {r.specialConsiderations}</div>
                           )}
-                          <div className="text-muted-foreground/60 mt-1 flex items-center gap-1.5 flex-wrap">
-                            <button
-                              onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
-                              title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
-                              className={`shrink-0 h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-all ${
-                                r.charged ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-emerald-500"
-                              }`}
-                            >
-                              {r.charged && <CheckCircle2 className="h-2.5 w-2.5" />}
-                            </button>
-                            <span className="truncate">
-                              {r.contactFirstName} {r.contactLastName} · {r.contactEmail}
-                              {r.charged && r.chargedAt && <span className="text-emerald-600 ml-1">· Charged {new Date(r.chargedAt).toLocaleDateString()}</span>}
-                            </span>
+                          <div className="text-muted-foreground/60 text-[11px] mt-1 truncate">
+                            {r.contactFirstName} {r.contactLastName} · {r.contactEmail}
                           </div>
+                          {r.charged && r.chargedAt && (
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
+                          )}
                         </>
                       ) : (
                         <>
-                          <div className="font-medium text-foreground">{r.contactFirstName} {r.contactLastName}</div>
-                          <div className="text-muted-foreground truncate">{r.contactEmail}</div>
+                          <div className="font-semibold text-foreground text-[13px] leading-tight">{r.contactFirstName} {r.contactLastName}</div>
+                          <div className="text-muted-foreground text-[11px] truncate mt-0.5">{r.contactEmail}</div>
                           {r.ticketCount && (
-                            <div className="text-muted-foreground">
-                              {r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}
+                            <div className="text-[11px] mt-0.5">
+                              <span className="text-muted-foreground">{r.ticketCount} ticket{r.ticketCount !== 1 ? "s" : ""}</span>
                               {r.ticketType && (event as any).isTwoDay && (
                                 <span className="ml-1 text-muted-foreground/60">
                                   · {r.ticketType === "day1" ? "Day 1" : r.ticketType === "day2" ? "Day 2" : "Both Days"}
                                 </span>
                               )}
-                              {lineTotal && <span className="ml-1 text-foreground font-semibold">${lineTotal}</span>}
+                              {lineTotal && <span className="ml-1.5 font-bold text-foreground">${lineTotal}</span>}
                             </div>
                           )}
                           {r.charged && r.chargedAt && (
-                            <div className="text-emerald-600 text-[10px] mt-0.5">Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
                           )}
                         </>
                       )}
                     </div>
 
-                    {/* Status selector + delete */}
-                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                    {/* Status + delete */}
+                    <div className="flex flex-col items-end gap-1.5 py-2.5 pr-2.5">
                       <select
                         value={r.status}
                         onChange={e => updateTicketStatus({ requestId: r.id, status: e.target.value })}

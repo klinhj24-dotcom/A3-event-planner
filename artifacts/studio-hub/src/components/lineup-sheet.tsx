@@ -22,6 +22,7 @@ import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
   Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
   Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe, Loader2,
+  Copy, Check,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ interface BandContact {
 interface BandInvite {
   id: number; contactName: string | null; contactEmail: string;
   status: string; conflictNote: string | null; sentAt: string | null; respondedAt: string | null;
+  token?: string | null;
 }
 
 interface LineupSlot {
@@ -113,6 +115,16 @@ const INVITE_STATUS_META: Record<string, { label: string; cls: string }> = {
 
 // ── Invite status row ──────────────────────────────────────────────────────────
 function InviteRow({ invite }: { invite: BandInvite }) {
+  const [copied, setCopied] = useState(false);
+  const confirmUrl = invite.token ? `${window.location.origin}/band-confirm/${invite.token}` : null;
+
+  function copyLink() {
+    if (!confirmUrl) return;
+    navigator.clipboard.writeText(confirmUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const statusCls = invite.status === "confirmed"
     ? "text-emerald-400"
     : invite.status === "declined"
@@ -127,7 +139,19 @@ function InviteRow({ invite }: { invite: BandInvite }) {
           {statusIcon} {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
         </span>
       </div>
-      <span className="text-[10px] text-muted-foreground">{invite.contactEmail}</span>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-muted-foreground truncate">{invite.contactEmail}</span>
+        {confirmUrl && (
+          <button
+            onClick={copyLink}
+            title="Copy confirmation link to text families"
+            className={`shrink-0 flex items-center gap-0.5 text-[10px] transition-colors rounded px-1 py-0.5 ${copied ? "text-emerald-400 bg-emerald-500/10" : "text-primary/60 hover:text-primary hover:bg-primary/10"}`}
+          >
+            {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+        )}
+      </div>
       {invite.conflictNote && (
         <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1.5">
           <p className="text-[11px] text-amber-400 font-medium mb-0.5">Day-of note:</p>
@@ -1039,10 +1063,21 @@ export function LineupSheet({ event, open, onClose }: {
       const bandId = Number(activeId.replace("band-", ""));
       const band = rawBands.find(b => b.id === bandId);
       if (band) {
-        // Determine which day zone was dropped on
+        // Determine which day zone / slot was dropped on
         let eventDay = newSlot.eventDay;
-        if (overId === "day-zone-1") eventDay = 1;
-        else if (overId === "day-zone-2") eventDay = 2;
+        let insertPosition = slots.length;
+        if (overId === "day-zone-1") {
+          eventDay = 1;
+        } else if (overId === "day-zone-2") {
+          eventDay = 2;
+        } else {
+          // Dropped directly on an existing slot — inherit that slot's day and insert before it
+          const targetSlot = slots.find(s => String(s.id) === overId);
+          if (targetSlot) {
+            eventDay = targetSlot.eventDay;
+            insertPosition = targetSlot.position;
+          }
+        }
         addSlot({
           type: "act",
           bandId,
@@ -1053,7 +1088,7 @@ export function LineupSheet({ event, open, onClose }: {
           bufferMinutes: 15,
           isOverlapping: false,
           eventDay,
-          position: slots.length,
+          position: insertPosition,
         });
       }
       return;

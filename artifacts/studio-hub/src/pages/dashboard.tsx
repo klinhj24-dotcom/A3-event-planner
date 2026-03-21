@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/layout";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle } from "lucide-react";
+import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -36,6 +36,7 @@ export default function Dashboard() {
     { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10", href: "/events" },
     { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10", href: "/employees" },
     { title: "Pending Signups", value: stats?.pendingSignups || 0, icon: ClipboardList, color: "text-[#f7b617]", bg: "bg-[#f7b617]/10" },
+    { title: "Pending Card Charges", value: stats?.pendingCharges || 0, icon: CreditCard, color: "text-rose-400", bg: "bg-rose-500/10", href: "/events" },
   ];
 
   return (
@@ -46,7 +47,7 @@ export default function Dashboard() {
           <p className="text-muted-foreground mt-1 text-lg">Here's what's happening at the studio today.</p>
         </div>
 
-        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {statCards.map((stat, i) => {
             const card = (
               <Card key={i} className={`border-border/10 bg-card shadow-md shadow-black/10 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group${stat.href ? " cursor-pointer" : ""}`}>
@@ -75,6 +76,44 @@ export default function Dashboard() {
               : card;
           })}
         </div>
+
+        {/* Pending Card Charges panel — only show when there are pending charges */}
+        {(stats?.pendingCharges ?? 0) > 0 && (
+          <Card className="rounded-2xl shadow-md border-rose-500/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-rose-500/5 border-b border-rose-500/15 pb-4">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-rose-400" />
+                <CardTitle className="font-display text-xl">Pending Card Charges</CardTitle>
+                <span className="bg-rose-500/15 text-rose-400 rounded-full px-2.5 py-0.5 text-xs font-bold border border-rose-500/20">{stats?.pendingCharges}</span>
+              </div>
+              <Link href="/events" className="text-sm font-medium text-primary hover:underline inline-flex items-center">
+                View events <ArrowUpRight className="h-4 w-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {stats?.pendingChargesList && stats.pendingChargesList.length > 0 ? (
+                <div className="divide-y divide-border/20">
+                  {stats.pendingChargesList.map((item: any) => (
+                    <Link key={item.eventId} href={`/events?open=${item.eventId}`} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors">{item.eventTitle}</p>
+                        {item.startDate && (
+                          <p className="text-xs text-muted-foreground">{format(new Date(item.startDate), "MMM d, yyyy")}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-full px-2.5 py-0.5">
+                          {item.pendingCount} uncharged
+                        </span>
+                        <CheckCircle2 className="h-4 w-4 text-muted-foreground/30 group-hover:text-rose-400 transition-colors" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Upcoming Events */}

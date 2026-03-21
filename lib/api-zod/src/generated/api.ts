@@ -652,4 +652,13 @@ export const GetDashboardStatsResponse = zod.object({
       updatedAt: zod.date(),
     }),
   ),
+  pendingCharges: zod.number().optional(),
+  pendingChargesList: zod.array(
+    zod.object({
+      eventId: zod.number(),
+      eventTitle: zod.string(),
+      startDate: zod.date().optional(),
+      pendingCount: zod.number(),
+    }),
+  ).optional(),
 });

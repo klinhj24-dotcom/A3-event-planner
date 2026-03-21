@@ -213,13 +213,23 @@ export interface SignupPageInfo {
   signupDeadline?: string;
 }
 
+export interface PendingChargesItem {
+  eventId: number;
+  eventTitle: string;
+  startDate?: string;
+  pendingCount: number;
+}
+
 export interface DashboardStats {
   totalContacts: number;
   upcomingEvents: number;
   totalEmployees: number;
   pendingSignups: number;
+  overdueContacts?: number;
   recentOutreach: Outreach[];
   upcomingEventsList: Event[];
+  pendingCharges?: number;
+  pendingChargesList?: PendingChargesItem[];
 }
 
 export type AuthorizationSessionHeaderParameter = string;
