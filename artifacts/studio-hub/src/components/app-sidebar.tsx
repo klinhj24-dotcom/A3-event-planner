@@ -10,7 +10,9 @@ import {
   DollarSign,
   CalendarDays,
   Music2,
+  CreditCard,
 } from "lucide-react";
+import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import {
@@ -37,6 +39,7 @@ const adminNavItems = [
   { title: "Bands", url: "/bands", icon: Music2 },
   { title: "Employees", url: "/employees", icon: UserSquare2 },
   { title: "Payroll", url: "/payroll", icon: DollarSign },
+  { title: "Card Charges", url: "/charges", icon: CreditCard },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -50,6 +53,8 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
   const navItems = isAdmin ? adminNavItems : employeeNavItems;
+  const { data: stats } = useGetDashboardStats({ query: { enabled: isAdmin } });
+  const pendingCharges = (stats as any)?.pendingCharges ?? 0;
 
   return (
     <Sidebar className="border-r border-border/20">
@@ -88,12 +93,17 @@ export function AppSidebar() {
                         }
                       `}
                     >
-                      <Link href={item.url} className="flex items-center gap-3">
+                      <Link href={item.url} className="flex items-center gap-3 w-full">
                         {isActive && (
                           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
                         )}
-                        <item.icon className={`h-5 w-5 ${isActive ? "text-primary" : ""}`} />
-                        <span>{item.title}</span>
+                        <item.icon className={`h-5 w-5 shrink-0 ${isActive ? "text-primary" : ""}`} />
+                        <span className="flex-1">{item.title}</span>
+                        {item.url === "/charges" && pendingCharges > 0 && (
+                          <span className="shrink-0 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/25 text-[10px] font-bold px-1.5 py-0.5 min-w-[20px] text-center">
+                            {pendingCharges}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

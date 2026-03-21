@@ -19,6 +19,7 @@ import CommSchedule from "@/pages/comm-schedule";
 import Payroll from "@/pages/payroll";
 import Bands from "@/pages/bands";
 import MySchedule from "@/pages/my-schedule";
+import Charges from "@/pages/charges";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +62,7 @@ function Router() {
       <Route path="/comm-schedule">{() => <AdminRoute component={CommSchedule} />}</Route>
       <Route path="/payroll">{() => <AdminRoute component={Payroll} />}</Route>
       <Route path="/bands">{() => <AdminRoute component={Bands} />}</Route>
+      <Route path="/charges">{() => <AdminRoute component={Charges} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );

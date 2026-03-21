@@ -36,7 +36,7 @@ export default function Dashboard() {
     { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10", href: "/events" },
     { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10", href: "/employees" },
     { title: "Pending Signups", value: stats?.pendingSignups || 0, icon: ClipboardList, color: "text-[#f7b617]", bg: "bg-[#f7b617]/10" },
-    { title: "Pending Card Charges", value: stats?.pendingCharges || 0, icon: CreditCard, color: "text-rose-400", bg: "bg-rose-500/10", href: "/events" },
+    { title: "Pending Card Charges", value: stats?.pendingCharges || 0, icon: CreditCard, color: "text-rose-400", bg: "bg-rose-500/10", href: "/charges" },
   ];
 
   return (
@@ -86,15 +86,15 @@ export default function Dashboard() {
                 <CardTitle className="font-display text-xl">Pending Card Charges</CardTitle>
                 <span className="bg-rose-500/15 text-rose-400 rounded-full px-2.5 py-0.5 text-xs font-bold border border-rose-500/20">{stats?.pendingCharges}</span>
               </div>
-              <Link href="/events" className="text-sm font-medium text-primary hover:underline inline-flex items-center">
-                View events <ArrowUpRight className="h-4 w-4 ml-1" />
+              <Link href="/charges" className="text-sm font-medium text-primary hover:underline inline-flex items-center">
+                View all <ArrowUpRight className="h-4 w-4 ml-1" />
               </Link>
             </CardHeader>
             <CardContent className="p-0">
               {stats?.pendingChargesList && stats.pendingChargesList.length > 0 ? (
                 <div className="divide-y divide-border/20">
                   {stats.pendingChargesList.map((item: any) => (
-                    <Link key={item.eventId} href={`/events?open=${item.eventId}`} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
+                    <Link key={item.eventId} href="/charges" className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
                       <div className="space-y-0.5">
                         <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors">{item.eventTitle}</p>
                         {item.startDate && (
