@@ -91,8 +91,22 @@ router.get("/events/:eventId/lineup/:slotId/invites", async (req, res) => {
   try {
     const slotId = parseInt(req.params.slotId);
     const invites = await db
-      .select()
+      .select({
+        id: eventBandInvitesTable.id,
+        lineupSlotId: eventBandInvitesTable.lineupSlotId,
+        eventId: eventBandInvitesTable.eventId,
+        memberId: eventBandInvitesTable.memberId,
+        memberName: bandMembersTable.name,
+        contactName: eventBandInvitesTable.contactName,
+        contactEmail: eventBandInvitesTable.contactEmail,
+        status: eventBandInvitesTable.status,
+        conflictNote: eventBandInvitesTable.conflictNote,
+        token: eventBandInvitesTable.token,
+        sentAt: eventBandInvitesTable.sentAt,
+        respondedAt: eventBandInvitesTable.respondedAt,
+      })
       .from(eventBandInvitesTable)
+      .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
       .where(eq(eventBandInvitesTable.lineupSlotId, slotId));
     res.json(invites);
   } catch (err) {
@@ -561,6 +575,17 @@ router.post("/band-confirm/:token", async (req, res) => {
       respondedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(eventBandInvitesTable.id, invite.id));
+
+    // If confirmed: auto-confirm all other pending invites for this slot
+    // (e.g. if one parent confirmed for a student, no need to chase the other)
+    if (newStatus === "confirmed") {
+      await db.update(eventBandInvitesTable)
+        .set({ status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId),
+          eq(eventBandInvitesTable.status, "pending"),
+        ));
+    }
 
     // Update slot inviteStatus: check if any contact confirmed or all declined
     const allSlotInvites = await db.select().from(eventBandInvitesTable)

@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2 } from "lucide-react";
+import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -9,6 +10,14 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
   const { data: stats, isLoading } = useGetDashboardStats();
+  const [copiedSlotId, setCopiedSlotId] = useState<number | null>(null);
+
+  function copyInviteLink(slotId: number, token: string | null) {
+    if (!token) return;
+    navigator.clipboard.writeText(`${window.location.origin}/band-confirm/${token}`);
+    setCopiedSlotId(slotId);
+    setTimeout(() => setCopiedSlotId(null), 2000);
+  }
 
   if (isLoading) {
     return (
@@ -108,6 +117,55 @@ export default function Dashboard() {
                         <CheckCircle2 className="h-4 w-4 text-muted-foreground/30 group-hover:text-rose-400 transition-colors" />
                       </div>
                     </Link>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pending Band Invitations panel — only show when there are unconfirmed slots */}
+        {(stats?.pendingInvites ?? 0) > 0 && (
+          <Card className="rounded-2xl shadow-md border-primary/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-primary/5 border-b border-primary/15 pb-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                <CardTitle className="font-display text-xl">Pending Band Invitations</CardTitle>
+                <span className="bg-primary/15 text-primary rounded-full px-2.5 py-0.5 text-xs font-bold border border-primary/20">{stats?.pendingInvites}</span>
+              </div>
+              <Link href="/events" className="text-sm font-medium text-primary hover:underline inline-flex items-center">
+                View events <ArrowUpRight className="h-4 w-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {stats?.pendingInvitesList && stats.pendingInvitesList.length > 0 ? (
+                <div className="divide-y divide-border/20">
+                  {(stats.pendingInvitesList as any[]).map((item: any) => (
+                    <div key={item.slotId} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group">
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{item.bandName ?? "Unknown Band"}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="truncate">{item.eventTitle}</span>
+                          {item.startDate && (
+                            <span className="shrink-0">{format(new Date(item.startDate), "MMM d")}</span>
+                          )}
+                        </div>
+                      </div>
+                      {item.token && (
+                        <button
+                          onClick={() => copyInviteLink(item.slotId, item.token)}
+                          title="Copy confirmation link"
+                          className={`shrink-0 ml-3 flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2.5 py-1.5 border ${
+                            copiedSlotId === item.slotId
+                              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                              : "text-primary/70 bg-primary/5 border-primary/20 hover:text-primary hover:bg-primary/10"
+                          }`}
+                        >
+                          {copiedSlotId === item.slotId ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          {copiedSlotId === item.slotId ? "Copied!" : "Copy link"}
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : null}

@@ -45,7 +45,7 @@ interface BandContact {
 }
 
 interface BandInvite {
-  id: number; contactName: string | null; contactEmail: string;
+  id: number; memberName?: string | null; contactName: string | null; contactEmail: string;
   status: string; conflictNote: string | null; sentAt: string | null; respondedAt: string | null;
   token?: string | null;
 }
@@ -131,16 +131,19 @@ function InviteRow({ invite }: { invite: BandInvite }) {
     ? "text-red-400"
     : "text-muted-foreground";
   const statusIcon = invite.status === "confirmed" ? "✅" : invite.status === "declined" ? "❌" : "⏳";
+  const displayName = invite.memberName ?? invite.contactName ?? invite.contactEmail;
   return (
     <div className="flex flex-col gap-0.5 py-1.5 border-b border-border/20 last:border-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium">{invite.contactName ?? invite.contactEmail}</span>
+        <span className="text-xs font-medium">{displayName}</span>
         <span className={`text-[11px] font-medium flex items-center gap-1 ${statusCls}`}>
           {statusIcon} {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground truncate">{invite.contactEmail}</span>
+        <span className="text-[10px] text-muted-foreground truncate">
+          {invite.memberName && invite.contactName ? invite.contactName : invite.contactEmail}
+        </span>
         {confirmUrl && (
           <button
             onClick={copyLink}
