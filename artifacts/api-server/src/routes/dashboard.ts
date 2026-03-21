@@ -45,17 +45,17 @@ router.get("/dashboard/stats", async (req, res) => {
           .limit(10),
       ]);
 
-    // Pending invites where nobody on the same slot has confirmed yet.
-    // (If any contact confirmed for a student, the slot is done — don't surface the others.)
-    const confirmedSlots = await db
-      .select({ lineupSlotId: eventBandInvitesTable.lineupSlotId })
+    // Pending invites where no other contact for the same student has already confirmed.
+    // (Sibling contacts for the same member are redundant once one confirms.)
+    const confirmedMembers = await db
+      .select({ memberId: eventBandInvitesTable.memberId })
       .from(eventBandInvitesTable)
-      .where(eq(eventBandInvitesTable.status, "confirmed"))
-      .groupBy(eventBandInvitesTable.lineupSlotId);
-    const confirmedSlotIds = confirmedSlots.map(s => s.lineupSlotId);
+      .where(and(eq(eventBandInvitesTable.status, "confirmed"), isNotNull(eventBandInvitesTable.memberId)))
+      .groupBy(eventBandInvitesTable.memberId);
+    const confirmedMemberIds = confirmedMembers.map(m => m.memberId).filter(Boolean) as number[];
 
-    const pendingInvitesWhere = confirmedSlotIds.length > 0
-      ? and(eq(eventBandInvitesTable.status, "pending"), notInArray(eventBandInvitesTable.lineupSlotId, confirmedSlotIds))
+    const pendingInvitesWhere = confirmedMemberIds.length > 0
+      ? and(eq(eventBandInvitesTable.status, "pending"), notInArray(eventBandInvitesTable.memberId, confirmedMemberIds))
       : eq(eventBandInvitesTable.status, "pending");
 
     const [pendingInvitesList, [pendingInvitesCountRow]] = await Promise.all([
