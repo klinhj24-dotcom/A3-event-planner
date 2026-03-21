@@ -45,9 +45,41 @@ interface BandContact {
 }
 
 interface BandInvite {
-  id: number; memberName?: string | null; contactName: string | null; contactEmail: string;
+  id: number; memberId?: number | null; memberName?: string | null;
+  contactName: string | null; contactEmail: string;
   status: string; conflictNote: string | null; sentAt: string | null; respondedAt: string | null;
   token?: string | null;
+}
+
+interface InviteGroup {
+  key: string;
+  label: string;
+  contactLine: string;
+  status: "confirmed" | "declined" | "pending";
+  conflictNote: string | null;
+  token: string | null;
+}
+
+function groupInvitesByMember(invites: BandInvite[]): InviteGroup[] {
+  const map = new Map<string, BandInvite[]>();
+  for (const inv of invites) {
+    const key = inv.memberId ? `m:${inv.memberId}` : `c:${inv.id}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(inv);
+  }
+  return Array.from(map.values()).map(group => {
+    const anyConfirmed = group.some(i => i.status === "confirmed");
+    const allDeclined = group.every(i => i.status === "declined");
+    const aggStatus: "confirmed" | "declined" | "pending" = anyConfirmed ? "confirmed" : allDeclined ? "declined" : "pending";
+    const label = group[0].memberName ?? group[0].contactName ?? group[0].contactEmail;
+    const contactLine = group.map(i => i.contactName ?? i.contactEmail).filter(Boolean).join(", ");
+    // Use the first pending invite's token; fall back to first token in the group
+    const pendingWithToken = group.find(i => i.status === "pending" && i.token);
+    const anyWithToken = group.find(i => i.token);
+    const token = (pendingWithToken ?? anyWithToken)?.token ?? null;
+    const conflictNote = group.find(i => i.conflictNote)?.conflictNote ?? null;
+    return { key: group[0].memberId ? `m:${group[0].memberId}` : `c:${group[0].id}`, label, contactLine, status: aggStatus, conflictNote, token };
+  });
 }
 
 interface LineupSlot {
@@ -113,10 +145,10 @@ const INVITE_STATUS_META: Record<string, { label: string; cls: string }> = {
   declined:  { label: "Declined",    cls: "bg-red-500/15 text-red-400 border-red-500/20" },
 };
 
-// ── Invite status row ──────────────────────────────────────────────────────────
-function InviteRow({ invite }: { invite: BandInvite }) {
+// ── Invite status row (one per student/member group) ───────────────────────────
+function InviteRow({ group }: { group: InviteGroup }) {
   const [copied, setCopied] = useState(false);
-  const confirmUrl = invite.token ? `${window.location.origin}/band-confirm/${invite.token}` : null;
+  const confirmUrl = group.token ? `${window.location.origin}/band-confirm/${group.token}` : null;
 
   function copyLink() {
     if (!confirmUrl) return;
@@ -125,26 +157,25 @@ function InviteRow({ invite }: { invite: BandInvite }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const statusCls = invite.status === "confirmed"
+  const statusCls = group.status === "confirmed"
     ? "text-emerald-400"
-    : invite.status === "declined"
+    : group.status === "declined"
     ? "text-red-400"
     : "text-muted-foreground";
-  const statusIcon = invite.status === "confirmed" ? "✅" : invite.status === "declined" ? "❌" : "⏳";
-  const displayName = invite.memberName ?? invite.contactName ?? invite.contactEmail;
+  const statusIcon = group.status === "confirmed" ? "✅" : group.status === "declined" ? "❌" : "⏳";
+  const statusLabel = group.status.charAt(0).toUpperCase() + group.status.slice(1);
+
   return (
     <div className="flex flex-col gap-0.5 py-1.5 border-b border-border/20 last:border-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium">{displayName}</span>
+        <span className="text-xs font-medium">{group.label}</span>
         <span className={`text-[11px] font-medium flex items-center gap-1 ${statusCls}`}>
-          {statusIcon} {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
+          {statusIcon} {statusLabel}
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground truncate">
-          {invite.memberName && invite.contactName ? invite.contactName : invite.contactEmail}
-        </span>
-        {confirmUrl && (
+        <span className="text-[10px] text-muted-foreground truncate">{group.contactLine}</span>
+        {confirmUrl && group.status !== "confirmed" && (
           <button
             onClick={copyLink}
             title="Copy confirmation link to text families"
@@ -155,10 +186,10 @@ function InviteRow({ invite }: { invite: BandInvite }) {
           </button>
         )}
       </div>
-      {invite.conflictNote && (
+      {group.conflictNote && (
         <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1.5">
           <p className="text-[11px] text-amber-400 font-medium mb-0.5">Day-of note:</p>
-          <p className="text-[11px] text-amber-300/80">{invite.conflictNote}</p>
+          <p className="text-[11px] text-amber-300/80">{group.conflictNote}</p>
         </div>
       )}
     </div>
@@ -230,9 +261,10 @@ function SlotRow({
   const meta = SLOT_TYPE_META[slot.type] ?? SLOT_TYPE_META.act;
   const inviteStatusMeta = INVITE_STATUS_META[slot.inviteStatus] ?? INVITE_STATUS_META.not_sent;
 
-  const confirmedCount = invites.filter(i => i.status === "confirmed").length;
-  const declinedCount = invites.filter(i => i.status === "declined").length;
-  const pendingCount = invites.filter(i => i.status === "pending").length;
+  const inviteGroups = groupInvitesByMember(invites);
+  const confirmedCount = inviteGroups.filter(g => g.status === "confirmed").length;
+  const declinedCount = inviteGroups.filter(g => g.status === "declined").length;
+  const pendingCount = inviteGroups.filter(g => g.status === "pending").length;
 
   async function save() {
     setSaveState("saving");
@@ -546,8 +578,8 @@ function SlotRow({
                 )}
               </div>
 
-              {/* Per-contact invite status */}
-              {invites.length > 0 && (
+              {/* Per-student invite status */}
+              {inviteGroups.length > 0 && (
                 <div className="rounded-xl border border-border/30 bg-muted/20 p-3 space-y-1">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Contact Responses</p>
@@ -557,7 +589,7 @@ function SlotRow({
                       {declinedCount > 0 && <span className="text-red-400">❌ {declinedCount} declined</span>}
                     </div>
                   </div>
-                  {invites.map(invite => <InviteRow key={invite.id} invite={invite} />)}
+                  {inviteGroups.map(group => <InviteRow key={group.key} group={group} />)}
                 </div>
               )}
               {invites.length === 0 && slot.inviteStatus !== "not_sent" && (
