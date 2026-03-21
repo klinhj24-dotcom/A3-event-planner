@@ -10,13 +10,13 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
   const { data: stats, isLoading } = useGetDashboardStats();
-  const [copiedSlotId, setCopiedSlotId] = useState<number | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<number | null>(null);
 
-  function copyInviteLink(slotId: number, token: string | null) {
+  function copyInviteLink(inviteId: number, token: string | null) {
     if (!token) return;
     navigator.clipboard.writeText(`${window.location.origin}/band-confirm/${token}`);
-    setCopiedSlotId(slotId);
-    setTimeout(() => setCopiedSlotId(null), 2000);
+    setCopiedInviteId(inviteId);
+    setTimeout(() => setCopiedInviteId(null), 2000);
   }
 
   if (isLoading) {
@@ -140,33 +140,40 @@ export default function Dashboard() {
             <CardContent className="p-0">
               {stats?.pendingInvitesList && stats.pendingInvitesList.length > 0 ? (
                 <div className="divide-y divide-border/20">
-                  {(stats.pendingInvitesList as any[]).map((item: any) => (
-                    <div key={item.slotId} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group">
-                      <div className="space-y-0.5 min-w-0">
-                        <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{item.bandName ?? "Unknown Band"}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className="truncate">{item.eventTitle}</span>
-                          {item.startDate && (
-                            <span className="shrink-0">{format(new Date(item.startDate), "MMM d")}</span>
-                          )}
+                  {(stats.pendingInvitesList as any[]).map((item: any) => {
+                    const studentName = item.memberName ?? item.contactName ?? "Unknown";
+                    const isCopied = copiedInviteId === item.inviteId;
+                    return (
+                      <div key={item.inviteId} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group">
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{studentName}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                            {item.memberName && item.contactName && (
+                              <span className="text-muted-foreground/70">via {item.contactName}</span>
+                            )}
+                            <span className="truncate">{item.eventTitle}</span>
+                            {item.startDate && (
+                              <span className="shrink-0">{format(new Date(item.startDate), "MMM d")}</span>
+                            )}
+                          </div>
                         </div>
+                        {item.token && (
+                          <button
+                            onClick={() => copyInviteLink(item.inviteId, item.token)}
+                            title="Copy confirmation link"
+                            className={`shrink-0 ml-3 flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2.5 py-1.5 border ${
+                              isCopied
+                                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                                : "text-primary/70 bg-primary/5 border-primary/20 hover:text-primary hover:bg-primary/10"
+                            }`}
+                          >
+                            {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            {isCopied ? "Copied!" : "Copy link"}
+                          </button>
+                        )}
                       </div>
-                      {item.token && (
-                        <button
-                          onClick={() => copyInviteLink(item.slotId, item.token)}
-                          title="Copy confirmation link"
-                          className={`shrink-0 ml-3 flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2.5 py-1.5 border ${
-                            copiedSlotId === item.slotId
-                              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                              : "text-primary/70 bg-primary/5 border-primary/20 hover:text-primary hover:bg-primary/10"
-                          }`}
-                        >
-                          {copiedSlotId === item.slotId ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                          {copiedSlotId === item.slotId ? "Copied!" : "Copy link"}
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
             </CardContent>
