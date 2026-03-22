@@ -41,7 +41,7 @@ export default function Employees() {
   const { data: employees, isLoading } = useListEmployees();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [roleTab, setRoleTab] = useState<"all" | "staff" | "teacher" | "intern">("all");
+  const [roleTab, setRoleTab] = useState<"all" | "staff" | "teacher" | "intern" | "photographer">("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [createPortalFor, setCreatePortalFor] = useState<any | null>(null);
@@ -235,7 +235,8 @@ export default function Employees() {
     const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase());
     const matchesTab = roleTab === "all"
       || (roleTab === "staff" && isStaffMember(e))
-      || (roleTab !== "staff" && e.role === roleTab);
+      || (roleTab === "photographer" && e.role === "photographer")
+      || (roleTab !== "staff" && roleTab !== "photographer" && e.role === roleTab);
     return matchesSearch && matchesTab;
   });
 
@@ -255,7 +256,7 @@ export default function Employees() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="font-display text-3xl font-bold tracking-tight">Team Roster</h1>
-            <p className="text-muted-foreground mt-1">Manage staff, teacher, and intern records.</p>
+            <p className="text-muted-foreground mt-1">Manage staff, teachers, interns, and photographers.</p>
           </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
@@ -283,8 +284,9 @@ export default function Employees() {
                         <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="staff">Staff</SelectItem>
-                          <SelectItem value="intern">Intern</SelectItem>
                           <SelectItem value="teacher">Teacher</SelectItem>
+                          <SelectItem value="intern">Intern</SelectItem>
+                          <SelectItem value="photographer">Photographer</SelectItem>
                         </SelectContent>
                       </Select>
                     </FormItem>
@@ -336,14 +338,15 @@ export default function Employees() {
             <Input placeholder="Search team..." className="pl-9 rounded-xl" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-muted/30 p-1">
-            {(["all", "staff", "teacher", "intern"] as const).map(tab => {
+            {(["all", "staff", "teacher", "intern", "photographer"] as const).map(tab => {
               const counts = {
                 all: employees?.length ?? 0,
                 staff: employees?.filter(e => isStaffMember(e)).length ?? 0,
                 teacher: employees?.filter(e => e.role === "teacher").length ?? 0,
                 intern: employees?.filter(e => e.role === "intern").length ?? 0,
+                photographer: employees?.filter(e => e.role === "photographer").length ?? 0,
               };
-              const labels = { all: "All", staff: "Staff", teacher: "Teachers", intern: "Interns" };
+              const labels = { all: "All", staff: "Staff", teacher: "Teachers", intern: "Interns", photographer: "Photographers" };
               return (
                 <button
                   key={tab}
@@ -373,18 +376,18 @@ export default function Employees() {
               const portalRole = portalUser?.role;
               return (
                 <div key={employee.id} className="bg-card rounded-2xl p-6 border border-border/50 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                  <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl opacity-10 rounded-bl-full -z-10 transition-opacity group-hover:opacity-20 ${employee.role === "staff" ? "from-primary to-transparent" : employee.role === "teacher" ? "from-[#00b199] to-transparent" : "from-orange-500 to-transparent"}`} />
+                  <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl opacity-10 rounded-bl-full -z-10 transition-opacity group-hover:opacity-20 ${employee.role === "staff" ? "from-primary to-transparent" : employee.role === "teacher" ? "from-[#00b199] to-transparent" : employee.role === "photographer" ? "from-rose-500 to-transparent" : "from-orange-500 to-transparent"}`} />
 
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex gap-4 items-center">
                       <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                        <AvatarFallback className={`font-display text-lg ${employee.role === "staff" ? "bg-primary/20 text-primary" : employee.role === "teacher" ? "bg-[#00b199]/20 text-[#00b199]" : "bg-orange-500/20 text-orange-600"}`}>
+                        <AvatarFallback className={`font-display text-lg ${employee.role === "staff" ? "bg-primary/20 text-primary" : employee.role === "teacher" ? "bg-[#00b199]/20 text-[#00b199]" : employee.role === "photographer" ? "bg-rose-500/20 text-rose-500" : "bg-orange-500/20 text-orange-600"}`}>
                           {employee.name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <h3 className="font-semibold text-lg text-foreground leading-none mb-1.5">{employee.name}</h3>
-                        <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === "staff" ? "bg-primary/10 text-primary hover:bg-primary/20" : employee.role === "teacher" ? "bg-[#00b199]/10 text-[#00b199] hover:bg-[#00b199]/20" : "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"}`}>
+                        <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider ${employee.role === "staff" ? "bg-primary/10 text-primary hover:bg-primary/20" : employee.role === "teacher" ? "bg-[#00b199]/10 text-[#00b199] hover:bg-[#00b199]/20" : employee.role === "photographer" ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500/20" : "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"}`}>
                           {employee.role}
                         </Badge>
                         {(employee as any).isBandLeader && (
@@ -581,8 +584,9 @@ export default function Employees() {
                     <FormControl><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="intern">Intern</SelectItem>
                       <SelectItem value="teacher">Teacher</SelectItem>
+                      <SelectItem value="intern">Intern</SelectItem>
+                      <SelectItem value="photographer">Photographer</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormItem>
