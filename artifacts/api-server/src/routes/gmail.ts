@@ -25,6 +25,43 @@ async function getGmailClient(userId: string) {
   return { gmail: google.gmail({ version: "v1", auth }), user };
 }
 
+// Tries the logged-in user's connection first; falls back to any connected account.
+// Allows alias accounts (Viv, Hanna, Violet) to read threads before they connect personally.
+async function getAnyGmailClient(userId: string) {
+  // First try the logged-in user
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (user?.googleAccessToken && user?.googleRefreshToken) {
+    const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, userId));
+      }
+    });
+    return { gmail: google.gmail({ version: "v1", auth }), user };
+  }
+  // Fall back to any account with a valid connection (ordered by most recent token)
+  const allUsers = await db.select().from(usersTable)
+    .where(and(isNotNull(usersTable.googleAccessToken), isNotNull(usersTable.googleRefreshToken), isNotNull(usersTable.googleTokenExpiry)))
+    .orderBy(desc(usersTable.googleTokenExpiry));
+  const fallback = allUsers[0];
+  if (!fallback) throw new Error("Google account not connected");
+  const auth = createAuthedClient(fallback.googleAccessToken!, fallback.googleRefreshToken!, fallback.googleTokenExpiry);
+  auth.on("tokens", async (tokens) => {
+    if (tokens.access_token) {
+      await db.update(usersTable).set({
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token ?? fallback.googleRefreshToken,
+        googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      }).where(eq(usersTable.id, fallback.id));
+    }
+  });
+  return { gmail: google.gmail({ version: "v1", auth }), user: fallback };
+}
+
 // Send an email on behalf of the logged-in user
 router.post("/gmail/send", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -34,7 +71,7 @@ router.post("/gmail/send", async (req, res) => {
       res.status(400).json({ error: "to, subject, and body are required" });
       return;
     }
-    const { gmail, user } = await getGmailClient(req.user.id);
+    const { gmail, user } = await getAnyGmailClient(req.user.id);
     const from = user.googleEmail ?? user.email ?? "";
 
     const raw = makeRawEmail({ to, from, subject, body, threadId, replyToMessageId });
@@ -100,7 +137,7 @@ router.get("/gmail/contact/:contactId/threads", async (req, res) => {
 router.get("/gmail/thread/:threadId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const { gmail } = await getGmailClient(req.user.id);
+    const { gmail } = await getAnyGmailClient(req.user.id);
     const thread = await gmail.users.threads.get({
       userId: "me",
       id: req.params.threadId,
@@ -147,7 +184,7 @@ router.post("/gmail/import-thread", async (req, res) => {
       ? rawThreadId.split("thread-")[1].replace(/[^a-zA-Z0-9]/g, "")
       : rawThreadId.trim();
 
-    const { gmail, user } = await getGmailClient(req.user.id);
+    const { gmail, user } = await getAnyGmailClient(req.user.id);
     const thread = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
@@ -216,7 +253,7 @@ router.post("/gmail/sync-contact/:contactId", async (req, res) => {
       return;
     }
 
-    const { gmail, user } = await getGmailClient(req.user.id);
+    const { gmail, user } = await getAnyGmailClient(req.user.id);
     const fromEmail = user.googleEmail ?? "";
 
     // Build date cutoff in YYYY/MM/DD format that Gmail's search understands
