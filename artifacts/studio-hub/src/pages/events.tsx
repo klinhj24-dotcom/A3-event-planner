@@ -1188,7 +1188,7 @@ function EventOverviewSheet({
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <DollarSign className="h-3.5 w-3.5" /> Financials
-                  <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${net >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-400"}`}>
+                  <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${net >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-blue-500/10 text-blue-400"}`}>
                     {net >= 0 ? "+" : ""}${net.toFixed(2)} net
                   </span>
                 </h4>
@@ -1214,12 +1214,12 @@ function EventOverviewSheet({
                   {expense > 0 && (
                     <div className="flex items-center justify-between px-3 py-2">
                       <span className="text-muted-foreground text-xs">Cost / sponsorship</span>
-                      <span className="font-semibold text-rose-400">-${expense.toFixed(2)}</span>
+                      <span className="font-semibold text-blue-400">-${expense.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Net</span>
-                    <span className={`font-bold text-sm ${net >= 0 ? "text-emerald-500" : "text-rose-400"}`}>{net >= 0 ? "+" : ""}${net.toFixed(2)}</span>
+                    <span className={`font-bold text-sm ${net >= 0 ? "text-emerald-500" : "text-blue-400"}`}>{net >= 0 ? "+" : ""}${net.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -2497,12 +2497,13 @@ export default function Events() {
                             ) : (
                               <Badge variant="outline" className="text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
                             )}
-                            {(event.revenue || event.cost || (event as any).externalTicketSales) && (() => {
+                            {(event.revenue || event.cost || (event as any).externalTicketSales || (event as any).internalTicketTotal > 0) && (() => {
                               const net = (event.revenue ? parseFloat(event.revenue as string) : 0)
+                                + ((event as any).internalTicketTotal ?? 0)
                                 + ((event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0)
                                 - (event.cost ? parseFloat(event.cost as string) : 0);
                               return (
-                                <span className={`ml-3 text-xs font-mono font-semibold ${net >= 0 ? "text-emerald-500" : "text-rose-400"}`}>
+                                <span className={`ml-3 text-xs font-mono font-semibold ${net >= 0 ? "text-emerald-500" : "text-blue-400"}`}>
                                   {net >= 0 ? "+" : ""}${net.toFixed(2)}
                                 </span>
                               );

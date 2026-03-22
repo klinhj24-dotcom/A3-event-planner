@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable, eventStaffSlotsTable } from "@workspace/db";
-import { eq, desc, gte, and, ilike } from "drizzle-orm";
+import { eq, desc, gte, and, ilike, inArray } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
@@ -269,7 +269,43 @@ router.get("/events", async (req, res) => {
       .from(eventsTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(eventsTable.startDate));
-    res.json(events);
+
+    // Compute internal ticket sales totals per event (charged requests only)
+    const eventIds = events.map(e => e.id);
+    let ticketTotalsMap: Record<number, number> = {};
+    if (eventIds.length > 0) {
+      const chargedRequests = await db
+        .select({
+          eventId: eventTicketRequestsTable.eventId,
+          ticketCount: eventTicketRequestsTable.ticketCount,
+          ticketType: eventTicketRequestsTable.ticketType,
+          formType: eventTicketRequestsTable.formType,
+        })
+        .from(eventTicketRequestsTable)
+        .where(and(
+          inArray(eventTicketRequestsTable.eventId, eventIds),
+          eq(eventTicketRequestsTable.charged, true)
+        ));
+
+      const eventMap = new Map(events.map(e => [e.id, e]));
+      for (const r of chargedRequests) {
+        const ev = eventMap.get(r.eventId);
+        if (!ev) continue;
+        const rawPrice = ev.isTwoDay && r.ticketType
+          ? r.ticketType === "day1" ? ev.day1Price
+          : r.ticketType === "day2" ? ev.day2Price
+          : ev.ticketPrice : ev.ticketPrice;
+        const price = rawPrice ? parseFloat(rawPrice) : (r.formType === "recital" ? (ev.ticketPrice ? parseFloat(ev.ticketPrice) : 30) : 0);
+        const count = r.ticketCount ?? (r.formType === "recital" ? 1 : 0);
+        ticketTotalsMap[r.eventId] = (ticketTotalsMap[r.eventId] ?? 0) + price * count;
+      }
+    }
+
+    const eventsWithTotals = events.map(e => ({
+      ...e,
+      internalTicketTotal: ticketTotalsMap[e.id] ?? 0,
+    }));
+    res.json(eventsWithTotals);
   } catch (err) {
     console.error("listEvents error:", err);
     res.status(500).json({ error: "Internal server error" });
