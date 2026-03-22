@@ -22,6 +22,26 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+async function runMigrations() {
+  // Idempotent column additions — safe to run against dev or prod; no-ops if columns exist
+  const migrations = [
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS is_lead_generating BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS leads_collected INTEGER`,
+    `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS trial_signups INTEGER`,
+    `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS event_vibe TEXT`,
+    `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS staff_notes TEXT`,
+    `ALTER TABLE event_staff_slots ADD COLUMN IF NOT EXISTS bonus_pay DECIMAL(10,2)`,
+  ];
+  for (const m of migrations) {
+    try {
+      await db.execute(sql.raw(m));
+    } catch (err) {
+      console.error(`[migration] Failed: ${m}`, err);
+    }
+  }
+  console.log("[migration] Column migrations complete.");
+}
+
 async function initDb() {
   try {
     const [existing] = await db
@@ -51,7 +71,7 @@ async function initDb() {
   await seedTeachers();
 }
 
-initDb().then(async () => {
+runMigrations().then(() => initDb()).then(async () => {
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startStaffReminderCron();
