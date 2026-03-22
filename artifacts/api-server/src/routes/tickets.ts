@@ -295,6 +295,48 @@ router.get("/pending-charges", async (req, res) => {
   }
 });
 
+// ── Admin: all charged (completed) ticket requests across events ──────────────
+router.get("/charge-history", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const rows = await db
+      .select({
+        id: eventTicketRequestsTable.id,
+        eventId: eventsTable.id,
+        eventTitle: eventsTable.title,
+        eventType: eventsTable.type,
+        startDate: eventsTable.startDate,
+        isTwoDay: eventsTable.isTwoDay,
+        ticketPrice: eventsTable.ticketPrice,
+        day1Price: eventsTable.day1Price,
+        day2Price: eventsTable.day2Price,
+        formType: eventTicketRequestsTable.formType,
+        contactFirstName: eventTicketRequestsTable.contactFirstName,
+        contactLastName: eventTicketRequestsTable.contactLastName,
+        contactEmail: eventTicketRequestsTable.contactEmail,
+        ticketCount: eventTicketRequestsTable.ticketCount,
+        ticketType: eventTicketRequestsTable.ticketType,
+        studentFirstName: eventTicketRequestsTable.studentFirstName,
+        studentLastName: eventTicketRequestsTable.studentLastName,
+        instrument: eventTicketRequestsTable.instrument,
+        recitalSong: eventTicketRequestsTable.recitalSong,
+        teacher: eventTicketRequestsTable.teacher,
+        status: eventTicketRequestsTable.status,
+        charged: eventTicketRequestsTable.charged,
+        chargedAt: eventTicketRequestsTable.chargedAt,
+        createdAt: eventTicketRequestsTable.createdAt,
+      })
+      .from(eventTicketRequestsTable)
+      .innerJoin(eventsTable, eq(eventTicketRequestsTable.eventId, eventsTable.id))
+      .where(and(eq(eventTicketRequestsTable.charged, true), ne(eventTicketRequestsTable.status, "cancelled")))
+      .orderBy(desc(eventTicketRequestsTable.chargedAt));
+    res.json(rows);
+  } catch (err) {
+    console.error("chargeHistory error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Admin: list ticket requests for an event ──────────────────────────────────
 router.get("/events/:id/ticket-requests", async (req, res) => {
   if (!req.isAuthenticated()) {
