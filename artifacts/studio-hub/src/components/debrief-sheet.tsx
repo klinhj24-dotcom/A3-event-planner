@@ -27,7 +27,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
   const [form, setForm] = useState({
     timeIn: "",
     timeOut: "",
-    greyInvolved: false,
     staffPresent: "",
     crowdSize: "",
     boothPlacement: "",
@@ -56,7 +55,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
       setForm({
         timeIn: debrief.timeIn ? new Date(debrief.timeIn).toISOString().slice(0, 16) : "",
         timeOut: debrief.timeOut ? new Date(debrief.timeOut).toISOString().slice(0, 16) : "",
-        greyInvolved: debrief.greyInvolved ?? false,
         staffPresent: debrief.staffPresent ?? "",
         crowdSize: debrief.crowdSize != null ? String(debrief.crowdSize) : "",
         boothPlacement: debrief.boothPlacement ?? "",
@@ -90,7 +88,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     upsert({
       timeIn: form.timeIn || null,
       timeOut: form.timeOut || null,
-      greyInvolved: form.greyInvolved,
       staffPresent: form.staffPresent || null,
       crowdSize: form.crowdSize ? parseInt(form.crowdSize) : null,
       boothPlacement: form.boothPlacement || null,
@@ -207,10 +204,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Staff Present</Label>
                 <Input placeholder="Names of staff who attended" className="rounded-xl text-sm" value={form.staffPresent} onChange={set("staffPresent")} />
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card px-4 py-3">
-                <Label className="text-sm">Grey Involved?</Label>
-                <Switch checked={form.greyInvolved} onCheckedChange={v => setForm(f => ({ ...f, greyInvolved: v }))} />
               </div>
             </div>
 
