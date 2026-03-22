@@ -503,6 +503,104 @@ The Music Space`;
   }
 });
 
+// ── Send lock-in confirmation email to all confirmed-but-unlocked slots ───────
+router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const eventId = parseInt(req.params.eventId);
+
+    const sender = await getSenderUser();
+    if (!sender) { res.status(400).json({ error: "No Google-authenticated user found." }); return; }
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
+    // All confirmed slots that haven't had the lock-in email sent
+    const slots = await db
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay, confirmationSent: eventLineupTable.confirmationSent, inviteStatus: eventLineupTable.inviteStatus, confirmed: eventLineupTable.confirmed })
+      .from(eventLineupTable)
+      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.type, "act")));
+
+    const toSend = slots.filter(s => s.bandId && !s.confirmationSent && (s.inviteStatus === "confirmed" || s.confirmed));
+    const skipped = slots.filter(s => s.bandId && s.confirmationSent).length;
+
+    if (toSend.length === 0) {
+      res.json({ sent: 0, skipped, message: "All confirmed bands already have lock-in emails sent." });
+      return;
+    }
+
+    const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, sender.id));
+      }
+    });
+    const gmail = google.gmail({ version: "v1", auth });
+    const from = sender.googleEmail ?? sender.email ?? "";
+
+    const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+
+    let sentCount = 0;
+    for (const slot of toSend) {
+      try {
+        const allInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slot.id));
+        if (!allInvites.length) continue;
+
+        const bccEmails = allInvites
+          .filter(i => i.status !== "declined" && i.contactEmail)
+          .map(i => i.contactEmail!)
+          .filter((e, idx, arr) => arr.indexOf(e) === idx);
+
+        const members = await db.select().from(bandMembersTable).where(eq(bandMembersTable.bandId, slot.bandId!));
+        const bandLeader = members.find(m => m.isBandLeader && m.email);
+
+        const bandName = slot.bandName ?? "Your Band";
+        const performanceDay = formatPerformanceDay(event, slot.eventDay);
+        const slotTimeLine = slot.startTime
+          ? `\nYour Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
+          : slot.staffNote ? `\nEstimated Slot: ${slot.staffNote}` : "";
+
+        const emailBody = `Hi ${bandName} Band Families,
+
+Great news — ${bandName} is confirmed for ${event.title}!
+
+Event: ${event.title}
+Performance Date: ${performanceDay}
+Location: ${event.location ?? "TBD"}${slotTimeLine}
+
+Please arrive early for soundcheck and setup. We'll be in touch with any additional details closer to the event.
+
+If anything changes on your end, reply to this email right away so we can adjust.
+
+We're excited to have you — see you there!
+
+The Music Space`;
+
+        const ccAddresses = bandLeader?.email ? [bandLeader.email] : [];
+        const bccAddresses = bccEmails.filter(e => e !== TMS_CC && !ccAddresses.includes(e));
+        const html = buildHtmlEmail({ body: emailBody });
+        const raw = makeHtmlEmail({ to: TMS_CC, from, subject: `You're Confirmed! ${bandName} @ ${event.title}`, html, cc: ccAddresses, bcc: bccAddresses });
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+
+        await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, updatedAt: new Date() }).where(eq(eventLineupTable.id, slot.id));
+        sentCount++;
+      } catch (slotErr) {
+        console.error(`[bulk-confirmation] Failed for slot ${slot.id}:`, slotErr);
+      }
+    }
+
+    res.json({ sent: sentCount, skipped });
+  } catch (err) {
+    console.error("sendConfirmationBulk error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Public: view confirm/decline page ─────────────────────────────────────────
 router.get("/band-confirm/:token", async (req, res) => {
   try {

@@ -1024,6 +1024,7 @@ export function LineupSheet({ event, open, onClose }: {
 
   // ── Invite mutations ───────────────────────────────────────────────────────
   const [bulkInviting, setBulkInviting] = useState(false);
+  const [bulkLockingIn, setBulkLockingIn] = useState(false);
 
   async function handleSendInvite(slotId: number, staffNote: string): Promise<void> {
     const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-invite`, {
@@ -1069,6 +1070,23 @@ export function LineupSheet({ event, open, onClose }: {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
     } finally {
       setBulkInviting(false);
+    }
+  }
+
+  async function handleBulkLockIn() {
+    setBulkLockingIn(true);
+    try {
+      const r = await fetch(`/api/events/${eventId}/lineup/send-confirmation-bulk`, { method: "POST", credentials: "include" });
+      const data = await r.json();
+      if (!r.ok) { toast({ title: "Bulk lock-in failed", description: data.error, variant: "destructive" }); return; }
+      if (data.sent === 0) {
+        toast({ title: "Nothing to lock in", description: data.message ?? "All confirmed bands already have lock-in emails sent." });
+      } else {
+        toast({ title: "Lock-in emails sent!", description: `${data.sent} band${data.sent !== 1 ? "s" : ""} locked in.${data.skipped > 0 ? ` ${data.skipped} already done (skipped).` : ""}` });
+      }
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+    } finally {
+      setBulkLockingIn(false);
     }
   }
 
@@ -1150,6 +1168,7 @@ export function LineupSheet({ event, open, onClose }: {
   const invitedCount = actSlots.filter(s => s.inviteStatus !== "not_sent").length;
   const confirmedCount = actSlots.filter(s => s.inviteStatus === "confirmed").length;
   const uninvitedCount = actSlots.filter(s => s.inviteStatus === "not_sent").length;
+  const unlockedConfirmedCount = actSlots.filter(s => (s.confirmed || s.inviteStatus === "confirmed") && !s.confirmationSent).length;
 
   function submitAddSlot() {
     addSlot({
@@ -1191,6 +1210,18 @@ export function LineupSheet({ event, open, onClose }: {
                 >
                   <Send className="h-3.5 w-3.5" />
                   {bulkInviting ? "Sending…" : `Invite All Bands${uninvitedCount > 0 ? ` (${uninvitedCount})` : ""}`}
+                </Button>
+              )}
+              {!isRecital && unlockedConfirmedCount > 0 && (
+                <Button
+                  size="sm"
+                  className="h-8 text-xs rounded-lg gap-1.5 bg-emerald-600 hover:bg-emerald-500"
+                  disabled={bulkLockingIn}
+                  onClick={handleBulkLockIn}
+                  title={`Send lock-in email to ${unlockedConfirmedCount} confirmed band(s)`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {bulkLockingIn ? "Sending…" : `Lock In All (${unlockedConfirmedCount})`}
                 </Button>
               )}
               {!isRecital && actSlots.length > 0 && (
