@@ -302,11 +302,11 @@ export default function Charges() {
         </div>
 
         {/* Summary stats */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <StatCard
             label="Pending"
             value={activePendingCount}
-            sub={activePendingCount === 1 ? "to collect" : "to collect"}
+            sub="to collect"
             accent="rose"
           />
           <StatCard
@@ -314,12 +314,6 @@ export default function Charges() {
             value={thisMonthTotal > 0 ? `$${thisMonthTotal.toFixed(2)}` : "—"}
             sub="this month"
             accent="emerald"
-          />
-          <StatCard
-            label="All Time"
-            value={allTimeTotal > 0 ? `$${allTimeTotal.toFixed(2)}` : "—"}
-            sub="total collected"
-            accent="violet"
           />
         </div>
 
