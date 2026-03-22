@@ -2194,8 +2194,8 @@ export default function Events() {
                               </Select>
                             </FormItem>
                           )} />
-                          {form.watch("ticketFormType") === "general" && (
-                            form.watch("isTwoDay") ? (
+                          {(form.watch("ticketFormType") === "general" || form.watch("ticketFormType") === "recital") && (
+                            form.watch("ticketFormType") === "general" && form.watch("isTwoDay") ? (
                               <div className="space-y-2">
                                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ticket Prices <span className="normal-case font-normal">(optional)</span></p>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -2217,7 +2217,7 @@ export default function Events() {
                             ) : (
                               <FormField control={form.control} name="ticketPrice" render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                                  <FormLabel className="text-xs">{form.watch("ticketFormType") === "recital" ? "Registration Fee ($)" : "Ticket Price ($)"} <span className="text-muted-foreground font-normal">optional</span></FormLabel>
                                   <FormControl>
                                     <div className="relative">
                                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
@@ -2853,8 +2853,8 @@ export default function Events() {
                         </Select>
                       </FormItem>
                     )} />
-                    {editForm.watch("ticketFormType") === "general" && (
-                      editForm.watch("isTwoDay") ? (
+                    {(editForm.watch("ticketFormType") === "general" || editForm.watch("ticketFormType") === "recital") && (
+                      editForm.watch("ticketFormType") === "general" && editForm.watch("isTwoDay") ? (
                         <div className="space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ticket Prices <span className="normal-case font-normal">(optional)</span></p>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -2876,7 +2876,7 @@ export default function Events() {
                       ) : (
                         <FormField control={editForm.control} name="ticketPrice" render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Ticket Price ($) <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                            <FormLabel className="text-xs">{editForm.watch("ticketFormType") === "recital" ? "Registration Fee ($)" : "Ticket Price ($)"} <span className="text-muted-foreground font-normal">optional</span></FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
