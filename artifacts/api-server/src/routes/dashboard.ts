@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, bandMembersTable } from "@workspace/db";
-import { count, gte, eq, desc, isNotNull, and, or, isNull, sql, ne, notInArray } from "drizzle-orm";
+import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, bandMembersTable, eventDebriefTable, usersTable } from "@workspace/db";
+import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, notInArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -11,6 +11,12 @@ router.get("/dashboard/stats", async (req, res) => {
   }
   try {
     const now = new Date();
+
+    const currentUserId = (req.user as any)?.id as string | undefined;
+
+    // "Closing window": event ended up to 3 days ago or ends within the next 4 hours
+    const windowStart = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() + 4 * 60 * 60 * 1000);
 
     const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList, [pendingChargesRow], pendingChargesList] =
       await Promise.all([
@@ -79,6 +85,38 @@ router.get("/dashboard/stats", async (req, res) => {
       db.select({ count: count() }).from(eventBandInvitesTable).where(pendingInvitesWhere),
     ]);
 
+    // Pending debriefs for the current user — events where they are the debrief owner,
+    // the event is in the "closing window", and no debrief has been submitted yet.
+    let pendingDebriefsList: { eventId: number; eventTitle: string; startDate: Date | null; endDate: Date | null }[] = [];
+    if (currentUserId) {
+      pendingDebriefsList = await db
+        .select({
+          eventId: eventsTable.id,
+          eventTitle: eventsTable.title,
+          startDate: eventsTable.startDate,
+          endDate: eventsTable.endDate,
+        })
+        .from(eventsTable)
+        .where(
+          and(
+            eq(eventsTable.primaryStaffId, currentUserId),
+            gte(eventsTable.endDate, windowStart),
+            lte(eventsTable.endDate, windowEnd),
+          )
+        )
+        .orderBy(eventsTable.endDate);
+
+      if (pendingDebriefsList.length > 0) {
+        const eventIds = pendingDebriefsList.map(e => e.eventId);
+        const submitted = await db
+          .select({ eventId: eventDebriefTable.eventId })
+          .from(eventDebriefTable)
+          .where(sql`${eventDebriefTable.eventId} IN (${sql.join(eventIds.map(id => sql`${id}`), sql`, `)})`);
+        const submittedIds = new Set(submitted.map(s => s.eventId));
+        pendingDebriefsList = pendingDebriefsList.filter(e => !submittedIds.has(e.eventId));
+      }
+    }
+
     res.json({
       totalContacts: totalContactsRow?.count ?? 0,
       upcomingEvents: upcomingEventsRow?.count ?? 0,
@@ -91,6 +129,8 @@ router.get("/dashboard/stats", async (req, res) => {
       pendingChargesList,
       pendingInvites: pendingInvitesCountRow?.count ?? 0,
       pendingInvitesList,
+      pendingDebriefs: pendingDebriefsList.length,
+      pendingDebriefsList,
     });
   } catch (err) {
     console.error("getDashboardStats error:", err);

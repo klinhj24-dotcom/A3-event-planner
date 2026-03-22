@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check } from "lucide-react";
+import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check, ClipboardCheck } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -85,6 +85,41 @@ export default function Dashboard() {
               : card;
           })}
         </div>
+
+        {/* Pending Debriefs — only shown to the debrief owner when their event is ending */}
+        {(stats?.pendingDebriefs ?? 0) > 0 && (
+          <Card className="rounded-2xl shadow-md border-[#00b199]/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-[#00b199]/5 border-b border-[#00b199]/15 pb-4">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-[#00b199]" />
+                <CardTitle className="font-display text-xl">Pending Debrief{(stats?.pendingDebriefs ?? 0) > 1 ? "s" : ""}</CardTitle>
+                <span className="bg-[#00b199]/15 text-[#00b199] rounded-full px-2.5 py-0.5 text-xs font-bold border border-[#00b199]/20">{stats?.pendingDebriefs}</span>
+              </div>
+              <Link href="/events" className="text-sm font-medium text-[#00b199] hover:underline inline-flex items-center">
+                View events <ArrowUpRight className="h-4 w-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {stats?.pendingDebriefsList && (stats.pendingDebriefsList as any[]).length > 0 ? (
+                <div className="divide-y divide-border/20">
+                  {(stats.pendingDebriefsList as any[]).map((item: any) => (
+                    <Link key={item.eventId} href={`/events?open=${item.eventId}`} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-foreground text-sm group-hover:text-[#00b199] transition-colors">{item.eventTitle}</p>
+                        {item.endDate && (
+                          <p className="text-xs text-muted-foreground">Ends {format(new Date(item.endDate), "MMM d 'at' h:mm a")}</p>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold text-[#00b199] bg-[#00b199]/10 border border-[#00b199]/20 rounded-full px-2.5 py-0.5">
+                        Debrief due
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Pending Card Charges panel — only show when there are pending charges */}
         {(stats?.pendingCharges ?? 0) > 0 && (

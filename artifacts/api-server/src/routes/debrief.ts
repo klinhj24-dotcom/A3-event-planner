@@ -34,13 +34,10 @@ router.put("/events/:id/debrief", async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
     const currentUser = req.user as any;
-    const isAdmin = currentUser?.role === "admin";
-    if (!isAdmin) {
-      const [event] = await db.select({ primaryStaffId: eventsTable.primaryStaffId }).from(eventsTable).where(eq(eventsTable.id, eventId));
-      if (event?.primaryStaffId && event.primaryStaffId !== currentUser?.id) {
-        res.status(403).json({ error: "Only the assigned debrief owner or an admin can save this debrief." });
-        return;
-      }
+    const [event] = await db.select({ primaryStaffId: eventsTable.primaryStaffId }).from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (event?.primaryStaffId && event.primaryStaffId !== currentUser?.id) {
+      res.status(403).json({ error: "Only the assigned debrief owner can save this debrief." });
+      return;
     }
     const {
       timeIn, timeOut, crowdSize,
