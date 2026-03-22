@@ -26,7 +26,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
-import { useCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmployee, type CommTask } from "@/hooks/use-team";
+import { useCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmployee, useTeamMembers, type CommTask } from "@/hooks/use-team";
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
 import { PackingSheet } from "@/components/packing-sheet";
@@ -735,6 +735,7 @@ const eventSchema = z.object({
   pocName: z.string().optional(),
   pocEmail: z.string().optional(),
   pocPhone: z.string().optional(),
+  primaryStaffId: z.string().nullable().optional(),
 });
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -1683,7 +1684,7 @@ export default function Events() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
-  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean } | null>(null);
+  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null } | null>(null);
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string; isTwoDay?: boolean } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
@@ -1787,13 +1788,15 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
   });
+
+  const { data: teamMembers = [] } = useTeamMembers();
 
   // Auto-fill end date when start date changes (create form)
   const prevCreateStart = useRef("");
@@ -1877,6 +1880,7 @@ export default function Events() {
       pocName: ev.pocName ?? "",
       pocEmail: ev.pocEmail ?? "",
       pocPhone: ev.pocPhone ?? "",
+      primaryStaffId: (ev as any).primaryStaffId ?? null,
     });
     // Seed ref so auto-fill effect doesn't trigger on load
     prevEditStart.current = ev.startDate ? toDatetimeLocal(new Date(ev.startDate)) : "";
@@ -2165,6 +2169,21 @@ export default function Events() {
                       <FormItem>
                         <FormLabel className="text-sm">Internal Notes</FormLabel>
                         <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
+                      </FormItem>
+                    )} />
+                    {/* Debrief Owner */}
+                    <FormField control={form.control} name="primaryStaffId" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm flex items-center gap-1.5"><ClipboardCheck className="h-3.5 w-3.5 text-secondary" /> Debrief Owner</FormLabel>
+                        <Select value={field.value ?? "none"} onValueChange={v => field.onChange(v === "none" ? null : v)}>
+                          <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Anyone can fill out debrief" /></SelectTrigger></FormControl>
+                          <SelectContent position="popper">
+                            <SelectItem value="none">Anyone</SelectItem>
+                            {teamMembers.map(m => (
+                              <SelectItem key={m.id} value={m.id}>{m.firstName && m.lastName ? `${m.firstName} ${m.lastName}` : m.email ?? m.id}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </FormItem>
                     )} />
                     {/* Point of Contact */}
@@ -2565,7 +2584,7 @@ export default function Events() {
                               variant="ghost"
                               title="Post-event debrief"
                               className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-secondary hover:bg-secondary/10"
-                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl, isLeadGenerating: (event as any).isLeadGenerating ?? false })}
+                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl, isLeadGenerating: (event as any).isLeadGenerating ?? false, primaryStaffId: (event as any).primaryStaffId ?? null })}
                             >
                               <ClipboardCheck className="h-3.5 w-3.5" />
                             </Button>
@@ -2839,6 +2858,21 @@ export default function Events() {
                 <FormItem>
                   <FormLabel className="text-sm">Internal Notes</FormLabel>
                   <FormControl><textarea placeholder="Staff notes, logistics, reminders…" className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...field} value={field.value || ''} /></FormControl>
+                </FormItem>
+              )} />
+              {/* Debrief Owner */}
+              <FormField control={editForm.control} name="primaryStaffId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm flex items-center gap-1.5"><ClipboardCheck className="h-3.5 w-3.5 text-secondary" /> Debrief Owner</FormLabel>
+                  <Select value={field.value ?? "none"} onValueChange={v => field.onChange(v === "none" ? null : v)}>
+                    <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Anyone can fill out debrief" /></SelectTrigger></FormControl>
+                    <SelectContent position="popper">
+                      <SelectItem value="none">Anyone</SelectItem>
+                      {teamMembers.map(m => (
+                        <SelectItem key={m.id} value={m.id}>{m.firstName && m.lastName ? `${m.firstName} ${m.lastName}` : m.email ?? m.id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )} />
               {/* Point of Contact */}
@@ -3176,7 +3210,7 @@ export default function Events() {
         actions={{
           onEdit: (ev) => openEdit(ev),
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
-          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl, isLeadGenerating: (ev as any).isLeadGenerating ?? false }),
+          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl, isLeadGenerating: (ev as any).isLeadGenerating ?? false, primaryStaffId: (ev as any).primaryStaffId ?? null }),
           onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type, isTwoDay: ev.isTwoDay ?? false }),
           onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location, isTwoDay: ev.isTwoDay ?? false }),
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),

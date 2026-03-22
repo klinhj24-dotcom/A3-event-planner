@@ -1,7 +1,8 @@
-import { boolean, decimal, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, decimal, integer, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { contactsTable } from "./contacts";
+import { usersTable } from "./auth";
 
 export const eventsTable = pgTable("events", {
   id: serial("id").primaryKey(),
@@ -42,6 +43,7 @@ export const eventsTable = pgTable("events", {
   pocName: text("poc_name"),
   pocEmail: text("poc_email"),
   pocPhone: text("poc_phone"),
+  primaryStaffId: varchar("primary_staff_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

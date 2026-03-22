@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,19 +8,37 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Upload, X, ImageIcon, CheckCircle2, TrendingUp } from "lucide-react";
+import { Loader2, Upload, X, ImageIcon, CheckCircle2, TrendingUp, ShieldAlert } from "lucide-react";
 import { useUpload } from "@workspace/object-storage-web";
-import { useEventDebrief, useUpsertDebrief, useUpdateEventImage } from "@/hooks/use-team";
+import { useEventDebrief, useUpsertDebrief, useUpdateEventImage, useTeamMembers } from "@/hooks/use-team";
 import { useToast } from "@/hooks/use-toast";
 
 interface DebriefSheetProps {
-  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean } | null;
+  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null } | null;
   onClose: () => void;
 }
 
 export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
   const { toast } = useToast();
   const { data: debrief, isLoading } = useEventDebrief(event?.id ?? null);
+  const { data: currentUser } = useQuery<{ id: string; role: string; firstName?: string | null; lastName?: string | null; email?: string | null }>({
+    queryKey: ["/api/auth/user"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/user", { credentials: "include" });
+      if (!res.ok) throw new Error("Not authenticated");
+      const data = await res.json();
+      return data.user;
+    },
+  });
+  const { data: teamMembers = [] } = useTeamMembers();
+
+  const isAdmin = currentUser?.role === "admin";
+  const primaryStaffId = event?.primaryStaffId ?? null;
+  const canSave = !primaryStaffId || isAdmin || currentUser?.id === primaryStaffId;
+  const ownerMember = primaryStaffId ? teamMembers.find(m => m.id === primaryStaffId) : null;
+  const ownerName = ownerMember
+    ? (ownerMember.firstName && ownerMember.lastName ? `${ownerMember.firstName} ${ownerMember.lastName}` : ownerMember.email ?? "Assigned Staff")
+    : null;
   const { mutate: upsert, isPending: saving } = useUpsertDebrief(event?.id ?? 0);
   const { mutate: updateImage } = useUpdateEventImage(event?.id ?? 0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,6 +134,14 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/40 shrink-0">
           <SheetTitle className="font-display text-lg leading-tight">{event.title}</SheetTitle>
           <SheetDescription className="text-xs">Post-event debrief & metrics</SheetDescription>
+          {ownerName && (
+            <div className={`flex items-center gap-2 mt-1 text-xs rounded-lg px-3 py-1.5 w-fit ${canSave ? "bg-secondary/10 text-secondary" : "bg-amber-500/10 text-amber-400"}`}>
+              {canSave
+                ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                : <ShieldAlert className="h-3 w-3 shrink-0" />}
+              {canSave ? `Debrief owner: ${ownerName}` : `Only ${ownerName} (or an admin) can save this debrief`}
+            </div>
+          )}
         </SheetHeader>
 
         {isLoading ? (
@@ -294,7 +321,8 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
             <Button
               className="w-full rounded-xl"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !canSave}
+              title={!canSave ? "You are not the assigned debrief owner" : undefined}
             >
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Save Debrief

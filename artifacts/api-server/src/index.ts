@@ -66,6 +66,7 @@ async function runMigrations() {
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS leader_staff_slot_id INTEGER`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS event_day INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS group_name TEXT`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS primary_staff_id varchar`,
     // ── Per-contact invite tracking table ───────────────────────────────────
     `CREATE TABLE IF NOT EXISTS event_band_invites (
       id SERIAL PRIMARY KEY,
