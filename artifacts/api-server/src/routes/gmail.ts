@@ -88,12 +88,8 @@ router.post("/gmail/send", async (req, res) => {
 
     // Convert plain-text body to HTML; inject HTML signature (may contain <a> links)
     const htmlBody = plainTextToHtml(body);
-    // Convert <p> tags to <br> so email clients don't add block-level spacing
-    const normalizedSignature = signature
-      ? signature.replace(/<\/p>/gi, "").replace(/<p(\s[^>]*)?>/gi, "<br>")
-      : null;
-    const signatureBlock = normalizedSignature
-      ? `<hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0 16px"><div style="font-size:13px;color:#555;line-height:1.6">${normalizedSignature}</div>`
+    const signatureBlock = signature
+      ? `<hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0 16px"><div style="font-size:13px;color:#555;line-height:1.6">${signature}</div>`
       : "";
     const fullHtml = `<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a">${htmlBody}</div>${signatureBlock}`;
 
