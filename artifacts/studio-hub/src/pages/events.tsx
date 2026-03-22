@@ -1905,6 +1905,7 @@ export default function Events() {
       hasStaffSchedule: ev.hasStaffSchedule ?? false,
       hasCallSheet: ev.hasCallSheet ?? false,
       hasPackingList: ev.hasPackingList ?? false,
+      hasDebrief: (ev as any).hasDebrief ?? false,
       allowGuestList: ev.allowGuestList ?? false,
       isLeadGenerating: (ev as any).isLeadGenerating ?? false,
       guestListPolicy: ev.guestListPolicy ?? "students_only",
