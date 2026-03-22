@@ -218,29 +218,12 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
               </div>
             </div>
 
-            {/* ── Lead Quality / Would Repeat ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Lead Quality</Label>
-                <Select value={form.leadQuality} onValueChange={v => setForm(f => ({ ...f, leadQuality: v }))}>
-                  <SelectTrigger className="rounded-xl text-sm">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="poor">Poor</SelectItem>
-                    <SelectItem value="fair">Fair</SelectItem>
-                    <SelectItem value="good">Good</SelectItem>
-                    <SelectItem value="excellent">Excellent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col justify-end space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Would Repeat?</Label>
-                <div className="flex items-center rounded-xl border border-border/50 bg-card px-4 py-2.5 h-10">
-                  <Switch checked={form.wouldRepeat} onCheckedChange={v => setForm(f => ({ ...f, wouldRepeat: v }))} />
-                  <span className="ml-3 text-sm text-muted-foreground">{form.wouldRepeat ? "Yes" : "No"}</span>
-                </div>
+            {/* ── Would Repeat ── */}
+            <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card px-4 py-3">
+              <Label className="text-sm">Would Repeat?</Label>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">{form.wouldRepeat ? "Yes" : "No"}</span>
+                <Switch checked={form.wouldRepeat} onCheckedChange={v => setForm(f => ({ ...f, wouldRepeat: v }))} />
               </div>
             </div>
 
@@ -250,7 +233,22 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
                 <Label className="text-xs font-semibold uppercase tracking-wider text-violet-400 flex items-center gap-1.5">
                   <TrendingUp className="h-3.5 w-3.5" /> Lead Results
                 </Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Lead Quality</Label>
+                    <Select value={form.leadQuality} onValueChange={v => setForm(f => ({ ...f, leadQuality: v }))}>
+                      <SelectTrigger className="rounded-xl text-sm">
+                        <SelectValue placeholder="Select…" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="poor">Poor</SelectItem>
+                        <SelectItem value="fair">Fair</SelectItem>
+                        <SelectItem value="good">Good</SelectItem>
+                        <SelectItem value="excellent">Excellent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Leads Collected</Label>
                     <Input type="number" min={0} placeholder="0" className="rounded-xl text-sm" value={form.leadsCollected} onChange={set("leadsCollected")} />
