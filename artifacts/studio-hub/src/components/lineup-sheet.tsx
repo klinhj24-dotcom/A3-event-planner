@@ -560,7 +560,7 @@ function SlotRow({
                   <Send className="h-3 w-3" />
                   {sendingInvite ? "Sending…" : slot.inviteStatus === "not_sent" ? "Send Invite" : "Re-invite New Contacts"}
                 </Button>
-                {slot.confirmed && !slot.confirmationSent && (
+                {(slot.confirmed || slot.inviteStatus === "confirmed") && !slot.confirmationSent && (
                   <Button
                     size="sm"
                     className="rounded-lg h-7 text-xs gap-1.5 flex-1 bg-emerald-600 hover:bg-emerald-500"
