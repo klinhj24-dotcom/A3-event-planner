@@ -2,7 +2,7 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { db, usersTable, eventsTable } from "@workspace/db";
 import { commScheduleRulesTable, commTasksTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull, desc } from "drizzle-orm";
 import { createAuthedClient } from "../lib/google";
 import { addDays, subDays } from "date-fns";
 
@@ -11,19 +11,24 @@ const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec4020
 
 const router = Router();
 
-async function getCalendarClient(userId: string) {
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-  if (!user?.googleAccessToken || !user?.googleRefreshToken) {
+async function getCalendarClient() {
+  // Use any account with a Google refresh token — the logged-in user doesn't
+  // need their own connection (aliases like viv@/violet@/hanna@ can't OAuth).
+  const users = await db.select().from(usersTable)
+    .where(and(isNotNull(usersTable.googleAccessToken), isNotNull(usersTable.googleRefreshToken)))
+    .orderBy(desc(usersTable.googleTokenExpiry));
+  const user = users[0];
+  if (!user) {
     throw new Error("Google account not connected");
   }
-  const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
+  const auth = createAuthedClient(user.googleAccessToken!, user.googleRefreshToken!, user.googleTokenExpiry);
   auth.on("tokens", async (tokens) => {
     if (tokens.access_token) {
       await db.update(usersTable).set({
         googleAccessToken: tokens.access_token,
         googleRefreshToken: tokens.refresh_token ?? user.googleRefreshToken,
         googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-      }).where(eq(usersTable.id, userId));
+      }).where(eq(usersTable.id, user.id));
     }
   });
   return google.calendar({ version: "v3", auth });
@@ -33,7 +38,7 @@ async function getCalendarClient(userId: string) {
 router.get("/calendar/events", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const calendar = await getCalendarClient(req.user.id);
+    const calendar = await getCalendarClient();
     const { timeMin, timeMax } = req.query;
 
     const response = await calendar.events.list({
@@ -64,7 +69,7 @@ router.post("/calendar/push/:eventId", async (req, res) => {
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
-    const calendar = await getCalendarClient(req.user.id);
+    const calendar = await getCalendarClient();
 
     // Build website-compatible description
     // Website script reads: [venue] Name, [TICKETS/REGISTER/etc] url, bare image url
@@ -138,7 +143,7 @@ router.post("/calendar/sync-comms/:eventId", async (req, res) => {
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
     if (!event.startDate) { res.status(400).json({ error: "Event has no start date set" }); return; }
 
-    const calendar = await getCalendarClient(req.user.id);
+    const calendar = await getCalendarClient();
 
     const tasks = await db.select().from(commTasksTable).where(eq(commTasksTable.eventId, eventId));
 
@@ -217,7 +222,7 @@ router.delete("/calendar/push/:eventId", async (req, res) => {
       return;
     }
 
-    const calendar = await getCalendarClient(req.user.id);
+    const calendar = await getCalendarClient();
     await calendar.events.delete({
       calendarId: TMS_CALENDAR_ID,
       eventId: event.googleCalendarEventId,
