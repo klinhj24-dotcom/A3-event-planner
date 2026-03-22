@@ -608,7 +608,7 @@ export default function Settings() {
               {/* Editor / Preview */}
               {sigPreview ? (
                 <div
-                  className="min-h-[96px] p-3 rounded-xl border border-border/30 bg-muted/20 text-sm text-foreground leading-relaxed [&_a]:text-primary [&_a]:underline"
+                  className="min-h-[96px] p-3 rounded-xl border border-border/30 bg-muted/20 text-sm text-foreground leading-relaxed [&_a]:text-primary [&_a]:underline [&_p]:mt-2 [&_p]:block"
                   dangerouslySetInnerHTML={{ __html: signature || '<span class="text-muted-foreground text-xs">Nothing to preview yet.</span>' }}
                 />
               ) : (
