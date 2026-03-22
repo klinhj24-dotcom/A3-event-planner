@@ -524,9 +524,12 @@ router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) =
 
     const toSend = slots.filter(s => s.bandId && !s.confirmationSent && (s.inviteStatus === "confirmed" || s.confirmed));
     const skipped = slots.filter(s => s.bandId && s.confirmationSent).length;
+    const unconfirmed = slots
+      .filter(s => s.bandId && !s.confirmationSent && s.inviteStatus !== "confirmed" && !s.confirmed && s.inviteStatus !== "not_sent")
+      .map(s => s.bandName ?? "Unknown Band");
 
     if (toSend.length === 0) {
-      res.json({ sent: 0, skipped, message: "All confirmed bands already have lock-in emails sent." });
+      res.json({ sent: 0, skipped, unconfirmed, message: "All confirmed bands already have lock-in emails sent." });
       return;
     }
 
@@ -594,7 +597,7 @@ The Music Space`;
       }
     }
 
-    res.json({ sent: sentCount, skipped });
+    res.json({ sent: sentCount, skipped, unconfirmed });
   } catch (err) {
     console.error("sendConfirmationBulk error:", err);
     res.status(500).json({ error: "Internal server error" });

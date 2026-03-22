@@ -1079,10 +1079,21 @@ export function LineupSheet({ event, open, onClose }: {
       const r = await fetch(`/api/events/${eventId}/lineup/send-confirmation-bulk`, { method: "POST", credentials: "include" });
       const data = await r.json();
       if (!r.ok) { toast({ title: "Bulk lock-in failed", description: data.error, variant: "destructive" }); return; }
+      const unconfirmedList: string[] = data.unconfirmed ?? [];
+      const pendingNote = unconfirmedList.length > 0
+        ? ` Still waiting on: ${unconfirmedList.join(", ")}.`
+        : "";
       if (data.sent === 0) {
-        toast({ title: "Nothing to lock in", description: data.message ?? "All confirmed bands already have lock-in emails sent." });
+        toast({
+          title: unconfirmedList.length > 0 ? "No confirmed bands to lock in" : "Nothing to lock in",
+          description: (data.message ?? "All confirmed bands already have lock-in emails sent.") + pendingNote,
+          variant: unconfirmedList.length > 0 ? "destructive" : "default",
+        });
       } else {
-        toast({ title: "Lock-in emails sent!", description: `${data.sent} band${data.sent !== 1 ? "s" : ""} locked in.${data.skipped > 0 ? ` ${data.skipped} already done (skipped).` : ""}` });
+        toast({
+          title: "Lock-in emails sent!",
+          description: `${data.sent} band${data.sent !== 1 ? "s" : ""} locked in.${data.skipped > 0 ? ` ${data.skipped} already done (skipped).` : ""}${pendingNote}`,
+        });
       }
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
     } finally {
