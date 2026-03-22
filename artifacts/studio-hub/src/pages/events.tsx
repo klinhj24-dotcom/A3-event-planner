@@ -731,6 +731,7 @@ const eventSchema = z.object({
   hasCallSheet: z.boolean().default(false),
   hasPackingList: z.boolean().default(false),
   allowGuestList: z.boolean().default(false),
+  hasDebrief: z.boolean().default(false),
   isLeadGenerating: z.boolean().default(false),
   guestListPolicy: z.string().optional(),
   hasPoc: z.boolean().default(false),
