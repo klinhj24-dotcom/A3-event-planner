@@ -274,23 +274,25 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
                     <Input type="number" min={0} placeholder="0" className="rounded-xl text-sm" value={form.trialSignups} onChange={set("trialSignups")} />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Event Vibe</Label>
-                  <Select value={form.eventVibe} onValueChange={v => setForm(f => ({ ...f, eventVibe: v }))}>
-                    <SelectTrigger className="rounded-xl text-sm">
-                      <SelectValue placeholder="How was the energy?" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dead">Dead — nobody around</SelectItem>
-                      <SelectItem value="slow">Slow — some foot traffic</SelectItem>
-                      <SelectItem value="moderate">Moderate — steady flow</SelectItem>
-                      <SelectItem value="busy">Busy — lots of engagement</SelectItem>
-                      <SelectItem value="electric">Electric — packed & excited</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             )}
+
+            {/* ── Event Vibe (always shown) ── */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Event Vibe</Label>
+              <Select value={form.eventVibe} onValueChange={v => setForm(f => ({ ...f, eventVibe: v }))}>
+                <SelectTrigger className="rounded-xl text-sm">
+                  <SelectValue placeholder="How was the energy?" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dead">Dead — nobody around</SelectItem>
+                  <SelectItem value="slow">Slow — some foot traffic</SelectItem>
+                  <SelectItem value="moderate">Moderate — steady flow</SelectItem>
+                  <SelectItem value="busy">Busy — lots of engagement</SelectItem>
+                  <SelectItem value="electric">Electric — packed & excited</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* ── Improvements ── */}
             <div className="space-y-2">
@@ -298,7 +300,7 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
               <Textarea placeholder="Suggestions, changes, ideas…" className="rounded-xl text-sm min-h-[70px] resize-none" value={form.improvements} onChange={set("improvements")} />
             </div>
 
-            {/* ── Staff Notes ── */}
+            {/* ── Staff Notes (always shown) ── */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Staff Notes</Label>
               <Textarea placeholder="Internal notes about staff performance, logistics…" className="rounded-xl text-sm min-h-[70px] resize-none" value={form.staffNotes} onChange={set("staffNotes")} />
