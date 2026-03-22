@@ -34,7 +34,7 @@ router.put("/events/:id/debrief", async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
     const {
-      timeIn, timeOut, staffPresent, crowdSize,
+      timeIn, timeOut, crowdSize,
       boothPlacement, soundSetupNotes, whatWorked, whatDidntWork,
       leadQuality, wouldRepeat, improvements,
       leadsCollected, trialSignups, eventVibe, staffNotes,
@@ -44,7 +44,6 @@ router.put("/events/:id/debrief", async (req, res) => {
       eventId,
       timeIn: timeIn ? new Date(timeIn) : null,
       timeOut: timeOut ? new Date(timeOut) : null,
-      staffPresent: staffPresent ?? null,
       crowdSize: crowdSize != null ? parseInt(crowdSize) : null,
       boothPlacement: boothPlacement ?? null,
       soundSetupNotes: soundSetupNotes ?? null,

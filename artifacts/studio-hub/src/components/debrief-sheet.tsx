@@ -27,7 +27,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
   const [form, setForm] = useState({
     timeIn: "",
     timeOut: "",
-    staffPresent: "",
     crowdSize: "",
     boothPlacement: "",
     soundSetupNotes: "",
@@ -55,7 +54,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
       setForm({
         timeIn: debrief.timeIn ? new Date(debrief.timeIn).toISOString().slice(0, 16) : "",
         timeOut: debrief.timeOut ? new Date(debrief.timeOut).toISOString().slice(0, 16) : "",
-        staffPresent: debrief.staffPresent ?? "",
         crowdSize: debrief.crowdSize != null ? String(debrief.crowdSize) : "",
         boothPlacement: debrief.boothPlacement ?? "",
         soundSetupNotes: debrief.soundSetupNotes ?? "",
@@ -88,7 +86,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     upsert({
       timeIn: form.timeIn || null,
       timeOut: form.timeOut || null,
-      staffPresent: form.staffPresent || null,
       crowdSize: form.crowdSize ? parseInt(form.crowdSize) : null,
       boothPlacement: form.boothPlacement || null,
       soundSetupNotes: form.soundSetupNotes || null,
@@ -200,10 +197,6 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
                   <Label className="text-xs text-muted-foreground">Booth Placement</Label>
                   <Input placeholder="e.g. Front left, near stage" className="rounded-xl text-sm" value={form.boothPlacement} onChange={set("boothPlacement")} />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Staff Present</Label>
-                <Input placeholder="Names of staff who attended" className="rounded-xl text-sm" value={form.staffPresent} onChange={set("staffPresent")} />
               </div>
             </div>
 
