@@ -1224,13 +1224,29 @@ function EventOverviewSheet({
           )}
 
           {/* Ticket requests */}
-          {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (
+          {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length > 0 && (() => {
+            const isRecitalSection = event.ticketFormType === "recital";
+            const sectionUnitPrice = event.ticketPrice ? parseFloat(event.ticketPrice) : (isRecitalSection ? 30 : null);
+            const chargedDollarTotal = (ticketRequests as any[]).filter(r => r.charged).reduce((sum, r) => {
+              const rawPrice = (event as any).isTwoDay && r.ticketType
+                ? r.ticketType === "day1" ? (event as any).day1Price
+                : r.ticketType === "day2" ? (event as any).day2Price
+                : event.ticketPrice : event.ticketPrice;
+              const price = rawPrice ? parseFloat(rawPrice) : (sectionUnitPrice ?? 0);
+              const count = r.ticketCount ?? (isRecitalSection ? 1 : 0);
+              return sum + price * count;
+            }, 0);
+            return (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Ticket className="h-3.5 w-3.5" /> {event.ticketFormType === "recital" ? "Recital Signups" : "Ticket Requests"}
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                <Ticket className="h-3.5 w-3.5" /> {isRecitalSection ? "Recital Signups" : "Ticket Requests"}
                 <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
+                {sectionUnitPrice != null && (
+                  <span className="text-muted-foreground/60 text-[10px]">${sectionUnitPrice.toFixed(2)}/{isRecitalSection ? "performer" : "ticket"}</span>
+                )}
                 <span className="text-emerald-500/80 text-[10px] font-medium">
-                  {ticketRequests.filter((r: any) => r.charged).length}/{ticketRequests.length} charged
+                  {(ticketRequests as any[]).filter(r => r.charged).length}/{ticketRequests.length} charged
+                  {chargedDollarTotal > 0 && ` · $${chargedDollarTotal.toFixed(2)}`}
                 </span>
               </h4>
               {/* Table header */}
@@ -1246,8 +1262,9 @@ function EventOverviewSheet({
                     : r.ticketType === "day2" ? (event as any).day2Price
                     : event.ticketPrice
                     : event.ticketPrice;
-                  const price = resolvedPrice ? parseFloat(resolvedPrice) : null;
-                  const lineTotal = price && r.ticketCount ? (price * r.ticketCount).toFixed(2) : null;
+                  const price = resolvedPrice ? parseFloat(resolvedPrice) : (isRecitalSection ? sectionUnitPrice : null);
+                  const rowCount = r.ticketCount ?? (isRecitalSection ? 1 : 0);
+                  const lineTotal = price && rowCount ? (price * rowCount).toFixed(2) : null;
                   const isRecitalEntry = r.formType === "recital" && r.studentFirstName;
                   return (
                   <div key={r.id} className={`grid grid-cols-[44px_1fr_auto] gap-0 items-start rounded-xl border transition-colors text-xs ${r.charged ? "bg-emerald-500/8 border-emerald-500/25" : "bg-muted/30 border-border/30 hover:border-border/50"}`}>
@@ -1284,6 +1301,11 @@ function EventOverviewSheet({
                           <div className="text-muted-foreground/60 text-[11px] mt-1 truncate">
                             {r.contactFirstName} {r.contactLastName} · {r.contactEmail}
                           </div>
+                          {lineTotal && (
+                            <div className="text-[11px] mt-0.5">
+                              <span className="font-bold text-foreground">${lineTotal}</span>
+                            </div>
+                          )}
                           {r.charged && r.chargedAt && (
                             <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
                           )}
@@ -1345,7 +1367,8 @@ function EventOverviewSheet({
                 })}
               </div>
             </div>
-          )}
+            );
+          })()}
           {event.ticketFormType && event.ticketFormType !== "none" && ticketRequests && ticketRequests.length === 0 && (
             <div className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Ticket className="h-3.5 w-3.5" />
