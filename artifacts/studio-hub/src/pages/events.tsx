@@ -723,6 +723,7 @@ const eventSchema = z.object({
   ticketPrice: z.coerce.number().min(0).optional(),
   day1Price: z.coerce.number().min(0).optional(),
   day2Price: z.coerce.number().min(0).optional(),
+  externalTicketSales: z.coerce.number().min(0).optional(),
   hasBandLineup: z.boolean().default(false),
   hasStaffSchedule: z.boolean().default(false),
   hasCallSheet: z.boolean().default(false),
@@ -1162,25 +1163,68 @@ function EventOverviewSheet({
           )}
 
           {/* Financials */}
-          {(event.revenue || event.cost) && (
-            <div className="space-y-1.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Financials</h4>
-              <div className="flex items-center gap-4 text-sm">
-                {event.revenue && (
-                  <div className="flex items-center gap-1.5 text-emerald-500">
-                    <DollarSign className="h-4 w-4" />
-                    <span className="font-medium">+${event.revenue} revenue</span>
+          {(() => {
+            const eventFee = event.revenue ? parseFloat(event.revenue as string) : 0;
+            const expense = event.cost ? parseFloat(event.cost as string) : 0;
+            const externalSales = (event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0;
+            const isRecitalSection = event.ticketFormType === "recital";
+            const unitPrice = event.ticketPrice ? parseFloat(event.ticketPrice as string) : (isRecitalSection ? 30 : 0);
+            const internalTicketTotal = ticketRequests
+              ? (ticketRequests as any[]).filter(r => r.charged).reduce((sum, r) => {
+                  const rawPrice = (event as any).isTwoDay && r.ticketType
+                    ? r.ticketType === "day1" ? (event as any).day1Price
+                    : r.ticketType === "day2" ? (event as any).day2Price
+                    : event.ticketPrice : event.ticketPrice;
+                  const price = rawPrice ? parseFloat(rawPrice) : unitPrice;
+                  const count = r.ticketCount ?? (isRecitalSection ? 1 : 0);
+                  return sum + price * count;
+                }, 0)
+              : 0;
+            const totalIncome = eventFee + internalTicketTotal + externalSales;
+            const net = totalIncome - expense;
+            const hasAny = eventFee > 0 || expense > 0 || internalTicketTotal > 0 || externalSales > 0;
+            if (!hasAny) return null;
+            return (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5" /> Financials
+                  <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${net >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-400"}`}>
+                    {net >= 0 ? "+" : ""}${net.toFixed(2)} net
+                  </span>
+                </h4>
+                <div className="rounded-xl border border-border/30 bg-muted/20 divide-y divide-border/20 text-sm overflow-hidden">
+                  {eventFee > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Event fee / gig pay</span>
+                      <span className="font-semibold text-emerald-500">+${eventFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {internalTicketTotal > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Ticket sales <span className="text-muted-foreground/50">(internal)</span></span>
+                      <span className="font-semibold text-emerald-500">+${internalTicketTotal.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {externalSales > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Ticket sales <span className="text-muted-foreground/50">(external)</span></span>
+                      <span className="font-semibold text-emerald-500">+${externalSales.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {expense > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Cost / sponsorship</span>
+                      <span className="font-semibold text-rose-400">-${expense.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Net</span>
+                    <span className={`font-bold text-sm ${net >= 0 ? "text-emerald-500" : "text-rose-400"}`}>{net >= 0 ? "+" : ""}${net.toFixed(2)}</span>
                   </div>
-                )}
-                {event.cost && (
-                  <div className="flex items-center gap-1.5 text-rose-400">
-                    <DollarSign className="h-4 w-4" />
-                    <span className="font-medium">-${event.cost} cost</span>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Description / Notes */}
           {event.description && (
@@ -1804,6 +1848,7 @@ export default function Events() {
       isPaid: ev.isPaid ?? false,
       revenue: ev.revenue ? Number(ev.revenue) : undefined,
       cost: ev.cost ? Number(ev.cost) : undefined,
+      externalTicketSales: ev.externalTicketSales ? Number(ev.externalTicketSales) : undefined,
       notes: ev.notes ?? "",
       flyerUrl: ev.flyerUrl ?? "",
       // Clear ticketsUrl if event is using the internal form — stale external URLs cause dead links
@@ -2076,17 +2121,23 @@ export default function Events() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField control={form.control} name="revenue" render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Revenue ($)</FormLabel>
-                            <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                            <FormLabel className="text-xs">TMS earns ($) <span className="font-normal text-muted-foreground">gig fee, sound pay, etc.</span></FormLabel>
+                            <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="cost" render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Cost — booth / sponsorship ($)</FormLabel>
-                            <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                            <FormLabel className="text-xs">TMS pays ($) <span className="font-normal text-muted-foreground">booth, sponsorship, etc.</span></FormLabel>
+                            <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
                           </FormItem>
                         )} />
                       </div>
+                      <FormField control={form.control} name="externalTicketSales" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">External ticket gross ($) <span className="font-normal text-muted-foreground">enter after event — Eventbrite, etc.</span></FormLabel>
+                          <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
+                        </FormItem>
+                      )} />
                     </div>
                     <FormField control={form.control} name="calendarTag" render={({ field }) => (
                       <FormItem>
@@ -2446,11 +2497,16 @@ export default function Events() {
                             ) : (
                               <Badge variant="outline" className="text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
                             )}
-                            {(event.revenue || event.cost) && (
-                              <span className="ml-3 text-xs text-muted-foreground font-mono">
-                                {event.revenue ? `+$${event.revenue}` : ''}{event.cost ? ` -$${event.cost}` : ''}
-                              </span>
-                            )}
+                            {(event.revenue || event.cost || (event as any).externalTicketSales) && (() => {
+                              const net = (event.revenue ? parseFloat(event.revenue as string) : 0)
+                                + ((event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0)
+                                - (event.cost ? parseFloat(event.cost as string) : 0);
+                              return (
+                                <span className={`ml-3 text-xs font-mono font-semibold ${net >= 0 ? "text-emerald-500" : "text-rose-400"}`}>
+                                  {net >= 0 ? "+" : ""}${net.toFixed(2)}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </TableCell>
                         <TableCell className="text-right hidden lg:table-cell">
@@ -2736,17 +2792,23 @@ export default function Events() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField control={editForm.control} name="revenue" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Revenue ($)</FormLabel>
-                      <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                      <FormLabel className="text-xs">TMS earns ($) <span className="font-normal text-muted-foreground">gig fee, sound pay, etc.</span></FormLabel>
+                      <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
                     </FormItem>
                   )} />
                   <FormField control={editForm.control} name="cost" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Cost — booth / sponsorship ($)</FormLabel>
-                      <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value || ''} /></FormControl>
+                      <FormLabel className="text-xs">TMS pays ($) <span className="font-normal text-muted-foreground">booth, sponsorship, etc.</span></FormLabel>
+                      <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
                     </FormItem>
                   )} />
                 </div>
+                <FormField control={editForm.control} name="externalTicketSales" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">External ticket gross ($) <span className="font-normal text-muted-foreground">enter after event — Eventbrite, etc.</span></FormLabel>
+                    <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
+                  </FormItem>
+                )} />
               </div>
               <FormField control={editForm.control} name="calendarTag" render={({ field }) => (
                 <FormItem>

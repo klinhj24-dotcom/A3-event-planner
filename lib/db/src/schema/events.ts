@@ -20,6 +20,7 @@ export const eventsTable = pgTable("events", {
   isPaid: boolean("is_paid").default(false),
   cost: decimal("cost", { precision: 10, scale: 2 }),
   revenue: decimal("revenue", { precision: 10, scale: 2 }),
+  externalTicketSales: decimal("external_ticket_sales", { precision: 10, scale: 2 }),
   notes: text("notes"),
   signupToken: text("signup_token").unique(),
   signupDeadline: timestamp("signup_deadline", { withTimezone: true }),
