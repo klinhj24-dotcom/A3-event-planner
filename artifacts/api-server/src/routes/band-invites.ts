@@ -422,21 +422,18 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
     if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
     if (!slot.bandId) { res.status(400).json({ error: "Slot has no band assigned" }); return; }
 
-    // Get all band members for BCC (exclude declined contacts)
+    // Get all contacts for this slot — BCC everyone (exclude declined)
     const allInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
+    if (!allInvites.length) { res.status(400).json({ error: "No contacts found to send confirmation to." }); return; }
+
     const bccEmails = allInvites
       .filter(i => i.status !== "declined" && i.contactEmail)
-      .map(i => i.contactEmail)
+      .map(i => i.contactEmail!)
       .filter((e, idx, arr) => arr.indexOf(e) === idx); // unique
 
-    // Also get any members who weren't invited but have emails
-    const members = await db.select().from(bandMembersTable).where(eq(bandMembersTable.bandId, slot.bandId));
-    const memberEmails = members.filter(m => m.email).map(m => m.email!);
-    const allBcc = [...new Set([...bccEmails, ...memberEmails])].filter(e => e !== TMS_CC);
-
-    // Primary recipient: first confirmed contact, or first contact with email
-    const primaryInvite = allInvites.find(i => i.status === "confirmed") ?? allInvites.find(i => i.contactEmail);
-    if (!primaryInvite) { res.status(400).json({ error: "No contacts found to send confirmation to." }); return; }
+    // Get band leader (staff member who leads the band) for CC
+    const members = await db.select().from(bandMembersTable).where(eq(bandMembersTable.bandId, slot.bandId!));
+    const bandLeader = members.find(m => m.isBandLeader && m.email);
 
     const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
     auth.on("tokens", async (tokens) => {
@@ -451,6 +448,7 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
     const gmail = google.gmail({ version: "v1", auth });
     const from = sender.googleEmail ?? sender.email ?? "";
     const performanceDay = formatPerformanceDay(event, slot.eventDay);
+    const bandName = slot.bandName ?? "Your Band";
 
     const fmt12 = (t: string) => {
       const [h, m] = t.split(":").map(Number);
@@ -460,9 +458,9 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
       ? `\nYour Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
       : slot.staffNote ? `\nEstimated Slot: ${slot.staffNote}` : "";
 
-    const emailBody = `Hi ${primaryInvite.contactName ?? "there"},
+    const emailBody = `Hi ${bandName} Band Families,
 
-Great news — ${slot.bandName ?? "your band"} is confirmed for ${event.title}!
+Great news — ${bandName} is confirmed for ${event.title}!
 
 Event: ${event.title}
 Performance Date: ${performanceDay}
@@ -476,15 +474,22 @@ We're excited to have you — see you there!
 
 The Music Space`;
 
-    const html = buildHtmlEmail({ recipientName: primaryInvite.contactName ?? "there", body: emailBody });
+    // To: "Band Families" display name pointing to TMS desk
+    // CC: band leader (if one exists with an email)
+    // BCC: all contacts
+    const toAddress = `"${bandName} Band Families" <${TMS_CC}>`;
+    const ccAddresses = bandLeader?.email ? [bandLeader.email] : [];
+    const bccAddresses = bccEmails.filter(e => e !== TMS_CC && !ccAddresses.includes(e));
+
+    const html = buildHtmlEmail({ body: emailBody });
 
     const raw = makeHtmlEmail({
-      to: primaryInvite.contactEmail,
+      to: toAddress,
       from,
-      subject: `You're Confirmed! ${slot.bandName ?? "Your Band"} @ ${event.title}`,
+      subject: `You're Confirmed! ${bandName} @ ${event.title}`,
       html,
-      cc: [TMS_CC],
-      bcc: allBcc.filter(e => e !== primaryInvite.contactEmail),
+      cc: ccAddresses,
+      bcc: bccAddresses,
     });
 
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
@@ -492,7 +497,7 @@ The Music Space`;
     // Mark confirmation sent
     await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
 
-    res.json({ ok: true, to: primaryInvite.contactEmail, bcc: allBcc.length });
+    res.json({ ok: true, to: toAddress, bcc: bccAddresses.length, cc: ccAddresses.length });
   } catch (err) {
     console.error("sendConfirmation error:", err);
     res.status(500).json({ error: "Internal server error" });
