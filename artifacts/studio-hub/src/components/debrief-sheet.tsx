@@ -24,7 +24,7 @@ function sameDay(a: Date, b: Date) {
 }
 
 interface DebriefSheetProps {
-  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null; isTwoDay?: boolean } | null;
+  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null; isTwoDay?: boolean; day1EndTime?: string | null; day2StartTime?: string | null } | null;
   onClose: () => void;
 }
 
@@ -117,9 +117,20 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     const defaultIn = earliest1 && eventStart ? (earliest1 < eventStart ? earliest1 : eventStart) : earliest1 ?? eventStart;
     const defaultOut = latest1 && eventStart ? (latest1 > eventStart ? latest1 : null) : latest1 ?? null;
 
+    // Helper: combine a local date with a "HH:MM" time string → datetime-local string
+    const localDateStr = (d: Date) => {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+
     const updates: Partial<typeof form> = {};
     if (defaultIn) updates.timeIn = toLocalDT(defaultIn);
-    if (defaultOut) updates.timeOut = toLocalDT(defaultOut);
+    // Day 1 Time Out: use slot data if available, else reconstruct from day1EndTime
+    if (defaultOut) {
+      updates.timeOut = toLocalDT(defaultOut);
+    } else if (eventStart && event?.day1EndTime) {
+      updates.timeOut = `${localDateStr(eventStart)}T${event.day1EndTime}`;
+    }
 
     if (event?.isTwoDay && eventEnd) {
       // Day 2: slots on same day as event end
@@ -131,14 +142,18 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
         .filter((d): d is Date => !!d && sameDay(d, eventEnd));
       const earliest2 = day2SlotStarts.length > 0 ? new Date(Math.min(...day2SlotStarts.map(d => d.getTime()))) : null;
       const latest2 = day2SlotEnds.length > 0 ? new Date(Math.max(...day2SlotEnds.map(d => d.getTime()))) : null;
-      const default2In = earliest2 && eventEnd ? (earliest2 < eventEnd ? earliest2 : eventEnd) : earliest2 ?? null;
       const default2Out = latest2 && eventEnd ? (latest2 > eventEnd ? latest2 : eventEnd) : latest2 ?? eventEnd;
-      if (default2In) updates.day2TimeIn = toLocalDT(default2In);
+      // Day 2 Time In: use slot data if available, else reconstruct from day2StartTime
+      if (earliest2) {
+        updates.day2TimeIn = toLocalDT(earliest2);
+      } else if (event?.day2StartTime) {
+        updates.day2TimeIn = `${localDateStr(eventEnd)}T${event.day2StartTime}`;
+      }
       if (default2Out) updates.day2TimeOut = toLocalDT(default2Out);
     }
 
     if (Object.keys(updates).length > 0) setForm(f => ({ ...f, ...updates }));
-  }, [isLoading, debrief, staffSlots, event?.startDate, event?.endDate, event?.isTwoDay]);
+  }, [isLoading, debrief, staffSlots, event?.startDate, event?.endDate, event?.isTwoDay, event?.day1EndTime, event?.day2StartTime]);
 
   useEffect(() => {
     if (debrief) {
