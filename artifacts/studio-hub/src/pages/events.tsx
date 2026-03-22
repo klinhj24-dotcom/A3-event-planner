@@ -724,6 +724,8 @@ const eventSchema = z.object({
   day1Price: z.coerce.number().min(0).optional(),
   day2Price: z.coerce.number().min(0).optional(),
   externalTicketSales: z.coerce.number().min(0).optional(),
+  revenueSharePercent: z.coerce.number().min(0).max(100).optional(),
+  perTicketVenueFee: z.coerce.number().min(0).optional(),
   hasBandLineup: z.boolean().default(false),
   hasStaffSchedule: z.boolean().default(false),
   hasCallSheet: z.boolean().default(false),
@@ -1185,9 +1187,18 @@ function EventOverviewSheet({
                 }, 0)
               : 0;
             const staffPayTotal = event.staffPayTotal ? parseFloat(event.staffPayTotal) : 0;
-            const totalIncome = eventFee + internalTicketTotal + externalSales;
-            const net = totalIncome - expense - staffPayTotal;
-            const hasAny = eventFee > 0 || expense > 0 || internalTicketTotal > 0 || externalSales > 0 || staffPayTotal > 0;
+            const sharePercent = (event as any).revenueSharePercent ?? 100;
+            const perTicketFee = (event as any).perTicketVenueFee ? parseFloat((event as any).perTicketVenueFee) : 0;
+            const totalTicketCount = ticketRequests
+              ? (ticketRequests as any[]).filter(r => r.charged).reduce((s: number, r: any) => s + (r.ticketCount ?? (isRecitalSection ? 1 : 0)), 0)
+              : 0;
+            const grossTicketRevenue = internalTicketTotal + externalSales;
+            const netTicketRevenue = grossTicketRevenue * (sharePercent / 100);
+            const venueFees = totalTicketCount * perTicketFee;
+            const totalIncome = eventFee + netTicketRevenue;
+            const net = totalIncome - venueFees - expense - staffPayTotal;
+            const splitDeduction = grossTicketRevenue - netTicketRevenue;
+            const hasAny = eventFee > 0 || expense > 0 || grossTicketRevenue > 0 || staffPayTotal > 0;
             if (!hasAny) return null;
             return (
               <div className="space-y-2">
@@ -1206,14 +1217,26 @@ function EventOverviewSheet({
                   )}
                   {internalTicketTotal > 0 && (
                     <div className="flex items-center justify-between px-3 py-2">
-                      <span className="text-muted-foreground text-xs">Ticket sales <span className="text-muted-foreground/50">(internal)</span></span>
+                      <span className="text-muted-foreground text-xs">Ticket sales <span className="text-muted-foreground/50">(internal, gross)</span></span>
                       <span className="font-semibold text-emerald-500">+${internalTicketTotal.toFixed(2)}</span>
                     </div>
                   )}
                   {externalSales > 0 && (
                     <div className="flex items-center justify-between px-3 py-2">
-                      <span className="text-muted-foreground text-xs">Ticket sales <span className="text-muted-foreground/50">(external)</span></span>
+                      <span className="text-muted-foreground text-xs">Ticket sales <span className="text-muted-foreground/50">(external, gross)</span></span>
                       <span className="font-semibold text-emerald-500">+${externalSales.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {splitDeduction > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Venue revenue split <span className="text-muted-foreground/50">({sharePercent}% kept)</span></span>
+                      <span className="font-semibold text-blue-400">-${splitDeduction.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {venueFees > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Per-ticket venue fee <span className="text-muted-foreground/50">({totalTicketCount} × ${perTicketFee.toFixed(2)})</span></span>
+                      <span className="font-semibold text-blue-400">-${venueFees.toFixed(2)}</span>
                     </div>
                   )}
                   {expense > 0 && (
@@ -1795,12 +1818,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null, revenueSharePercent: 100 }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null, revenueSharePercent: 100 }
   });
 
   const { data: teamMembers = [] } = useTeamMembers();
@@ -1867,6 +1890,8 @@ export default function Events() {
       revenue: ev.revenue ? Number(ev.revenue) : undefined,
       cost: ev.cost ? Number(ev.cost) : undefined,
       externalTicketSales: ev.externalTicketSales ? Number(ev.externalTicketSales) : undefined,
+      revenueSharePercent: ev.revenueSharePercent != null ? Number(ev.revenueSharePercent) : 100,
+      perTicketVenueFee: ev.perTicketVenueFee ? Number(ev.perTicketVenueFee) : undefined,
       notes: ev.notes ?? "",
       flyerUrl: ev.flyerUrl ?? "",
       // Clear ticketsUrl if event is using the internal form — stale external URLs cause dead links
@@ -2182,6 +2207,21 @@ export default function Events() {
                         </FormItem>
                       )} />
                     </div>}
+                    {/* Revenue split */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField control={form.control} name="revenueSharePercent" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">% of ticket revenue kept <span className="font-normal text-muted-foreground">100 = keep all</span></FormLabel>
+                          <FormControl><Input type="number" min="0" max="100" placeholder="100" className="rounded-xl h-9" {...field} value={field.value ?? 100} onChange={e => field.onChange(e.target.value === "" ? 100 : Number(e.target.value))} /></FormControl>
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="perTicketVenueFee" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Per-ticket venue fee ($) <span className="font-normal text-muted-foreground">owed to venue</span></FormLabel>
+                          <FormControl><Input type="number" min="0" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
+                        </FormItem>
+                      )} />
+                    </div>
                     <FormField control={form.control} name="calendarTag" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
@@ -2558,9 +2598,14 @@ export default function Events() {
                               <Badge variant="outline" className="text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
                             ) : null}
                             {canViewFinances && (event.revenue || event.cost || (event as any).externalTicketSales || (event as any).internalTicketTotal > 0) && (() => {
+                              const sharePercent = (event as any).revenueSharePercent ?? 100;
+                              const perTicketFee = (event as any).perTicketVenueFee ? parseFloat((event as any).perTicketVenueFee) : 0;
+                              const grossTickets = ((event as any).internalTicketTotal ?? 0) + ((event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0);
+                              const netTickets = grossTickets * (sharePercent / 100);
+                              const venueFees = ((event as any).totalTicketCount ?? 0) * perTicketFee;
                               const net = (event.revenue ? parseFloat(event.revenue as string) : 0)
-                                + ((event as any).internalTicketTotal ?? 0)
-                                + ((event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0)
+                                + netTickets
+                                - venueFees
                                 - (event.cost ? parseFloat(event.cost as string) : 0)
                                 - ((event as any).staffPayTotal ?? 0);
                               return (
@@ -2874,6 +2919,21 @@ export default function Events() {
                   </FormItem>
                 )} />
               </div>}
+              {/* Revenue split */}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={editForm.control} name="revenueSharePercent" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">% of ticket revenue kept <span className="font-normal text-muted-foreground">100 = keep all</span></FormLabel>
+                    <FormControl><Input type="number" min="0" max="100" placeholder="100" className="rounded-xl h-9" {...field} value={field.value ?? 100} onChange={e => field.onChange(e.target.value === "" ? 100 : Number(e.target.value))} /></FormControl>
+                  </FormItem>
+                )} />
+                <FormField control={editForm.control} name="perTicketVenueFee" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Per-ticket venue fee ($) <span className="font-normal text-muted-foreground">owed to venue</span></FormLabel>
+                    <FormControl><Input type="number" min="0" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
+                  </FormItem>
+                )} />
+              </div>
               <FormField control={editForm.control} name="calendarTag" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>

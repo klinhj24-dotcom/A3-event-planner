@@ -46,6 +46,8 @@ export const eventsTable = pgTable("events", {
   pocEmail: text("poc_email"),
   pocPhone: text("poc_phone"),
   primaryStaffId: varchar("primary_staff_id").references(() => usersTable.id, { onDelete: "set null" }),
+  revenueSharePercent: integer("revenue_share_percent").default(100),
+  perTicketVenueFee: decimal("per_ticket_venue_fee", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

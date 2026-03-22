@@ -68,6 +68,8 @@ async function runMigrations() {
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS event_day INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS group_name TEXT`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS primary_staff_id varchar`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS revenue_share_percent INTEGER NOT NULL DEFAULT 100`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS per_ticket_venue_fee DECIMAL(10,2)`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS has_debrief BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS debrief_nudge_sent BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_finances BOOLEAN NOT NULL DEFAULT FALSE`,

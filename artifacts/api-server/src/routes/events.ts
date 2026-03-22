@@ -273,6 +273,7 @@ router.get("/events", async (req, res) => {
     // Compute internal ticket sales totals per event (charged requests only)
     const eventIds = events.map(e => e.id);
     let ticketTotalsMap: Record<number, number> = {};
+    let ticketCountMap: Record<number, number> = {};
     if (eventIds.length > 0) {
       const chargedRequests = await db
         .select({
@@ -298,6 +299,7 @@ router.get("/events", async (req, res) => {
         const price = rawPrice ? parseFloat(rawPrice) : (r.formType === "recital" ? (ev.ticketPrice ? parseFloat(ev.ticketPrice) : 30) : 0);
         const count = r.ticketCount ?? (r.formType === "recital" ? 1 : 0);
         ticketTotalsMap[r.eventId] = (ticketTotalsMap[r.eventId] ?? 0) + price * count;
+        ticketCountMap[r.eventId] = (ticketCountMap[r.eventId] ?? 0) + count;
       }
     }
 
@@ -329,6 +331,7 @@ router.get("/events", async (req, res) => {
     const eventsWithTotals = events.map(e => ({
       ...e,
       internalTicketTotal: ticketTotalsMap[e.id] ?? 0,
+      totalTicketCount: ticketCountMap[e.id] ?? 0,
       staffPayTotal: staffPayMap[e.id] ?? 0,
     }));
     res.json(eventsWithTotals);
@@ -344,7 +347,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -390,6 +393,8 @@ router.post("/events", async (req, res) => {
         isLeadGenerating: isLeadGenerating ?? false,
         hasDebrief: hasDebrief ?? false,
         primaryStaffId: primaryStaffId ?? null,
+        revenueSharePercent: revenueSharePercent != null ? Number(revenueSharePercent) : 100,
+        perTicketVenueFee: perTicketVenueFee != null ? perTicketVenueFee.toString() : null,
       })
       .returning();
 
@@ -444,7 +449,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -494,6 +499,8 @@ router.put("/events/:id", async (req, res) => {
         isLeadGenerating: isLeadGenerating !== undefined ? isLeadGenerating : undefined,
         hasDebrief: hasDebrief !== undefined ? hasDebrief : undefined,
         primaryStaffId: primaryStaffId !== undefined ? (primaryStaffId ?? null) : undefined,
+        revenueSharePercent: revenueSharePercent !== undefined ? Number(revenueSharePercent) : undefined,
+        perTicketVenueFee: perTicketVenueFee !== undefined ? (perTicketVenueFee != null ? perTicketVenueFee.toString() : null) : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))
