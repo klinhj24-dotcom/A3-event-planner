@@ -14,6 +14,15 @@ import { useEventDebrief, useUpsertDebrief, useUpdateEventImage, useTeamMembers 
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
+function toLocalDT(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 interface DebriefSheetProps {
   event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null } | null;
   onClose: () => void;
@@ -94,8 +103,14 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     if (isLoading || debrief) return;
     const eventStart = event?.startDate ? new Date(event.startDate) : null;
     const eventEnd = event?.endDate ? new Date(event.endDate) : null;
-    const slotStarts = staffSlots.map((s: any) => s.startTime ? new Date(s.startTime) : null).filter(Boolean) as Date[];
-    const slotEnds = staffSlots.map((s: any) => s.endTime ? new Date(s.endTime) : null).filter(Boolean) as Date[];
+    // Only consider slot starts on the same calendar day as the event start,
+    // and slot ends on the same calendar day as the event end — avoids two-day spanning weirdness
+    const slotStarts = staffSlots
+      .map((s: any) => s.startTime ? new Date(s.startTime) : null)
+      .filter((d): d is Date => !!d && !!eventStart && sameDay(d, eventStart));
+    const slotEnds = staffSlots
+      .map((s: any) => s.endTime ? new Date(s.endTime) : null)
+      .filter((d): d is Date => !!d && !!eventEnd && sameDay(d, eventEnd));
     const earliestStart = slotStarts.length > 0 ? new Date(Math.min(...slotStarts.map(d => d.getTime()))) : null;
     const latestEnd = slotEnds.length > 0 ? new Date(Math.max(...slotEnds.map(d => d.getTime()))) : null;
     const defaultIn = earliestStart && eventStart
@@ -107,8 +122,8 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     if (defaultIn || defaultOut) {
       setForm(f => ({
         ...f,
-        timeIn: defaultIn ? defaultIn.toISOString().slice(0, 16) : f.timeIn,
-        timeOut: defaultOut ? defaultOut.toISOString().slice(0, 16) : f.timeOut,
+        timeIn: defaultIn ? toLocalDT(defaultIn) : f.timeIn,
+        timeOut: defaultOut ? toLocalDT(defaultOut) : f.timeOut,
       }));
     }
   }, [isLoading, debrief, staffSlots, event?.startDate, event?.endDate]);
@@ -116,8 +131,8 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
   useEffect(() => {
     if (debrief) {
       setForm({
-        timeIn: debrief.timeIn ? new Date(debrief.timeIn).toISOString().slice(0, 16) : "",
-        timeOut: debrief.timeOut ? new Date(debrief.timeOut).toISOString().slice(0, 16) : "",
+        timeIn: debrief.timeIn ? toLocalDT(new Date(debrief.timeIn)) : "",
+        timeOut: debrief.timeOut ? toLocalDT(new Date(debrief.timeOut)) : "",
         crowdSize: debrief.crowdSize != null ? String(debrief.crowdSize) : "",
         boothPlacement: debrief.boothPlacement ?? "",
         soundSetupNotes: debrief.soundSetupNotes ?? "",
