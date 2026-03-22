@@ -31,6 +31,60 @@ async function runMigrations() {
     `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS event_vibe TEXT`,
     `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS staff_notes TEXT`,
     `ALTER TABLE event_staff_slots ADD COLUMN IF NOT EXISTS bonus_pay DECIMAL(10,2)`,
+    // ── Band invite system tables ───────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS band_members (
+      id SERIAL PRIMARY KEY,
+      band_id INTEGER NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      role TEXT,
+      instruments TEXT[],
+      is_band_leader BOOLEAN NOT NULL DEFAULT FALSE,
+      email TEXT,
+      phone TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS band_contacts (
+      id SERIAL PRIMARY KEY,
+      member_id INTEGER NOT NULL REFERENCES band_members(id) ON DELETE CASCADE,
+      band_id INTEGER NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      relationship TEXT,
+      is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    // ── New columns on event_lineup ─────────────────────────────────────────
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS staff_note TEXT`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS invite_status TEXT NOT NULL DEFAULT 'not_sent'`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS confirmation_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS leader_attending BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS leader_staff_slot_id INTEGER`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS event_day INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS group_name TEXT`,
+    // ── Per-contact invite tracking table ───────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS event_band_invites (
+      id SERIAL PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      lineup_slot_id INTEGER NOT NULL REFERENCES event_lineup(id) ON DELETE CASCADE,
+      band_id INTEGER REFERENCES bands(id) ON DELETE SET NULL,
+      member_id INTEGER REFERENCES band_members(id) ON DELETE SET NULL,
+      contact_id INTEGER REFERENCES band_contacts(id) ON DELETE SET NULL,
+      contact_name TEXT,
+      contact_email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      staff_note TEXT,
+      conflict_note TEXT,
+      sent_at TIMESTAMPTZ,
+      responded_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ];
   for (const m of migrations) {
     try {

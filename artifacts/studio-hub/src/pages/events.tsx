@@ -1181,14 +1181,7 @@ function EventOverviewSheet({
                   return sum + price * count;
                 }, 0)
               : 0;
-            const staffPayTotal = staffSlots.reduce((sum, s: any) => {
-              const bonus = s.bonusPay ? parseFloat(s.bonusPay) : 0;
-              const rate = s.assignedEmployeeHourlyRate ? parseFloat(s.assignedEmployeeHourlyRate) : 0;
-              const hours = s.startTime && s.endTime
-                ? (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000
-                : 0;
-              return sum + hours * rate + bonus;
-            }, 0);
+            const staffPayTotal = event.staffPayTotal ? parseFloat(event.staffPayTotal) : 0;
             const totalIncome = eventFee + internalTicketTotal + externalSales;
             const net = totalIncome - expense - staffPayTotal;
             const hasAny = eventFee > 0 || expense > 0 || internalTicketTotal > 0 || externalSales > 0 || staffPayTotal > 0;
