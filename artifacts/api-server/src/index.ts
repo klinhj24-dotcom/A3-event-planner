@@ -1,7 +1,7 @@
 import app from "./app";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, eventBandInvitesTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
 import { seedEventTypes } from "./seeds/event-types";
 import { seedTeachers } from "./seeds/teachers";
@@ -105,6 +105,30 @@ async function runMigrations() {
   console.log("[migration] Column migrations complete.");
 }
 
+async function runOneTimeFixes() {
+  // Fix: reset contacts incorrectly auto-confirmed by the slot-wide cascade bug (slot 30, Never Early Fest)
+  // Only Sara Nett (42), Katlyn Talerico (43), Greer Callender (40), Marc Callender (41) —
+  // contacts for students whose own family never clicked the invite link.
+  try {
+    const bugIds = [40, 41, 42, 43];
+    const affected = await db
+      .select({ id: eventBandInvitesTable.id, status: eventBandInvitesTable.status })
+      .from(eventBandInvitesTable)
+      .where(inArray(eventBandInvitesTable.id, bugIds));
+    const toReset = affected.filter(r => r.status === "confirmed").map(r => r.id);
+    if (toReset.length > 0) {
+      await db.update(eventBandInvitesTable)
+        .set({ status: "pending", respondedAt: null, updatedAt: new Date() })
+        .where(inArray(eventBandInvitesTable.id, toReset));
+      console.log(`[fix] Reset ${toReset.length} incorrectly auto-confirmed contacts to pending:`, toReset);
+    } else {
+      console.log("[fix] Slot-30 contacts already correct — no reset needed.");
+    }
+  } catch (err) {
+    console.error("[fix] One-time fix failed (non-fatal):", err);
+  }
+}
+
 async function initDb() {
   try {
     const [existing] = await db
@@ -134,7 +158,7 @@ async function initDb() {
   await seedTeachers();
 }
 
-runMigrations().then(() => initDb()).then(async () => {
+runMigrations().then(() => runOneTimeFixes()).then(() => initDb()).then(async () => {
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startStaffReminderCron();
