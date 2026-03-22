@@ -130,6 +130,7 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
     : event?.ticketPrice;
   const ticketPrice = resolvedPriceRaw ? parseFloat(resolvedPriceRaw) : null;
   const total = ticketPrice && ticketCount > 0 ? (ticketPrice * ticketCount).toFixed(2) : null;
+  const recitalFee = event?.ticketPrice ? parseFloat(event.ticketPrice) : 30;
 
   const { mutate: submit, isPending } = useMutation({
     mutationFn: async (data: GeneralForm) => {
@@ -299,7 +300,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
         </div>
         <div>
           <h2 className="text-xl font-semibold text-foreground">Registered!</h2>
-          <p className="text-muted-foreground mt-1 text-sm">We'll send a confirmation to your email. The $30 recital fee will be charged to your card on file on the next open business day.</p>
+          <p className="text-muted-foreground mt-1 text-sm">We'll send a confirmation to your email. The ${recitalFee.toFixed(2)} recital fee will be charged to your card on file on the next open business day.</p>
         </div>
       </motion.div>
     );
@@ -395,7 +396,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
 
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2.5 text-sm text-amber-700 dark:text-amber-400">
           <CreditCard className="h-4 w-4 shrink-0 mt-0.5" />
-          <p>A nonrefundable recital fee of <strong>$30 per performer</strong> will be charged to the card on file on the next open business day.</p>
+          <p>A nonrefundable recital fee of <strong>${recitalFee.toFixed(2)} per performer</strong> will be charged to the card on file on the next open business day.</p>
         </div>
 
         <Button type="submit" disabled={isPending} className="w-full rounded-xl">

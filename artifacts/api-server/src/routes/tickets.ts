@@ -188,13 +188,13 @@ router.post("/ticket/:token/submit", async (req, res) => {
         bodyText += `\n`;
 
         if (isRecital) {
-          const recitalFee = 30;
+          const recitalFee = event.ticketPrice ? parseFloat(event.ticketPrice) : 30;
           bodyText += `Performer: ${studentFirstName} ${studentLastName}\n`;
           if (instrument) bodyText += `Instrument: ${instrument}\n`;
           if (recitalSong) bodyText += `Song: ${recitalSong}\n`;
           if (teacher) bodyText += `Teacher: ${teacher}\n`;
           if (specialConsiderations) bodyText += `Special Considerations: ${specialConsiderations}\n`;
-          bodyText += `\nRecital fee: $${recitalFee} per performer — this nonrefundable fee will be charged to the card on file on the next open business day.\n`;
+          bodyText += `\nRecital fee: $${recitalFee.toFixed(2)} per performer — this nonrefundable fee will be charged to the card on file on the next open business day.\n`;
           bodyText += `\nADDITIONAL TICKETS\n`;
           bodyText += `Your performer will be added to the guest list at the door. `;
           bodyText += `Family members and friends who are not on the performer guest list will need to purchase tickets separately.`;
