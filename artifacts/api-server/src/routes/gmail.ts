@@ -74,7 +74,12 @@ router.post("/gmail/send", async (req, res) => {
     const { gmail, user } = await getAnyGmailClient(req.user.id);
     const from = user.googleEmail ?? user.email ?? "";
 
-    const raw = makeRawEmail({ to, from, subject, body, threadId, replyToMessageId });
+    // Append the logged-in user's own signature (not the fallback sender's)
+    const [loggedInUser] = await db.select({ emailSignature: usersTable.emailSignature }).from(usersTable).where(eq(usersTable.id, req.user.id));
+    const signature = loggedInUser?.emailSignature?.trim() || null;
+    const bodyWithSignature = signature ? `${body}\n\n--\n${signature}` : body;
+
+    const raw = makeRawEmail({ to, from, subject, body: bodyWithSignature, threadId, replyToMessageId });
     const result = await gmail.users.messages.send({
       userId: "me",
       requestBody: { raw, ...(threadId ? { threadId } : {}) },

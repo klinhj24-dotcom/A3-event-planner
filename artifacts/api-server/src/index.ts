@@ -1,7 +1,7 @@
 import app from "./app";
-import { db, usersTable, eventBandInvitesTable } from "@workspace/db";
+import { db, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
-import { sql, eq, and, inArray } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { seedCommRules } from "./seeds/comm-rules";
 import { seedEventTypes } from "./seeds/event-types";
 import { seedTeachers } from "./seeds/teachers";
@@ -51,34 +51,7 @@ async function initDb() {
   await seedTeachers();
 }
 
-// One-time revert: undo the incorrect auto-confirm that ran on 2026-03-21.
-// Those contacts never responded — set them back to pending.
-async function revertIncorrectAutoConfirm() {
-  try {
-    const contactsToRevert = [
-      "Erin Reilly", "Silvia Palomares", "Moira Cahan", "Wendy Mu",
-      "Melissa Ginsberg", "Art Larson", "Cameron Larson", "Greer Callender",
-      "Marc Callender", "Sara Nett", "Katlyn Talerico", "Rick Burkhart", "Tom Melanson",
-    ];
-    const reverted = await db
-      .update(eventBandInvitesTable)
-      .set({ status: "pending", respondedAt: null, updatedAt: new Date() })
-      .where(and(
-        eq(eventBandInvitesTable.eventId, 7),
-        inArray(eventBandInvitesTable.contactName, contactsToRevert),
-        eq(eventBandInvitesTable.status, "confirmed"),
-      ))
-      .returning({ id: eventBandInvitesTable.id });
-    if (reverted.length > 0) {
-      console.log(`[revert] Reset ${reverted.length} incorrectly auto-confirmed invite(s) back to pending`);
-    }
-  } catch (err) {
-    console.error("[revert] failed:", err);
-  }
-}
-
 initDb().then(async () => {
-  await revertIncorrectAutoConfirm();
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startStaffReminderCron();

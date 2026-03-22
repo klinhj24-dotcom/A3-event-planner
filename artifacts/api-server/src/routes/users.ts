@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { Request, Response } from "express";
 
 const router = Router();
 
@@ -70,6 +71,31 @@ router.patch("/users/:id/role", async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error("updateUserRole error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /users/me/signature — get the logged-in user's email signature
+router.get("/users/me/signature", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const [user] = await db.select({ emailSignature: usersTable.emailSignature }).from(usersTable).where(eq(usersTable.id, req.user.id));
+    res.json({ emailSignature: user?.emailSignature ?? null });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /users/me/signature — save the logged-in user's email signature
+router.patch("/users/me/signature", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { emailSignature } = req.body;
+    await db.update(usersTable)
+      .set({ emailSignature: emailSignature?.trim() || null, updatedAt: new Date() })
+      .where(eq(usersTable.id, req.user.id));
+    res.json({ ok: true });
+  } catch (err) {
     res.status(500).json({ error: "Internal server error" });
   }
 });

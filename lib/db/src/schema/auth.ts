@@ -26,6 +26,7 @@ export const usersTable = pgTable("users", {
   googleRefreshToken: text("google_refresh_token"),
   googleTokenExpiry: timestamp("google_token_expiry", { withTimezone: true }),
   googleEmail: varchar("google_email"),
+  emailSignature: text("email_signature"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

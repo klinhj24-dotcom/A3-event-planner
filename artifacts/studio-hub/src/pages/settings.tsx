@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -312,6 +312,37 @@ export default function Settings() {
 
   const [createOpen, setCreateOpen] = useState(false);
 
+  // Email signature state
+  const [signature, setSignature] = useState("");
+  const [isSavingSignature, setIsSavingSignature] = useState(false);
+  const [sigLoaded, setSigLoaded] = useState(false);
+
+  useEffect(() => {
+    if (sigLoaded) return;
+    fetch("/api/users/me/signature", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { setSignature(d.emailSignature ?? ""); setSigLoaded(true); })
+      .catch(() => setSigLoaded(true));
+  }, [sigLoaded]);
+
+  const handleSaveSignature = async () => {
+    setIsSavingSignature(true);
+    try {
+      const res = await fetch("/api/users/me/signature", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ emailSignature: signature }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      toast({ title: "Signature saved" });
+    } catch {
+      toast({ title: "Failed to save signature", variant: "destructive" });
+    } finally {
+      setIsSavingSignature(false);
+    }
+  };
+
   // Change password state
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -485,6 +516,28 @@ export default function Settings() {
                 </div>
               </div>
             )}
+
+            {/* Email Signature */}
+            <div className="rounded-2xl border border-border/20 bg-card p-5 space-y-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="font-medium text-sm">Email Signature</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">Automatically appended to every email you compose and send from this portal.</p>
+              </div>
+              <Textarea
+                value={signature}
+                onChange={e => setSignature(e.target.value)}
+                placeholder={"Your Name\nTitle — Company\nPhone\nWebsite"}
+                className="min-h-[96px] font-mono text-xs rounded-xl resize-y"
+                rows={5}
+              />
+              <Button size="sm" className="rounded-xl" onClick={handleSaveSignature} disabled={isSavingSignature}>
+                {isSavingSignature ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : <Check className="h-3.5 w-3.5 mr-2" />}
+                Save Signature
+              </Button>
+            </div>
           </TabsContent>
 
           {/* Email Templates Tab */}
