@@ -47,10 +47,17 @@ function resolvePrice(r: ChargeRow): number | null {
   return raw ? parseFloat(raw) : null;
 }
 
+// Recital registrations are per-performer — ticketCount is null but count is implicitly 1
+function resolveCount(r: ChargeRow): number {
+  if (r.ticketCount != null) return r.ticketCount;
+  return r.formType === "recital" ? 1 : 0;
+}
+
 function calcTotal(items: ChargeRow[]): number {
   return items.reduce((sum, r) => {
     const price = resolvePrice(r);
-    return sum + (price && r.ticketCount ? price * r.ticketCount : 0);
+    const count = resolveCount(r);
+    return sum + (price && count ? price * count : 0);
   }, 0);
 }
 
@@ -71,7 +78,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string 
 
 function HistoryRow({ r }: { r: ChargeRow }) {
   const price = resolvePrice(r);
-  const lineTotal = price && r.ticketCount ? price * r.ticketCount : null;
+  const lineTotal = price != null && resolveCount(r) > 0 ? price * resolveCount(r) : null;
   const isRecital = r.formType === "recital" && r.studentFirstName;
   const chargedDate = r.chargedAt ? format(new Date(r.chargedAt), "MMM d") : null;
 
@@ -384,7 +391,7 @@ export default function Charges() {
                       {visible.map(r => {
                         const isRecital = r.formType === "recital" && r.studentFirstName;
                         const price = resolvePrice(r);
-                        const lineTotal = price && r.ticketCount ? price * r.ticketCount : null;
+                        const lineTotal = price != null && resolveCount(r) > 0 ? price * resolveCount(r) : null;
 
                         return (
                           <div
