@@ -1715,7 +1715,7 @@ export default function Events() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
-  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null } | null>(null);
+  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null; isTwoDay?: boolean } | null>(null);
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string; isTwoDay?: boolean } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
@@ -2663,7 +2663,7 @@ export default function Events() {
                               variant="ghost"
                               title="Post-event debrief"
                               className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-secondary hover:bg-secondary/10"
-                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl, isLeadGenerating: (event as any).isLeadGenerating ?? false, primaryStaffId: (event as any).primaryStaffId ?? null, startDate: event.startDate, endDate: event.endDate })}
+                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl, isLeadGenerating: (event as any).isLeadGenerating ?? false, primaryStaffId: (event as any).primaryStaffId ?? null, startDate: event.startDate, endDate: event.endDate, isTwoDay: event.isTwoDay ?? false })}
                             >
                               <ClipboardCheck className="h-3.5 w-3.5" />
                             </Button>
@@ -3307,7 +3307,7 @@ export default function Events() {
         actions={{
           onEdit: (ev) => openEdit(ev),
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
-          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl, isLeadGenerating: (ev as any).isLeadGenerating ?? false, primaryStaffId: (ev as any).primaryStaffId ?? null, startDate: ev.startDate, endDate: ev.endDate }),
+          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl, isLeadGenerating: (ev as any).isLeadGenerating ?? false, primaryStaffId: (ev as any).primaryStaffId ?? null, startDate: ev.startDate, endDate: ev.endDate, isTwoDay: ev.isTwoDay ?? false }),
           onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type, isTwoDay: ev.isTwoDay ?? false }),
           onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location, isTwoDay: ev.isTwoDay ?? false }),
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),

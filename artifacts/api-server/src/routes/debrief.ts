@@ -40,7 +40,7 @@ router.put("/events/:id/debrief", async (req, res) => {
       return;
     }
     const {
-      timeIn, timeOut, crowdSize,
+      timeIn, timeOut, day2TimeIn, day2TimeOut, crowdSize,
       boothPlacement, soundSetupNotes, whatWorked, whatDidntWork,
       leadQuality, wouldRepeat, improvements,
       leadsCollected, trialSignups, eventVibe, staffNotes,
@@ -50,6 +50,8 @@ router.put("/events/:id/debrief", async (req, res) => {
       eventId,
       timeIn: timeIn ? new Date(timeIn) : null,
       timeOut: timeOut ? new Date(timeOut) : null,
+      day2TimeIn: day2TimeIn ? new Date(day2TimeIn) : null,
+      day2TimeOut: day2TimeOut ? new Date(day2TimeOut) : null,
       crowdSize: crowdSize != null ? parseInt(crowdSize) : null,
       boothPlacement: boothPlacement ?? null,
       soundSetupNotes: soundSetupNotes ?? null,

@@ -102,6 +102,8 @@ export const eventDebriefTable = pgTable("event_debriefs", {
   eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull().unique(),
   timeIn: timestamp("time_in", { withTimezone: true }),
   timeOut: timestamp("time_out", { withTimezone: true }),
+  day2TimeIn: timestamp("day2_time_in", { withTimezone: true }),
+  day2TimeOut: timestamp("day2_time_out", { withTimezone: true }),
   greyInvolved: boolean("grey_involved"),
   staffPresent: text("staff_present"),
   crowdSize: integer("crowd_size"),

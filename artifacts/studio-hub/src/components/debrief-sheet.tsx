@@ -24,7 +24,7 @@ function sameDay(a: Date, b: Date) {
 }
 
 interface DebriefSheetProps {
-  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null } | null;
+  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null; isTwoDay?: boolean } | null;
   onClose: () => void;
 }
 
@@ -76,6 +76,8 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
   const [form, setForm] = useState({
     timeIn: "",
     timeOut: "",
+    day2TimeIn: "",
+    day2TimeOut: "",
     crowdSize: "",
     boothPlacement: "",
     soundSetupNotes: "",
@@ -103,36 +105,48 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     if (isLoading || debrief) return;
     const eventStart = event?.startDate ? new Date(event.startDate) : null;
     const eventEnd = event?.endDate ? new Date(event.endDate) : null;
-    // Only consider slot starts on the same calendar day as the event start,
-    // and slot ends on the same calendar day as the event end — avoids two-day spanning weirdness
-    const slotStarts = staffSlots
+    // Day 1: slots on same day as event start
+    const day1SlotStarts = staffSlots
       .map((s: any) => s.startTime ? new Date(s.startTime) : null)
       .filter((d): d is Date => !!d && !!eventStart && sameDay(d, eventStart));
-    const slotEnds = staffSlots
+    const day1SlotEnds = staffSlots
       .map((s: any) => s.endTime ? new Date(s.endTime) : null)
-      .filter((d): d is Date => !!d && !!eventEnd && sameDay(d, eventEnd));
-    const earliestStart = slotStarts.length > 0 ? new Date(Math.min(...slotStarts.map(d => d.getTime()))) : null;
-    const latestEnd = slotEnds.length > 0 ? new Date(Math.max(...slotEnds.map(d => d.getTime()))) : null;
-    const defaultIn = earliestStart && eventStart
-      ? (earliestStart < eventStart ? earliestStart : eventStart)
-      : earliestStart ?? eventStart;
-    const defaultOut = latestEnd && eventEnd
-      ? (latestEnd > eventEnd ? latestEnd : eventEnd)
-      : latestEnd ?? eventEnd;
-    if (defaultIn || defaultOut) {
-      setForm(f => ({
-        ...f,
-        timeIn: defaultIn ? toLocalDT(defaultIn) : f.timeIn,
-        timeOut: defaultOut ? toLocalDT(defaultOut) : f.timeOut,
-      }));
+      .filter((d): d is Date => !!d && !!eventStart && sameDay(d, eventStart));
+    const earliest1 = day1SlotStarts.length > 0 ? new Date(Math.min(...day1SlotStarts.map(d => d.getTime()))) : null;
+    const latest1 = day1SlotEnds.length > 0 ? new Date(Math.max(...day1SlotEnds.map(d => d.getTime()))) : null;
+    const defaultIn = earliest1 && eventStart ? (earliest1 < eventStart ? earliest1 : eventStart) : earliest1 ?? eventStart;
+    const defaultOut = latest1 && eventStart ? (latest1 > eventStart ? latest1 : null) : latest1 ?? null;
+
+    const updates: Partial<typeof form> = {};
+    if (defaultIn) updates.timeIn = toLocalDT(defaultIn);
+    if (defaultOut) updates.timeOut = toLocalDT(defaultOut);
+
+    if (event?.isTwoDay && eventEnd) {
+      // Day 2: slots on same day as event end
+      const day2SlotStarts = staffSlots
+        .map((s: any) => s.startTime ? new Date(s.startTime) : null)
+        .filter((d): d is Date => !!d && sameDay(d, eventEnd));
+      const day2SlotEnds = staffSlots
+        .map((s: any) => s.endTime ? new Date(s.endTime) : null)
+        .filter((d): d is Date => !!d && sameDay(d, eventEnd));
+      const earliest2 = day2SlotStarts.length > 0 ? new Date(Math.min(...day2SlotStarts.map(d => d.getTime()))) : null;
+      const latest2 = day2SlotEnds.length > 0 ? new Date(Math.max(...day2SlotEnds.map(d => d.getTime()))) : null;
+      const default2In = earliest2 && eventEnd ? (earliest2 < eventEnd ? earliest2 : eventEnd) : earliest2 ?? null;
+      const default2Out = latest2 && eventEnd ? (latest2 > eventEnd ? latest2 : eventEnd) : latest2 ?? eventEnd;
+      if (default2In) updates.day2TimeIn = toLocalDT(default2In);
+      if (default2Out) updates.day2TimeOut = toLocalDT(default2Out);
     }
-  }, [isLoading, debrief, staffSlots, event?.startDate, event?.endDate]);
+
+    if (Object.keys(updates).length > 0) setForm(f => ({ ...f, ...updates }));
+  }, [isLoading, debrief, staffSlots, event?.startDate, event?.endDate, event?.isTwoDay]);
 
   useEffect(() => {
     if (debrief) {
       setForm({
         timeIn: debrief.timeIn ? toLocalDT(new Date(debrief.timeIn)) : "",
         timeOut: debrief.timeOut ? toLocalDT(new Date(debrief.timeOut)) : "",
+        day2TimeIn: (debrief as any).day2TimeIn ? toLocalDT(new Date((debrief as any).day2TimeIn)) : "",
+        day2TimeOut: (debrief as any).day2TimeOut ? toLocalDT(new Date((debrief as any).day2TimeOut)) : "",
         crowdSize: debrief.crowdSize != null ? String(debrief.crowdSize) : "",
         boothPlacement: debrief.boothPlacement ?? "",
         soundSetupNotes: debrief.soundSetupNotes ?? "",
@@ -165,6 +179,8 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     upsert({
       timeIn: form.timeIn || null,
       timeOut: form.timeOut || null,
+      day2TimeIn: form.day2TimeIn || null,
+      day2TimeOut: form.day2TimeOut || null,
       crowdSize: form.crowdSize ? parseInt(form.crowdSize) : null,
       boothPlacement: form.boothPlacement || null,
       soundSetupNotes: form.soundSetupNotes || null,
@@ -234,8 +250,19 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
                 <div className="rounded-xl border border-border/30 bg-muted/20 p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Logistics</p>
                   <div className="grid grid-cols-2 gap-4">
-                    <ReadOnlyField label="Time In" value={debrief.timeIn ? format(new Date(debrief.timeIn), "MMM d, h:mm a") : null} />
-                    <ReadOnlyField label="Time Out" value={debrief.timeOut ? format(new Date(debrief.timeOut), "MMM d, h:mm a") : null} />
+                    {event.isTwoDay ? (
+                      <>
+                        <ReadOnlyField label="Day 1 Time In" value={debrief.timeIn ? format(new Date(debrief.timeIn), "MMM d, h:mm a") : null} />
+                        <ReadOnlyField label="Day 1 Time Out" value={debrief.timeOut ? format(new Date(debrief.timeOut), "MMM d, h:mm a") : null} />
+                        <ReadOnlyField label="Day 2 Time In" value={(debrief as any).day2TimeIn ? format(new Date((debrief as any).day2TimeIn), "MMM d, h:mm a") : null} />
+                        <ReadOnlyField label="Day 2 Time Out" value={(debrief as any).day2TimeOut ? format(new Date((debrief as any).day2TimeOut), "MMM d, h:mm a") : null} />
+                      </>
+                    ) : (
+                      <>
+                        <ReadOnlyField label="Time In" value={debrief.timeIn ? format(new Date(debrief.timeIn), "MMM d, h:mm a") : null} />
+                        <ReadOnlyField label="Time Out" value={debrief.timeOut ? format(new Date(debrief.timeOut), "MMM d, h:mm a") : null} />
+                      </>
+                    )}
                     <ReadOnlyField label="Crowd Size" value={debrief.crowdSize} />
                     <ReadOnlyField label="Booth Placement" value={debrief.boothPlacement} />
                   </div>
@@ -344,16 +371,43 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
             {/* ── Time & Logistics ── */}
             <div className="space-y-3">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Logistics</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Time In</Label>
-                  <Input type="datetime-local" className="rounded-xl text-xs" value={form.timeIn} onChange={set("timeIn")} />
+              {event.isTwoDay ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium">Day 1</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Time In</Label>
+                      <Input type="datetime-local" className="rounded-xl text-xs" value={form.timeIn} onChange={set("timeIn")} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Time Out</Label>
+                      <Input type="datetime-local" className="rounded-xl text-xs" value={form.timeOut} onChange={set("timeOut")} />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-medium pt-1">Day 2</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Time In</Label>
+                      <Input type="datetime-local" className="rounded-xl text-xs" value={form.day2TimeIn} onChange={set("day2TimeIn")} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Time Out</Label>
+                      <Input type="datetime-local" className="rounded-xl text-xs" value={form.day2TimeOut} onChange={set("day2TimeOut")} />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Time Out</Label>
-                  <Input type="datetime-local" className="rounded-xl text-xs" value={form.timeOut} onChange={set("timeOut")} />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Time In</Label>
+                    <Input type="datetime-local" className="rounded-xl text-xs" value={form.timeIn} onChange={set("timeIn")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Time Out</Label>
+                    <Input type="datetime-local" className="rounded-xl text-xs" value={form.timeOut} onChange={set("timeOut")} />
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Crowd Size</Label>

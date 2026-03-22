@@ -73,6 +73,8 @@ async function runMigrations() {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS has_debrief BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS debrief_nudge_sent BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_finances BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS day2_time_in TIMESTAMPTZ`,
+    `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS day2_time_out TIMESTAMPTZ`,
     // ── Per-contact invite tracking table ───────────────────────────────────
     `CREATE TABLE IF NOT EXISTS event_band_invites (
       id SERIAL PRIMARY KEY,
