@@ -121,6 +121,37 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/* Recent Debriefs — shows across all staff */}
+        {(stats?.recentDebriefsList as any[])?.length > 0 && (
+          <Card className="rounded-2xl shadow-md border-violet-500/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-violet-500/5 border-b border-violet-500/15 pb-4">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-violet-400" />
+                <CardTitle className="font-display text-xl">Recent Debriefs</CardTitle>
+                <span className="bg-violet-500/15 text-violet-400 rounded-full px-2.5 py-0.5 text-xs font-bold border border-violet-500/20">{(stats?.recentDebriefsList as any[]).length}</span>
+              </div>
+              <Link href="/events" className="text-sm font-medium text-violet-400 hover:underline inline-flex items-center">
+                All events <ArrowUpRight className="h-4 w-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/20">
+                {(stats.recentDebriefsList as any[]).map((item: any) => (
+                  <Link key={item.eventId} href={`/events?open=${item.eventId}`} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-foreground text-sm group-hover:text-violet-400 transition-colors">{item.eventTitle}</p>
+                      {item.ownerName && <p className="text-xs text-muted-foreground">Submitted by {item.ownerName}</p>}
+                    </div>
+                    {item.submittedAt && (
+                      <span className="text-xs text-muted-foreground shrink-0 ml-4">{format(new Date(item.submittedAt), "MMM d")}</span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Pending Card Charges panel — only show when there are pending charges */}
         {(stats?.pendingCharges ?? 0) > 0 && (
           <Card className="rounded-2xl shadow-md border-rose-500/20 overflow-hidden flex flex-col bg-card">

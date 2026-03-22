@@ -20,6 +20,7 @@ import Payroll from "@/pages/payroll";
 import Bands from "@/pages/bands";
 import MySchedule from "@/pages/my-schedule";
 import Charges from "@/pages/charges";
+import Reports from "@/pages/reports";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/payroll">{() => <AdminRoute component={Payroll} />}</Route>
       <Route path="/bands">{() => <AdminRoute component={Bands} />}</Route>
       <Route path="/charges">{() => <AdminRoute component={Charges} />}</Route>
+      <Route path="/reports">{() => <AdminRoute component={Reports} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );

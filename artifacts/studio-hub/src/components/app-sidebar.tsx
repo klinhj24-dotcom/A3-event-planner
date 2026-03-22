@@ -11,6 +11,7 @@ import {
   CalendarDays,
   Music2,
   CreditCard,
+  BarChart2,
 } from "lucide-react";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
@@ -40,6 +41,7 @@ const adminNavItems = [
   { title: "Employees", url: "/employees", icon: UserSquare2 },
   { title: "Payroll", url: "/payroll", icon: DollarSign },
   { title: "Card Charges", url: "/charges", icon: CreditCard },
+  { title: "Reports", url: "/reports", icon: BarChart2 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

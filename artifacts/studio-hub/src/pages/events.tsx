@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -824,11 +824,13 @@ function EventOverviewSheet({
   open,
   onClose,
   actions,
+  canViewFinances,
 }: {
   event: OverviewEvent | null;
   open: boolean;
   onClose: () => void;
   actions: OverviewActions;
+  canViewFinances?: boolean;
 }) {
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1022,7 +1024,7 @@ function EventOverviewSheet({
   const ACTIONS = [
     { label: "Edit Event", icon: <Pencil className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onEdit(event); } },
     { label: "Comm Tasks", icon: <ClipboardList className="h-4 w-4" />, color: "text-foreground", bg: "hover:bg-muted/60", fn: () => { onClose(); actions.onTasks(event); } },
-    { label: "Post-Event Debrief", icon: <ClipboardCheck className="h-4 w-4" />, color: "text-[#00b199]", bg: "hover:bg-[#00b199]/10", fn: () => { onClose(); actions.onDebrief(event); } },
+    ...(event.hasDebrief ? [{ label: "Post-Event Debrief", icon: <ClipboardCheck className="h-4 w-4" />, color: "text-[#00b199]", bg: "hover:bg-[#00b199]/10", fn: () => { onClose(); actions.onDebrief(event); } }] : []),
     ...(event.hasBandLineup ? [{ label: event.type === "Recital" ? "Recital Order" : "Band Lineup", icon: <Music className="h-4 w-4" />, color: "text-primary", bg: "hover:bg-primary/10", fn: () => { onClose(); actions.onLineup(event); } }] : []),
     ...(event.hasStaffSchedule ? [{ label: "Staff Schedule", icon: <Users2 className="h-4 w-4" />, color: "text-emerald-500", bg: "hover:bg-emerald-500/10", fn: () => { onClose(); actions.onStaffSlots(event); } }] : []),
     ...(event.hasCallSheet ? [{ label: "Call Sheet", icon: <FileText className="h-4 w-4" />, color: "text-sky-400", bg: "hover:bg-sky-500/10", fn: () => { onClose(); actions.onCallSheet(event); } }] : []),
@@ -1061,11 +1063,11 @@ function EventOverviewSheet({
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge variant="outline" className="text-xs capitalize text-muted-foreground border-border/50">{event.type}</Badge>
                 <Badge variant="outline" className={`text-xs capitalize ${getStatusColor(event.status)}`}>{event.status}</Badge>
-                {event.isPaid ? (
+                {canViewFinances && (event.isPaid ? (
                   <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-semibold tracking-wide">PAID</Badge>
                 ) : (
                   <Badge variant="outline" className="text-xs text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
-                )}
+                ))}
                 <div className="flex items-center gap-1 ml-auto">
                   <CalendarPushButton eventId={event.id} />
                   <CommsPushButton eventId={event.id} eventTitle={event.title} />
@@ -1165,7 +1167,7 @@ function EventOverviewSheet({
           )}
 
           {/* Financials */}
-          {(() => {
+          {canViewFinances && (() => {
             const eventFee = event.revenue ? parseFloat(event.revenue as string) : 0;
             const expense = event.cost ? parseFloat(event.cost as string) : 0;
             const externalSales = (event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0;
@@ -1233,7 +1235,7 @@ function EventOverviewSheet({
                 </div>
               </div>
             );
-          })()}
+          })?.()}
 
           {/* Description / Notes */}
           {event.description && (
@@ -1679,6 +1681,11 @@ export default function Events() {
   const [view, setView] = useState<"list" | "calendar">("list");
   const { data: events, isLoading } = useListEvents();
   const { data: eventTypeList = [] } = useActiveEventTypes();
+  const { data: currentUser } = useQuery<any>({
+    queryKey: ["/api/auth/user"],
+    queryFn: async () => { const r = await fetch("/api/auth/user", { credentials: "include" }); const d = await r.json(); return d.user; },
+  });
+  const canViewFinances = currentUser?.canViewFinances === true || currentUser?.email === "justin@themusicspace.com";
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
@@ -1788,12 +1795,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null }
   });
 
   const { data: teamMembers = [] } = useTeamMembers();
@@ -1911,6 +1918,29 @@ export default function Events() {
                 <CalendarDays className="h-3.5 w-3.5" /> Calendar
               </button>
             </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl gap-2"
+              onClick={() => {
+                const headers = ["Title", "Type", "Status", "Start Date", "End Date", "Location", "Is Paid", ...(canViewFinances ? ["Revenue", "Cost"] : []), "Lead Generating", "Has Debrief"];
+                const rows = [headers, ...(events ?? []).map((e: any) => [
+                  e.title ?? "", e.type ?? "", e.status ?? "",
+                  e.startDate ? format(new Date(e.startDate), "yyyy-MM-dd") : "",
+                  e.endDate ? format(new Date(e.endDate), "yyyy-MM-dd") : "",
+                  e.location ?? "", e.isPaid ? "Yes" : "No",
+                  ...(canViewFinances ? [e.revenue ?? "0", e.cost ?? "0"] : []),
+                  e.isLeadGenerating ? "Yes" : "No", e.hasDebrief ? "Yes" : "No",
+                ])];
+                const csv = rows.map(r => r.map((v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `events-${format(new Date(), "yyyy-MM-dd")}.csv`; a.click(); URL.revokeObjectURL(url);
+              }}
+            >
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
 
             <Button
               variant="outline"
@@ -2120,7 +2150,7 @@ export default function Events() {
                         <FormControl><Input placeholder="Zen West, Main Stage, etc." className="rounded-xl" {...field} /></FormControl>
                       </FormItem>
                     )} />
-                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+                    {canViewFinances && <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                       <h4 className="font-semibold text-sm flex items-center"><DollarSign className="h-4 w-4 mr-1 text-primary" /> Financials</h4>
                       <FormField control={form.control} name="isPaid" render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
@@ -2151,7 +2181,7 @@ export default function Events() {
                           <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
                         </FormItem>
                       )} />
-                    </div>
+                    </div>}
                     <FormField control={form.control} name="calendarTag" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
@@ -2215,6 +2245,7 @@ export default function Events() {
                         { name: "hasStaffSchedule" as const, icon: <Users2 className="h-3.5 w-3.5 text-emerald-500" />, label: "Staff Schedule", desc: "Assign staff to this event" },
                         { name: "hasCallSheet" as const, icon: <FileText className="h-3.5 w-3.5 text-sky-500" />, label: "Call Sheet", desc: "Generate a call sheet" },
                         { name: "hasPackingList" as const, icon: <Package className="h-3.5 w-3.5 text-amber-500" />, label: "Packing List", desc: "Equipment packing list" },
+                        { name: "hasDebrief" as const, icon: <ClipboardList className="h-3.5 w-3.5 text-[#00b199]" />, label: "Post-Event Debrief", desc: "Owner fills out debrief after the event" },
                         { name: "isLeadGenerating" as const, icon: <TrendingUp className="h-3.5 w-3.5 text-violet-400" />, label: "Lead Generating", desc: "Track leads, trials & vibe in debrief" },
                       ]).map(({ name, icon, label, desc }) => (
                         <FormField key={name} control={form.control} name={name} render={({ field }) => (
@@ -2521,12 +2552,12 @@ export default function Events() {
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex items-center text-sm">
-                            {event.isPaid ? (
+                            {canViewFinances && event.isPaid ? (
                               <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold tracking-wide">PAID</Badge>
-                            ) : (
+                            ) : canViewFinances ? (
                               <Badge variant="outline" className="text-muted-foreground bg-muted/50 border-border/50">UNPAID</Badge>
-                            )}
-                            {(event.revenue || event.cost || (event as any).externalTicketSales || (event as any).internalTicketTotal > 0) && (() => {
+                            ) : null}
+                            {canViewFinances && (event.revenue || event.cost || (event as any).externalTicketSales || (event as any).internalTicketTotal > 0) && (() => {
                               const net = (event.revenue ? parseFloat(event.revenue as string) : 0)
                                 + ((event as any).internalTicketTotal ?? 0)
                                 + ((event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0)
@@ -2579,6 +2610,7 @@ export default function Events() {
                               <ClipboardList className="h-3.5 w-3.5" />
                             </Button>
                             {/* Debrief */}
+                            {(event as any).hasDebrief && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -2588,6 +2620,7 @@ export default function Events() {
                             >
                               <ClipboardCheck className="h-3.5 w-3.5" />
                             </Button>
+                            )}
                             {/* Band lineup */}
                             {event.hasBandLineup && (
                               <Button
@@ -2810,7 +2843,7 @@ export default function Events() {
                   <FormControl><Input placeholder="Zen West, Main Stage, etc." className="rounded-xl" {...field} /></FormControl>
                 </FormItem>
               )} />
-              <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+              {canViewFinances && <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
                 <h4 className="font-semibold text-sm flex items-center"><DollarSign className="h-4 w-4 mr-1 text-primary" /> Financials</h4>
                 <FormField control={editForm.control} name="isPaid" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/50 p-3 shadow-sm bg-card">
@@ -2840,7 +2873,7 @@ export default function Events() {
                     <FormControl><Input type="number" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
                   </FormItem>
                 )} />
-              </div>
+              </div>}
               <FormField control={editForm.control} name="calendarTag" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
@@ -2903,6 +2936,7 @@ export default function Events() {
                   { name: "hasStaffSchedule" as const, icon: <Users2 className="h-3.5 w-3.5 text-emerald-500" />, label: "Staff Schedule", desc: "Assign staff to this event" },
                   { name: "hasCallSheet" as const, icon: <FileText className="h-3.5 w-3.5 text-sky-500" />, label: "Call Sheet", desc: "Generate a call sheet" },
                   { name: "hasPackingList" as const, icon: <Package className="h-3.5 w-3.5 text-amber-500" />, label: "Packing List", desc: "Equipment packing list" },
+                  { name: "hasDebrief" as const, icon: <ClipboardList className="h-3.5 w-3.5 text-[#00b199]" />, label: "Post-Event Debrief", desc: "Owner fills out debrief after the event" },
                   { name: "isLeadGenerating" as const, icon: <TrendingUp className="h-3.5 w-3.5 text-violet-400" />, label: "Lead Generating", desc: "Track leads, trials & vibe in debrief" },
                 ]).map(({ name, icon, label, desc }) => (
                   <FormField key={name} control={editForm.control} name={name} render={({ field }) => (
@@ -3207,6 +3241,7 @@ export default function Events() {
         event={overviewEvent}
         open={!!overviewEvent}
         onClose={() => setOverviewEvent(null)}
+        canViewFinances={canViewFinances}
         actions={{
           onEdit: (ev) => openEdit(ev),
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),

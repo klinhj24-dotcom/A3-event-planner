@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon,
-  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck, Pencil
+  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck, Pencil, Download
 } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -306,6 +306,29 @@ export default function Contacts() {
     (c.organization?.toLowerCase().includes(search.toLowerCase()) ?? false)
   );
 
+  function exportContactsCSV() {
+    const rows = [
+      ["Name", "Type", "Organization", "Email", "Phone", "Category", "City", "State", "Notes"],
+      ...(filteredContacts ?? []).map(c => [
+        c.name ?? "",
+        c.type ?? "",
+        c.organization ?? "",
+        c.email ?? "",
+        c.phone ?? "",
+        (c as any).category ?? "",
+        (c as any).city ?? "",
+        (c as any).state ?? "",
+        (c as any).notes ?? "",
+      ]),
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `contacts-${format(new Date(), "yyyy-MM-dd")}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const activeContact = contacts?.find(c => c.id === selectedContactId);
 
   const sheetTabs = isAdmin
@@ -322,6 +345,10 @@ export default function Contacts() {
               {isAdmin ? "All contacts in the studio database." : "Your assigned contacts."}
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2 rounded-xl" onClick={exportContactsCSV}>
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
@@ -418,6 +445,7 @@ export default function Contacts() {
               </Form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">

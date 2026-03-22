@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, bandMembersTable, eventDebriefTable, usersTable } from "@workspace/db";
-import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, notInArray } from "drizzle-orm";
+import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, notInArray, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -111,11 +111,43 @@ router.get("/dashboard/stats", async (req, res) => {
         const submitted = await db
           .select({ eventId: eventDebriefTable.eventId })
           .from(eventDebriefTable)
-          .where(sql`${eventDebriefTable.eventId} IN (${sql.join(eventIds.map(id => sql`${id}`), sql`, `)})`);
+          .where(inArray(eventDebriefTable.eventId, eventIds));
         const submittedIds = new Set(submitted.map(s => s.eventId));
         pendingDebriefsList = pendingDebriefsList.filter(e => !submittedIds.has(e.eventId));
       }
     }
+
+    // Recent submitted debriefs (past 14 days) — for the dashboard "completed debriefs" feed
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const recentDebriefs = await db
+      .select({
+        eventId: eventsTable.id,
+        eventTitle: eventsTable.title,
+        startDate: eventsTable.startDate,
+        ownerId: eventsTable.primaryStaffId,
+        submittedAt: eventDebriefTable.updatedAt,
+      })
+      .from(eventDebriefTable)
+      .innerJoin(eventsTable, eq(eventDebriefTable.eventId, eventsTable.id))
+      .where(gte(eventDebriefTable.updatedAt, fourteenDaysAgo))
+      .orderBy(desc(eventDebriefTable.updatedAt))
+      .limit(10);
+
+    // Attach owner names
+    const ownerIds = [...new Set(recentDebriefs.map(d => d.ownerId).filter(Boolean) as string[])];
+    const owners = ownerIds.length > 0
+      ? await db.select({ id: usersTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName, email: usersTable.email })
+          .from(usersTable).where(inArray(usersTable.id, ownerIds))
+      : [];
+    const ownerMap = new Map(owners.map(u => [u.id, u]));
+
+    const recentDebriefsList = recentDebriefs.map(d => {
+      const owner = d.ownerId ? ownerMap.get(d.ownerId) : null;
+      const ownerName = owner
+        ? (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : owner.email ?? "Staff")
+        : null;
+      return { ...d, ownerName };
+    });
 
     res.json({
       totalContacts: totalContactsRow?.count ?? 0,
@@ -131,6 +163,7 @@ router.get("/dashboard/stats", async (req, res) => {
       pendingInvitesList,
       pendingDebriefs: pendingDebriefsList.length,
       pendingDebriefsList,
+      recentDebriefsList,
     });
   } catch (err) {
     console.error("getDashboardStats error:", err);

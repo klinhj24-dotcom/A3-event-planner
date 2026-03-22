@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Search, UserPlus, Mail, Phone, Loader2, Link2, Unlink, Pencil, Shield, ShieldOff, KeyRound, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Search, UserPlus, Mail, Phone, Loader2, Link2, Unlink, Pencil, Shield, ShieldOff, KeyRound, Eye, EyeOff, Trash2, DollarSign } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -128,6 +128,24 @@ export default function Employees() {
       toast({ title: "Password updated" });
     },
     onError: () => toast({ title: "Failed to update password", variant: "destructive" }),
+  });
+
+  // Toggle canViewFinances for a portal user
+  const { mutate: updateFinances } = useMutation({
+    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      const res = await fetch(`/api/users/${userId}/finances`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canViewFinances: enabled }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchPortalUsers();
+      toast({ title: "Finance access updated" });
+    },
+    onError: () => toast({ title: "Failed to update finance access", variant: "destructive" }),
   });
 
   // Delete employee record
@@ -495,6 +513,19 @@ export default function Employees() {
                                   )}
                                 </Button>
                               </div>
+                            </div>
+                            <div className="flex items-center justify-between px-0.5">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                <DollarSign className="h-3 w-3 opacity-50" /> Finance access
+                              </span>
+                              <Switch
+                                checked={!!portalUser.canViewFinances}
+                                onCheckedChange={(val) => {
+                                  updateFinances({ userId: portalUser.id, enabled: val }, {
+                                    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users"] }),
+                                  });
+                                }}
+                              />
                             </div>
                             <div className="flex gap-1.5">
                               <Button

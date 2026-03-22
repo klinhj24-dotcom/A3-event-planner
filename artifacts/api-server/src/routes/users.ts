@@ -30,6 +30,7 @@ router.get("/users", async (req, res) => {
         lastName: usersTable.lastName,
         profileImageUrl: usersTable.profileImageUrl,
         role: usersTable.role,
+        canViewFinances: usersTable.canViewFinances,
         googleEmail: usersTable.googleEmail,
         createdAt: usersTable.createdAt,
       })
@@ -71,6 +72,29 @@ router.patch("/users/:id/role", async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error("updateUserRole error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /users/:id/finances — admin only: toggle canViewFinances
+router.patch("/users/:id/finances", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { id } = req.params;
+    const { canViewFinances } = req.body;
+    if (typeof canViewFinances !== "boolean") {
+      res.status(400).json({ error: "canViewFinances must be a boolean" });
+      return;
+    }
+    const [user] = await db
+      .update(usersTable)
+      .set({ canViewFinances, updatedAt: new Date() })
+      .where(eq(usersTable.id, id))
+      .returning({ id: usersTable.id, email: usersTable.email, canViewFinances: usersTable.canViewFinances });
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    res.json(user);
+  } catch (err) {
+    console.error("updateUserFinances error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

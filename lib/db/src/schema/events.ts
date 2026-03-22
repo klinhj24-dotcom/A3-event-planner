@@ -39,6 +39,8 @@ export const eventsTable = pgTable("events", {
   hasPackingList: boolean("has_packing_list").default(false),
   allowGuestList: boolean("allow_guest_list").default(false),
   isLeadGenerating: boolean("is_lead_generating").default(false),
+  hasDebrief: boolean("has_debrief").default(false),
+  debriefNudgeSent: boolean("debrief_nudge_sent").notNull().default(false),
   guestListPolicy: text("guest_list_policy").default("students_only"), // "students_only" | "plus_one" | "plus_two"
   pocName: text("poc_name"),
   pocEmail: text("poc_email"),

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  ChevronLeft, ChevronRight, Plus, Trash2, Pencil, DollarSign, Clock, Users, Loader2
+  ChevronLeft, ChevronRight, Plus, Trash2, Pencil, DollarSign, Clock, Users, Loader2, Download
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -92,6 +92,11 @@ async function fetchJson(url: string, opts?: RequestInit) {
 export default function Payroll() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { data: currentUser } = useQuery<any>({
+    queryKey: ["/api/auth/user"],
+    queryFn: async () => { const r = await fetch("/api/auth/user", { credentials: "include" }); const d = await r.json(); return d.user; },
+  });
+  const canViewFinances = currentUser?.canViewFinances === true || currentUser?.email === "justin@themusicspace.com";
 
   // Current pay-period state
   const [weekStart, setWeekStart] = useState<Date>(() => startOfPayPeriod(new Date()));
@@ -199,6 +204,18 @@ export default function Payroll() {
     setRateOpen(true);
   }
 
+  if (currentUser && !canViewFinances) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-4 text-center">
+          <DollarSign className="h-12 w-12 text-muted-foreground/30" />
+          <h2 className="text-xl font-semibold text-foreground">Finance Access Required</h2>
+          <p className="text-muted-foreground text-sm max-w-xs">You don't have permission to view payroll. Contact Justin to request access.</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -210,16 +227,35 @@ export default function Payroll() {
               Track employee hours and calculate pay by period
             </p>
           </div>
-          <Button
-            onClick={() => {
-              setLogForm({ employeeId: "", eventId: "", workDate: weekStartStr, hours: "", notes: "" });
-              setLogOpen(true);
-            }}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Log Hours
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 rounded-xl"
+              onClick={() => {
+                const rows = [
+                  ["Employee", "Total Hours", "Hourly Rate", "Total Pay"],
+                  ...summary.map((e: any) => [e.name, e.totalHours, e.hourlyRate ?? "", e.totalPay.toFixed(2)]),
+                ];
+                const csv = rows.map(r => r.map((v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `payroll-${weekStartStr}.csv`; a.click(); URL.revokeObjectURL(url);
+              }}
+            >
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Button
+              onClick={() => {
+                setLogForm({ employeeId: "", eventId: "", workDate: weekStartStr, hours: "", notes: "" });
+                setLogOpen(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Log Hours
+            </Button>
+          </div>
         </div>
 
         {/* ── Period Picker ── */}
