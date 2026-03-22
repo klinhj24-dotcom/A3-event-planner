@@ -438,7 +438,23 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
             ? `\nPerformer: ${updated.studentFirstName} ${updated.studentLastName ?? ""}\n`
             : "";
 
-          const bodyText = `Hi ${updated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for ${event.title}.${performerLine}\n\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
+          // Resolve the charged amount
+          let amountLine = "";
+          if (isRecital) {
+            const fee = event.ticketPrice ? parseFloat(event.ticketPrice) : 30;
+            amountLine = `\nAmount charged: $${fee.toFixed(2)}\n`;
+          } else if (updated.ticketCount && event.ticketPrice) {
+            const resolvedPrice = event.isTwoDay && updated.ticketType
+              ? updated.ticketType === "day1" ? event.day1Price : updated.ticketType === "day2" ? event.day2Price : event.ticketPrice
+              : event.ticketPrice;
+            if (resolvedPrice) {
+              const price = parseFloat(resolvedPrice);
+              const total = price * updated.ticketCount;
+              amountLine = `\nTickets: ${updated.ticketCount} × $${price.toFixed(2)} = $${total.toFixed(2)}\n`;
+            }
+          }
+
+          const bodyText = `Hi ${updated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
           const html = buildHtmlEmail({ recipientName: updated.contactFirstName ?? "there", body: bodyText });
           const subject = `Payment Confirmed — ${event.title}`;
           const raw = makeHtmlEmail({ to: updated.contactEmail, from: sender.email || "", subject, html, cc });
