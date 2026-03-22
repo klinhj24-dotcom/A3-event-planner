@@ -44,7 +44,6 @@ export default function Dashboard() {
     { title: "Total Contacts", value: stats?.totalContacts || 0, icon: Users, color: "text-[#7250ef]", bg: "bg-[#7250ef]/10", href: "/contacts" },
     { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10", href: "/events" },
     { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10", href: "/employees" },
-    { title: "Pending Signups", value: stats?.pendingSignups || 0, icon: ClipboardList, color: "text-[#f7b617]", bg: "bg-[#f7b617]/10" },
     { title: "Pending Card Charges", value: stats?.pendingCharges || 0, icon: CreditCard, color: "text-rose-400", bg: "bg-rose-500/10", href: "/charges" },
   ];
 
