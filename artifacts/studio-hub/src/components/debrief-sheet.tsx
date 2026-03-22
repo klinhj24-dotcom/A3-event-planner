@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 interface DebriefSheetProps {
-  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null } | null;
+  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null } | null;
   onClose: () => void;
 }
 
@@ -42,6 +42,16 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     },
   });
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: staffSlots = [] } = useQuery<any[]>({
+    queryKey: [`/api/events/${event?.id}/staff-slots`],
+    queryFn: async () => {
+      if (!event?.id) return [];
+      const r = await fetch(`/api/events/${event.id}/staff-slots`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!event?.id,
+  });
 
   const primaryStaffId = event?.primaryStaffId ?? null;
   const canEdit = !primaryStaffId || currentUser?.id === primaryStaffId;
@@ -78,6 +88,30 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
       setCurrentImage(event.imageUrl ?? null);
     }
   }, [event?.imageUrl]);
+
+  // Seed default timeIn/timeOut from staff slots + event times when no debrief saved yet
+  useEffect(() => {
+    if (isLoading || debrief) return;
+    const eventStart = event?.startDate ? new Date(event.startDate) : null;
+    const eventEnd = event?.endDate ? new Date(event.endDate) : null;
+    const slotStarts = staffSlots.map((s: any) => s.startTime ? new Date(s.startTime) : null).filter(Boolean) as Date[];
+    const slotEnds = staffSlots.map((s: any) => s.endTime ? new Date(s.endTime) : null).filter(Boolean) as Date[];
+    const earliestStart = slotStarts.length > 0 ? new Date(Math.min(...slotStarts.map(d => d.getTime()))) : null;
+    const latestEnd = slotEnds.length > 0 ? new Date(Math.max(...slotEnds.map(d => d.getTime()))) : null;
+    const defaultIn = earliestStart && eventStart
+      ? (earliestStart < eventStart ? earliestStart : eventStart)
+      : earliestStart ?? eventStart;
+    const defaultOut = latestEnd && eventEnd
+      ? (latestEnd > eventEnd ? latestEnd : eventEnd)
+      : latestEnd ?? eventEnd;
+    if (defaultIn || defaultOut) {
+      setForm(f => ({
+        ...f,
+        timeIn: defaultIn ? defaultIn.toISOString().slice(0, 16) : f.timeIn,
+        timeOut: defaultOut ? defaultOut.toISOString().slice(0, 16) : f.timeOut,
+      }));
+    }
+  }, [isLoading, debrief, staffSlots, event?.startDate, event?.endDate]);
 
   useEffect(() => {
     if (debrief) {
