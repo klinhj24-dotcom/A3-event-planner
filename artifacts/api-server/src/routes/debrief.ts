@@ -37,6 +37,7 @@ router.put("/events/:id/debrief", async (req, res) => {
       timeIn, timeOut, greyInvolved, staffPresent, crowdSize,
       boothPlacement, soundSetupNotes, whatWorked, whatDidntWork,
       leadQuality, wouldRepeat, improvements,
+      leadsCollected, trialSignups, eventVibe, staffNotes,
     } = req.body;
 
     const values = {
@@ -53,6 +54,10 @@ router.put("/events/:id/debrief", async (req, res) => {
       leadQuality: leadQuality ?? null,
       wouldRepeat: wouldRepeat ?? null,
       improvements: improvements ?? null,
+      leadsCollected: leadsCollected != null ? parseInt(leadsCollected) : null,
+      trialSignups: trialSignups != null ? parseInt(trialSignups) : null,
+      eventVibe: eventVibe ?? null,
+      staffNotes: staffNotes ?? null,
     };
 
     const [debrief] = await db

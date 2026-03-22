@@ -37,6 +37,7 @@ export const eventsTable = pgTable("events", {
   hasCallSheet: boolean("has_call_sheet").default(false),
   hasPackingList: boolean("has_packing_list").default(false),
   allowGuestList: boolean("allow_guest_list").default(false),
+  isLeadGenerating: boolean("is_lead_generating").default(false),
   guestListPolicy: text("guest_list_policy").default("students_only"), // "students_only" | "plus_one" | "plus_two"
   pocName: text("poc_name"),
   pocEmail: text("poc_email"),
@@ -105,6 +106,10 @@ export const eventDebriefTable = pgTable("event_debriefs", {
   leadQuality: text("lead_quality"),
   wouldRepeat: boolean("would_repeat"),
   improvements: text("improvements"),
+  leadsCollected: integer("leads_collected"),
+  trialSignups: integer("trial_signups"),
+  eventVibe: text("event_vibe"),
+  staffNotes: text("staff_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

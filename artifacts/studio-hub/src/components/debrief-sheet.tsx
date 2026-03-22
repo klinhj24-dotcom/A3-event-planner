@@ -7,13 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Upload, X, ImageIcon, CheckCircle2 } from "lucide-react";
+import { Loader2, Upload, X, ImageIcon, CheckCircle2, TrendingUp } from "lucide-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { useEventDebrief, useUpsertDebrief, useUpdateEventImage } from "@/hooks/use-team";
 import { useToast } from "@/hooks/use-toast";
 
 interface DebriefSheetProps {
-  event: { id: number; title: string; type: string; imageUrl?: string | null } | null;
+  event: { id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean } | null;
   onClose: () => void;
 }
 
@@ -37,6 +37,10 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
     leadQuality: "",
     wouldRepeat: false,
     improvements: "",
+    leadsCollected: "",
+    trialSignups: "",
+    eventVibe: "",
+    staffNotes: "",
   });
 
   const [currentImage, setCurrentImage] = useState<string | null>(null);
@@ -62,6 +66,10 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
         leadQuality: debrief.leadQuality ?? "",
         wouldRepeat: debrief.wouldRepeat ?? false,
         improvements: debrief.improvements ?? "",
+        leadsCollected: (debrief as any).leadsCollected != null ? String((debrief as any).leadsCollected) : "",
+        trialSignups: (debrief as any).trialSignups != null ? String((debrief as any).trialSignups) : "",
+        eventVibe: (debrief as any).eventVibe ?? "",
+        staffNotes: (debrief as any).staffNotes ?? "",
       });
     }
   }, [debrief]);
@@ -92,6 +100,10 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
       leadQuality: form.leadQuality || null,
       wouldRepeat: form.wouldRepeat,
       improvements: form.improvements || null,
+      leadsCollected: form.leadsCollected ? parseInt(form.leadsCollected) : null,
+      trialSignups: form.trialSignups ? parseInt(form.trialSignups) : null,
+      eventVibe: form.eventVibe || null,
+      staffNotes: form.staffNotes || null,
     }, {
       onSuccess: () => toast({ title: "Debrief saved" }),
       onError: () => toast({ title: "Failed to save debrief", variant: "destructive" }),
@@ -246,10 +258,50 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
               </div>
             </div>
 
+            {/* ── Lead Results (only when isLeadGenerating) ── */}
+            {event.isLeadGenerating && (
+              <div className="space-y-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-violet-400 flex items-center gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5" /> Lead Results
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Leads Collected</Label>
+                    <Input type="number" min={0} placeholder="0" className="rounded-xl text-sm" value={form.leadsCollected} onChange={set("leadsCollected")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Trial Signups</Label>
+                    <Input type="number" min={0} placeholder="0" className="rounded-xl text-sm" value={form.trialSignups} onChange={set("trialSignups")} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Event Vibe</Label>
+                  <Select value={form.eventVibe} onValueChange={v => setForm(f => ({ ...f, eventVibe: v }))}>
+                    <SelectTrigger className="rounded-xl text-sm">
+                      <SelectValue placeholder="How was the energy?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dead">Dead — nobody around</SelectItem>
+                      <SelectItem value="slow">Slow — some foot traffic</SelectItem>
+                      <SelectItem value="moderate">Moderate — steady flow</SelectItem>
+                      <SelectItem value="busy">Busy — lots of engagement</SelectItem>
+                      <SelectItem value="electric">Electric — packed & excited</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             {/* ── Improvements ── */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Improvements for Next Time</Label>
               <Textarea placeholder="Suggestions, changes, ideas…" className="rounded-xl text-sm min-h-[70px] resize-none" value={form.improvements} onChange={set("improvements")} />
+            </div>
+
+            {/* ── Staff Notes ── */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Staff Notes</Label>
+              <Textarea placeholder="Internal notes about staff performance, logistics…" className="rounded-xl text-sm min-h-[70px] resize-none" value={form.staffNotes} onChange={set("staffNotes")} />
             </div>
 
             {/* ── Save ── */}

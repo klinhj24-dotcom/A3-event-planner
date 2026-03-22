@@ -247,12 +247,14 @@ const SLOT_SELECT = {
   assignedEmployeeId: eventStaffSlotsTable.assignedEmployeeId,
   assignedEmployeeName: employeesTable.name,
   assignedEmployeeRole: employeesTable.role,
+  assignedEmployeeHourlyRate: employeesTable.hourlyRate,
   startTime: eventStaffSlotsTable.startTime,
   endTime: eventStaffSlotsTable.endTime,
   notes: eventStaffSlotsTable.notes,
   confirmed: eventStaffSlotsTable.confirmed,
   eventDay: eventStaffSlotsTable.eventDay,
   isAutoCreated: eventStaffSlotsTable.isAutoCreated,
+  bonusPay: eventStaffSlotsTable.bonusPay,
   createdAt: eventStaffSlotsTable.createdAt,
 };
 
@@ -278,7 +280,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay, bonusPay } = req.body;
 
     const [slot] = await db.insert(eventStaffSlotsTable)
       .values({
@@ -290,6 +292,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
         notes: notes || null,
         eventDay: eventDay ? Number(eventDay) : 1,
         isAutoCreated: isAutoCreated ?? false,
+        bonusPay: bonusPay != null ? bonusPay.toString() : null,
       })
       .returning();
 
@@ -320,7 +323,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay } = req.body;
 
     const [prev] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
     if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -340,6 +343,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         ...(endTime !== undefined ? { endTime: endTime ? new Date(endTime) : null } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
         ...(eventDay !== undefined ? { eventDay: Number(eventDay) } : {}),
+        ...(bonusPay !== undefined ? { bonusPay: bonusPay != null ? bonusPay.toString() : null } : {}),
         ...(assigneeChanged ? { confirmed: false, confirmationToken: null, weekReminderSent: false, dayReminderSent: false } : {}),
         updatedAt: new Date(),
       })

@@ -28,8 +28,10 @@ interface StaffSlot {
   id: number; eventId: number;
   roleTypeId?: number | null; roleName?: string | null; roleColor?: string | null;
   assignedEmployeeId?: number | null; assignedEmployeeName?: string | null; assignedEmployeeRole?: string | null;
+  assignedEmployeeHourlyRate?: string | null;
   startTime?: string | null; endTime?: string | null; notes?: string | null;
   confirmed?: boolean | null; isAutoCreated?: boolean | null; eventDay?: number | null;
+  bonusPay?: string | null;
 }
 interface EventMeta {
   id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean;
@@ -141,6 +143,7 @@ function SlotCard({
     endTime: toLocalInput(slot.endTime),
     notes: slot.notes ?? "",
     eventDay: slot.eventDay ?? 1,
+    bonusPay: slot.bonusPay ?? "",
   });
 
   const filled = !!slot.assignedEmployeeId;
@@ -152,6 +155,7 @@ function SlotCard({
       endTime: form.endTime || null,
       notes: form.notes || null,
       eventDay: form.eventDay,
+      bonusPay: form.bonusPay ? parseFloat(form.bonusPay) : null,
     });
     setEditing(false);
   }
@@ -184,9 +188,15 @@ function SlotCard({
             <Input type="datetime-local" className="h-8 rounded-lg text-xs" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} />
           </div>
         </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Notes</label>
-          <Textarea className="rounded-lg text-xs min-h-[48px]" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes…" />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Notes</label>
+            <Textarea className="rounded-lg text-xs min-h-[48px]" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes…" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Bonus Pay ($)</label>
+            <Input type="number" min={0} step={0.01} placeholder="0.00" className="h-8 rounded-lg text-xs" value={form.bonusPay} onChange={e => setForm(f => ({ ...f, bonusPay: e.target.value }))} />
+          </div>
         </div>
         {/* Day selector for two-day events */}
         {isTwoDay && (
@@ -290,7 +300,7 @@ export function StaffSlotsSheet({
   const [addCategory, setAddCategory] = useState<EmpCategory>("all");
   const [addForm, setAddForm] = useState({
     roleTypeId: "", assignedEmployeeId: "unassigned",
-    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1,
+    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "",
   });
 
   function openAddDialog(presetRoleTypeId?: string, presetDay?: number) {
@@ -302,7 +312,7 @@ export function StaffSlotsSheet({
     setAddForm({
       roleTypeId: presetRoleTypeId || "",
       assignedEmployeeId: "unassigned",
-      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1,
+      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1, bonusPay: "",
     });
     setAddOpen(true);
   }
@@ -315,7 +325,7 @@ export function StaffSlotsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
-      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1 });
+      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "" });
       setAddOpen(false);
       toast({ title: "Slot added" });
     },
@@ -545,6 +555,11 @@ export function StaffSlotsSheet({
               <Textarea className="rounded-xl min-h-[60px]" value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} placeholder="Setup instructions, parking info, etc." />
             </div>
 
+            <div className="space-y-1">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bonus Pay ($)</label>
+              <Input type="number" min={0} step={0.01} placeholder="0.00" className="rounded-xl h-9 text-sm" value={addForm.bonusPay} onChange={e => setAddForm(f => ({ ...f, bonusPay: e.target.value }))} />
+            </div>
+
             {event.isTwoDay && (
               <div className="flex items-center gap-3 rounded-xl border border-border/40 px-4 py-2.5">
                 <p className="text-sm font-medium flex-1">Which day?</p>
@@ -573,6 +588,7 @@ export function StaffSlotsSheet({
                 endTime: addForm.endDate && addForm.endTime ? `${addForm.endDate}T${addForm.endTime}:00` : null,
                 notes: addForm.notes || null,
                 eventDay: addForm.eventDay,
+                bonusPay: addForm.bonusPay ? parseFloat(addForm.bonusPay) : null,
               })}>
               Add Slot
             </Button>

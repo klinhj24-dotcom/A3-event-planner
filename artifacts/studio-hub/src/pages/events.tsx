@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -729,6 +729,7 @@ const eventSchema = z.object({
   hasCallSheet: z.boolean().default(false),
   hasPackingList: z.boolean().default(false),
   allowGuestList: z.boolean().default(false),
+  isLeadGenerating: z.boolean().default(false),
   guestListPolicy: z.string().optional(),
   hasPoc: z.boolean().default(false),
   pocName: z.string().optional(),
@@ -1180,9 +1181,17 @@ function EventOverviewSheet({
                   return sum + price * count;
                 }, 0)
               : 0;
+            const staffPayTotal = staffSlots.reduce((sum, s: any) => {
+              const bonus = s.bonusPay ? parseFloat(s.bonusPay) : 0;
+              const rate = s.assignedEmployeeHourlyRate ? parseFloat(s.assignedEmployeeHourlyRate) : 0;
+              const hours = s.startTime && s.endTime
+                ? (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000
+                : 0;
+              return sum + hours * rate + bonus;
+            }, 0);
             const totalIncome = eventFee + internalTicketTotal + externalSales;
-            const net = totalIncome - expense;
-            const hasAny = eventFee > 0 || expense > 0 || internalTicketTotal > 0 || externalSales > 0;
+            const net = totalIncome - expense - staffPayTotal;
+            const hasAny = eventFee > 0 || expense > 0 || internalTicketTotal > 0 || externalSales > 0 || staffPayTotal > 0;
             if (!hasAny) return null;
             return (
               <div className="space-y-2">
@@ -1215,6 +1224,12 @@ function EventOverviewSheet({
                     <div className="flex items-center justify-between px-3 py-2">
                       <span className="text-muted-foreground text-xs">Cost / sponsorship</span>
                       <span className="font-semibold text-blue-400">-${expense.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {staffPayTotal > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-muted-foreground text-xs">Staff pay</span>
+                      <span className="font-semibold text-blue-400">-${staffPayTotal.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
@@ -1675,7 +1690,7 @@ export default function Events() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<any | null>(null);
   const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
-  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null } | null>(null);
+  const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean } | null>(null);
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string; isTwoDay?: boolean } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
   const [callSheetEvent, setCallSheetEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; endDate?: string | null; location?: string | null } | null>(null);
@@ -1779,12 +1794,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "" }
   });
 
   // Auto-fill end date when start date changes (create form)
@@ -1863,6 +1878,7 @@ export default function Events() {
       hasCallSheet: ev.hasCallSheet ?? false,
       hasPackingList: ev.hasPackingList ?? false,
       allowGuestList: ev.allowGuestList ?? false,
+      isLeadGenerating: (ev as any).isLeadGenerating ?? false,
       guestListPolicy: ev.guestListPolicy ?? "students_only",
       hasPoc: !!(ev.pocName || ev.pocEmail || ev.pocPhone),
       pocName: ev.pocName ?? "",
@@ -2187,6 +2203,7 @@ export default function Events() {
                         { name: "hasStaffSchedule" as const, icon: <Users2 className="h-3.5 w-3.5 text-emerald-500" />, label: "Staff Schedule", desc: "Assign staff to this event" },
                         { name: "hasCallSheet" as const, icon: <FileText className="h-3.5 w-3.5 text-sky-500" />, label: "Call Sheet", desc: "Generate a call sheet" },
                         { name: "hasPackingList" as const, icon: <Package className="h-3.5 w-3.5 text-amber-500" />, label: "Packing List", desc: "Equipment packing list" },
+                        { name: "isLeadGenerating" as const, icon: <TrendingUp className="h-3.5 w-3.5 text-violet-400" />, label: "Lead Generating", desc: "Track leads, trials & vibe in debrief" },
                       ]).map(({ name, icon, label, desc }) => (
                         <FormField key={name} control={form.control} name={name} render={({ field }) => (
                           <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 px-3 py-2 bg-card">
@@ -2501,7 +2518,8 @@ export default function Events() {
                               const net = (event.revenue ? parseFloat(event.revenue as string) : 0)
                                 + ((event as any).internalTicketTotal ?? 0)
                                 + ((event as any).externalTicketSales ? parseFloat((event as any).externalTicketSales) : 0)
-                                - (event.cost ? parseFloat(event.cost as string) : 0);
+                                - (event.cost ? parseFloat(event.cost as string) : 0)
+                                - ((event as any).staffPayTotal ?? 0);
                               return (
                                 <span className={`ml-3 text-xs font-mono font-semibold ${net >= 0 ? "text-emerald-500" : "text-blue-400"}`}>
                                   {net >= 0 ? "+" : ""}${net.toFixed(2)}
@@ -2554,7 +2572,7 @@ export default function Events() {
                               variant="ghost"
                               title="Post-event debrief"
                               className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-secondary hover:bg-secondary/10"
-                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl })}
+                              onClick={() => setDebriefEvent({ id: event.id, title: event.title, type: event.type, imageUrl: (event as any).imageUrl, isLeadGenerating: (event as any).isLeadGenerating ?? false })}
                             >
                               <ClipboardCheck className="h-3.5 w-3.5" />
                             </Button>
@@ -2858,6 +2876,7 @@ export default function Events() {
                   { name: "hasStaffSchedule" as const, icon: <Users2 className="h-3.5 w-3.5 text-emerald-500" />, label: "Staff Schedule", desc: "Assign staff to this event" },
                   { name: "hasCallSheet" as const, icon: <FileText className="h-3.5 w-3.5 text-sky-500" />, label: "Call Sheet", desc: "Generate a call sheet" },
                   { name: "hasPackingList" as const, icon: <Package className="h-3.5 w-3.5 text-amber-500" />, label: "Packing List", desc: "Equipment packing list" },
+                  { name: "isLeadGenerating" as const, icon: <TrendingUp className="h-3.5 w-3.5 text-violet-400" />, label: "Lead Generating", desc: "Track leads, trials & vibe in debrief" },
                 ]).map(({ name, icon, label, desc }) => (
                   <FormField key={name} control={editForm.control} name={name} render={({ field }) => (
                     <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border/40 px-3 py-2 bg-card">
@@ -3164,7 +3183,7 @@ export default function Events() {
         actions={{
           onEdit: (ev) => openEdit(ev),
           onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
-          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl }),
+          onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl, isLeadGenerating: (ev as any).isLeadGenerating ?? false }),
           onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type, isTwoDay: ev.isTwoDay ?? false }),
           onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location, isTwoDay: ev.isTwoDay ?? false }),
           onCallSheet: (ev) => setCallSheetEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, endDate: ev.endDate, location: ev.location }),

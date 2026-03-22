@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, decimal, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { eventsTable } from "./events";
 import { employeesTable } from "./employees";
 
@@ -31,6 +31,7 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   googleCalendarEventId: text("google_calendar_event_id"),
   eventDay: integer("event_day").notNull().default(1),
   isAutoCreated: boolean("is_auto_created").notNull().default(false),
+  bonusPay: decimal("bonus_pay", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

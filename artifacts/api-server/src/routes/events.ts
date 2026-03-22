@@ -301,9 +301,35 @@ router.get("/events", async (req, res) => {
       }
     }
 
+    // Compute staff pay totals per event (hours × hourlyRate + bonusPay)
+    let staffPayMap: Record<number, number> = {};
+    if (eventIds.length > 0) {
+      const slots = await db
+        .select({
+          eventId: eventStaffSlotsTable.eventId,
+          startTime: eventStaffSlotsTable.startTime,
+          endTime: eventStaffSlotsTable.endTime,
+          bonusPay: eventStaffSlotsTable.bonusPay,
+          hourlyRate: employeesTable.hourlyRate,
+        })
+        .from(eventStaffSlotsTable)
+        .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
+        .where(inArray(eventStaffSlotsTable.eventId, eventIds));
+
+      for (const s of slots) {
+        const bonus = s.bonusPay ? parseFloat(s.bonusPay) : 0;
+        const rate = s.hourlyRate ? parseFloat(s.hourlyRate as string) : 0;
+        const hours = s.startTime && s.endTime
+          ? (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000
+          : 0;
+        staffPayMap[s.eventId] = (staffPayMap[s.eventId] ?? 0) + hours * rate + bonus;
+      }
+    }
+
     const eventsWithTotals = events.map(e => ({
       ...e,
       internalTicketTotal: ticketTotalsMap[e.id] ?? 0,
+      staffPayTotal: staffPayMap[e.id] ?? 0,
     }));
     res.json(eventsWithTotals);
   } catch (err) {
@@ -318,7 +344,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -361,6 +387,7 @@ router.post("/events", async (req, res) => {
         pocName: pocName?.trim() || null,
         pocEmail: pocEmail?.trim() || null,
         pocPhone: pocPhone?.trim() || null,
+        isLeadGenerating: isLeadGenerating ?? false,
       })
       .returning();
 
@@ -415,7 +442,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -462,6 +489,7 @@ router.put("/events/:id", async (req, res) => {
         pocName: pocName !== undefined ? (pocName?.trim() || null) : undefined,
         pocEmail: pocEmail !== undefined ? (pocEmail?.trim() || null) : undefined,
         pocPhone: pocPhone !== undefined ? (pocPhone?.trim() || null) : undefined,
+        isLeadGenerating: isLeadGenerating !== undefined ? isLeadGenerating : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))
