@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -316,6 +316,11 @@ export default function Settings() {
   const [signature, setSignature] = useState("");
   const [isSavingSignature, setIsSavingSignature] = useState(false);
   const [sigLoaded, setSigLoaded] = useState(false);
+  const [sigPreview, setSigPreview] = useState(false);
+  const [linkInsertOpen, setLinkInsertOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkLabel, setLinkLabel] = useState("");
+  const sigTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (sigLoaded) return;
@@ -342,6 +347,26 @@ export default function Settings() {
       setIsSavingSignature(false);
     }
   };
+
+  function handleInsertLink() {
+    const url = linkUrl.trim();
+    const label = linkLabel.trim() || url;
+    if (!url) return;
+    const tag = `<a href="${url}">${label}</a>`;
+    const el = sigTextareaRef.current;
+    if (el) {
+      const start = el.selectionStart ?? signature.length;
+      const end = el.selectionEnd ?? signature.length;
+      const next = signature.slice(0, start) + tag + signature.slice(end);
+      setSignature(next);
+      setTimeout(() => { el.focus(); el.setSelectionRange(start + tag.length, start + tag.length); }, 0);
+    } else {
+      setSignature(sig => sig + tag);
+    }
+    setLinkUrl("");
+    setLinkLabel("");
+    setLinkInsertOpen(false);
+  }
 
   // Change password state
   const [currentPw, setCurrentPw] = useState("");
@@ -524,15 +549,79 @@ export default function Settings() {
                   <Pencil className="h-4 w-4 text-muted-foreground" />
                   <h3 className="font-medium text-sm">Email Signature</h3>
                 </div>
-                <p className="text-xs text-muted-foreground">Automatically appended to every email you compose and send from this portal.</p>
+                <p className="text-xs text-muted-foreground">Automatically appended to every email you send. Supports plain text and hyperlinks.</p>
               </div>
-              <Textarea
-                value={signature}
-                onChange={e => setSignature(e.target.value)}
-                placeholder={"Your Name\nTitle — Company\nPhone\nWebsite"}
-                className="min-h-[96px] font-mono text-xs rounded-xl resize-y"
-                rows={5}
-              />
+
+              {/* Toolbar */}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg h-7 px-2.5 text-xs gap-1.5"
+                  onClick={() => { setLinkInsertOpen(o => !o); setLinkUrl(""); setLinkLabel(""); }}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Insert Link
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-lg h-7 px-2.5 text-xs gap-1.5 ml-auto"
+                  onClick={() => setSigPreview(p => !p)}
+                >
+                  <Eye className="h-3 w-3" />
+                  {sigPreview ? "Edit" : "Preview"}
+                </Button>
+              </div>
+
+              {/* Inline link inserter */}
+              {linkInsertOpen && (
+                <div className="flex flex-col gap-2 p-3 bg-muted/30 rounded-xl border border-border/30">
+                  <p className="text-xs font-medium text-muted-foreground">Insert hyperlink</p>
+                  <Input
+                    placeholder="URL (e.g. https://themusicspace.com)"
+                    value={linkUrl}
+                    onChange={e => setLinkUrl(e.target.value)}
+                    className="h-8 text-xs rounded-lg"
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleInsertLink(); } }}
+                  />
+                  <Input
+                    placeholder="Link text (optional — defaults to URL)"
+                    value={linkLabel}
+                    onChange={e => setLinkLabel(e.target.value)}
+                    className="h-8 text-xs rounded-lg"
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleInsertLink(); } }}
+                  />
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" className="h-7 text-xs rounded-lg" onClick={handleInsertLink} disabled={!linkUrl.trim()}>
+                      Insert
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs rounded-lg" onClick={() => setLinkInsertOpen(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Editor / Preview */}
+              {sigPreview ? (
+                <div
+                  className="min-h-[96px] p-3 rounded-xl border border-border/30 bg-muted/20 text-sm text-foreground leading-relaxed [&_a]:text-primary [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: signature || '<span class="text-muted-foreground text-xs">Nothing to preview yet.</span>' }}
+                />
+              ) : (
+                <Textarea
+                  ref={sigTextareaRef}
+                  value={signature}
+                  onChange={e => setSignature(e.target.value)}
+                  placeholder={"Your Name\nTitle — The Music Space\nPhone\n<a href=\"https://themusicspace.com\">themusicspace.com</a>"}
+                  className="min-h-[96px] font-mono text-xs rounded-xl resize-y"
+                  rows={5}
+                />
+              )}
+
               <Button size="sm" className="rounded-xl" onClick={handleSaveSignature} disabled={isSavingSignature}>
                 {isSavingSignature ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : <Check className="h-3.5 w-3.5 mr-2" />}
                 Save Signature

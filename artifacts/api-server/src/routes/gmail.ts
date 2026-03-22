@@ -2,7 +2,15 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { db, usersTable, outreachTable, contactsTable, emailTemplatesTable } from "@workspace/db";
 import { eq, desc, and, isNotNull } from "drizzle-orm";
-import { createAuthedClient, makeRawEmail, extractEmailBody, getHeader } from "../lib/google";
+import { createAuthedClient, makeRawEmail, makeHtmlEmail, extractEmailBody, getHeader } from "../lib/google";
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function plainTextToHtml(text: string): string {
+  return escapeHtml(text).replace(/\r?\n/g, "<br>");
+}
 
 const router = Router();
 
@@ -77,9 +85,15 @@ router.post("/gmail/send", async (req, res) => {
     // Append the logged-in user's own signature (not the fallback sender's)
     const [loggedInUser] = await db.select({ emailSignature: usersTable.emailSignature }).from(usersTable).where(eq(usersTable.id, req.user.id));
     const signature = loggedInUser?.emailSignature?.trim() || null;
-    const bodyWithSignature = signature ? `${body}\n\n--\n${signature}` : body;
 
-    const raw = makeRawEmail({ to, from, subject, body: bodyWithSignature, threadId, replyToMessageId });
+    // Convert plain-text body to HTML; inject HTML signature (may contain <a> links)
+    const htmlBody = plainTextToHtml(body);
+    const signatureBlock = signature
+      ? `<hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0 16px"><div style="font-size:13px;color:#555;line-height:1.6">${signature}</div>`
+      : "";
+    const fullHtml = `<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a">${htmlBody}</div>${signatureBlock}`;
+
+    const raw = makeHtmlEmail({ to, from, subject, html: fullHtml, threadId, replyToMessageId });
     const result = await gmail.users.messages.send({
       userId: "me",
       requestBody: { raw, ...(threadId ? { threadId } : {}) },
