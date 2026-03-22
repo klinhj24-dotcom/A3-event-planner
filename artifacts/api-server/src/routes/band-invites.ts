@@ -580,13 +580,15 @@ router.post("/band-confirm/:token", async (req, res) => {
       updatedAt: new Date(),
     }).where(eq(eventBandInvitesTable.id, invite.id));
 
-    // If confirmed: auto-confirm all other pending invites for this slot
-    // (e.g. if one parent confirmed for a student, no need to chase the other)
-    if (newStatus === "confirmed") {
+    // If confirmed: auto-confirm other pending contacts for the SAME student only
+    // (e.g. if one parent confirmed for their kid, no need to chase the other parent for that same kid)
+    // Do NOT touch contacts for other students in the same band slot
+    if (newStatus === "confirmed" && invite.memberId) {
       await db.update(eventBandInvitesTable)
         .set({ status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
         .where(and(
           eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId),
+          eq(eventBandInvitesTable.memberId, invite.memberId),
           eq(eventBandInvitesTable.status, "pending"),
         ));
     }
