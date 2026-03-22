@@ -474,17 +474,16 @@ We're excited to have you — see you there!
 
 The Music Space`;
 
-    // To: "Band Families" display name pointing to TMS desk
+    // To: TMS desk
     // CC: band leader (if one exists with an email)
     // BCC: all contacts
-    const toAddress = `"${bandName} Band Families" <${TMS_CC}>`;
     const ccAddresses = bandLeader?.email ? [bandLeader.email] : [];
     const bccAddresses = bccEmails.filter(e => e !== TMS_CC && !ccAddresses.includes(e));
 
     const html = buildHtmlEmail({ body: emailBody });
 
     const raw = makeHtmlEmail({
-      to: toAddress,
+      to: TMS_CC,
       from,
       subject: `You're Confirmed! ${bandName} @ ${event.title}`,
       html,
@@ -497,7 +496,7 @@ The Music Space`;
     // Mark confirmation sent
     await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
 
-    res.json({ ok: true, to: toAddress, bcc: bccAddresses.length, cc: ccAddresses.length });
+    res.json({ ok: true, to: TMS_CC, bcc: bccAddresses.length, cc: ccAddresses.length });
   } catch (err) {
     console.error("sendConfirmation error:", err);
     res.status(500).json({ error: "Internal server error" });
