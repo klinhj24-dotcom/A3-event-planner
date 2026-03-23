@@ -273,6 +273,7 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
   const [submitted, setSubmitted] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const form = useForm<RecitalForm>({ resolver: zodResolver(recitalSchema) });
+  const recitalFee = event?.ticketPrice ? parseFloat(event.ticketPrice) : 30;
 
   const { mutate: submit, isPending } = useMutation({
     mutationFn: async (data: RecitalForm) => {
