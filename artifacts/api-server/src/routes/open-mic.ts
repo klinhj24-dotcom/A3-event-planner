@@ -187,6 +187,52 @@ async function sendEmailToList(opts: {
   return uniqueRecipients.length;
 }
 
+/**
+ * Parse a time string like "6:00 PM" or "7:30 pm" into { hours24, minutes }.
+ * Returns { hours24: 18, minutes: 0 } for "6:00 PM".
+ */
+function parseTimeString(timeStr: string): { hours24: number; minutes: number } {
+  const match = timeStr.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!match) return { hours24: 18, minutes: 0 }; // default 6 PM
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2] ?? "0", 10);
+  const meridiem = (match[3] ?? "").toLowerCase();
+  if (meridiem === "pm" && hours !== 12) hours += 12;
+  if (meridiem === "am" && hours === 12) hours = 0;
+  return { hours24: hours, minutes };
+}
+
+/**
+ * Determine if a UTC date falls in US Eastern Daylight Time (EDT = UTC-4).
+ * DST: 2nd Sunday of March 2:00 AM → 1st Sunday of November 2:00 AM.
+ * Returns UTC offset in hours: -4 (EDT) or -5 (EST).
+ */
+function easternUtcOffset(year: number, month: number, day: number): number {
+  // 2nd Sunday of March
+  const marchFirst = new Date(Date.UTC(year, 2, 1));
+  const marchDow = marchFirst.getUTCDay();
+  const dstStart = 8 + ((7 - marchDow) % 7); // 2nd Sunday day of month
+  // 1st Sunday of November
+  const novFirst = new Date(Date.UTC(year, 10, 1));
+  const novDow = novFirst.getUTCDay();
+  const dstEnd = 1 + ((7 - novDow) % 7); // 1st Sunday day of month
+  const isEDT = (month === 2 && day >= dstStart) ||
+    (month > 2 && month < 10) ||
+    (month === 10 && day < dstEnd);
+  return isEDT ? -4 : -5;
+}
+
+/**
+ * Build a UTC Date from a year/month/day + a time string like "6:00 PM",
+ * interpreting the time in US Eastern time (auto EDT/EST).
+ */
+function buildEventDate(year: number, month: number, day: number, timeStr: string): Date {
+  const { hours24, minutes } = parseTimeString(timeStr);
+  const offset = easternUtcOffset(year, month, day);
+  const utcHours = hours24 - offset; // e.g. 18 - (-4) = 22 for EDT
+  return new Date(Date.UTC(year, month, day, utcHours, minutes, 0));
+}
+
 /** Auto-create events for a series for the next N occurrences (idempotent) */
 export async function ensureUpcomingEvents(series: any, count = 3) {
   const upcoming = getUpcomingOccurrences(series.recurrenceType ?? "first_friday", count);
@@ -195,14 +241,21 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
     const existing = await db.select({ id: eventsTable.id })
       .from(eventsTable)
       .where(and(eq(eventsTable.openMicSeriesId, series.id), eq(eventsTable.openMicMonth, ff.monthKey)));
-    if (existing.length) continue;
+    const startDate = buildEventDate(ff.year, ff.month, ff.day, series.eventTime ?? "6:00 PM");
+    const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000); // +3 hours
+    if (existing.length) {
+      // Fix time on already-existing events (e.g. if eventTime changed or was previously wrong)
+      await db.update(eventsTable).set({ startDate, endDate }).where(eq(eventsTable.id, existing[0].id));
+      continue;
+    }
     const title = `${series.name} — ${MONTH_NAMES[ff.month]} ${ff.year}`;
     const [ev] = await db.insert(eventsTable).values({
       title,
       type: "Open Mic",
       status: "planning",
       location: series.location,
-      startDate: ff.date,
+      startDate,
+      endDate,
       openMicSeriesId: series.id,
       openMicMonth: ff.monthKey,
     }).returning();
