@@ -389,27 +389,29 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
   }
   try {
     const requestId = parseInt(req.params.requestId);
-    const { status, adminNotes, charged } = req.body;
+    const { status, adminNotes } = req.body;
 
-    // Fetch current state before update so we know if charged is transitioning to true
+    // Fetch current state before update
     const [before] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+
+    // Selecting "paid" status = card was charged; moving away from "paid" = undo charge mark
+    const chargingNow = status === "paid" && before?.status !== "paid";
+    const unchargingNow = status !== undefined && status !== "paid" && before?.status === "paid";
 
     const [updated] = await db
       .update(eventTicketRequestsTable)
       .set({
         ...(status !== undefined ? { status } : {}),
         ...(adminNotes !== undefined ? { adminNotes } : {}),
-        ...(charged !== undefined ? {
-          charged,
-          chargedAt: charged ? new Date() : null,
-        } : {}),
+        ...(chargingNow ? { charged: true, chargedAt: new Date() } : {}),
+        ...(unchargingNow ? { charged: false, chargedAt: null } : {}),
       })
       .where(eq(eventTicketRequestsTable.id, requestId))
       .returning();
     res.json(updated);
 
-    // Send charge confirmation email when charged flips to true
-    if (charged === true && before && !before.charged && updated?.contactEmail) {
+    // Send charge confirmation email when status transitions to "paid"
+    if (chargingNow && updated?.contactEmail) {
       try {
         const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, updated.eventId));
         const users = await db.select().from(usersTable);

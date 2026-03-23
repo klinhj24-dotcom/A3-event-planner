@@ -909,19 +909,6 @@ function EventOverviewSheet({
     onError: () => toast({ title: "Failed to send reminders", variant: "destructive" }),
   });
 
-  const { mutate: toggleCharged } = useMutation({
-    mutationFn: async ({ requestId, charged }: { requestId: number; charged: boolean }) => {
-      const res = await fetch(`/api/events/${event!.id}/ticket-requests/${requestId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ charged }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
-      return res.json();
-    },
-    onSuccess: () => refetchTickets(),
-  });
-
   const { mutate: updateTicketStatus } = useMutation({
     mutationFn: async ({ requestId, status }: { requestId: number; status: string }) => {
       const res = await fetch(`/api/events/${event!.id}/ticket-requests/${requestId}`, {
@@ -1397,24 +1384,9 @@ function EventOverviewSheet({
                   const lineTotal = price && rowCount ? (price * rowCount).toFixed(2) : null;
                   const isRecitalEntry = r.formType === "recital" && r.studentFirstName;
                   return (
-                  <div key={r.id} className={`grid grid-cols-[44px_1fr_auto] gap-0 items-start rounded-xl border transition-colors text-xs ${r.charged ? "bg-emerald-500/8 border-emerald-500/25" : "bg-muted/30 border-border/30 hover:border-border/50"}`}>
-                    {/* Big charge checkbox */}
-                    <div className="flex items-start justify-center pt-3 pb-2">
-                      <button
-                        onClick={() => toggleCharged({ requestId: r.id, charged: !r.charged })}
-                        title={r.charged ? `Charged on ${r.chargedAt ? new Date(r.chargedAt).toLocaleDateString() : "?"}` : "Mark as charged"}
-                        className={`h-7 w-7 rounded-lg border-2 flex items-center justify-center transition-all shadow-sm ${
-                          r.charged
-                            ? "bg-emerald-500 border-emerald-500 text-white shadow-emerald-500/30"
-                            : "border-border/60 bg-background hover:border-emerald-500 hover:bg-emerald-500/5"
-                        }`}
-                      >
-                        {r.charged && <CheckCircle2 className="h-4 w-4" />}
-                      </button>
-                    </div>
-
+                  <div key={r.id} className={`grid grid-cols-[1fr_auto] gap-0 items-start rounded-xl border transition-colors text-xs ${r.status === "paid" ? "bg-emerald-500/8 border-emerald-500/25" : "bg-muted/30 border-border/30 hover:border-border/50"}`}>
                     {/* Name + details */}
-                    <div className="py-2.5 pr-2 min-w-0">
+                    <div className="py-2.5 pl-3 pr-2 min-w-0">
                       {isRecitalEntry ? (
                         <>
                           <div className="flex items-center gap-1.5">
@@ -1436,8 +1408,8 @@ function EventOverviewSheet({
                               <span className="font-bold text-foreground">${lineTotal}</span>
                             </div>
                           )}
-                          {r.charged && r.chargedAt && (
-                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
+                          {r.status === "paid" && (
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Paid{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
                           )}
                         </>
                       ) : (
@@ -1455,8 +1427,8 @@ function EventOverviewSheet({
                               {lineTotal && <span className="ml-1.5 font-bold text-foreground">${lineTotal}</span>}
                             </div>
                           )}
-                          {r.charged && r.chargedAt && (
-                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged {new Date(r.chargedAt).toLocaleDateString()}</div>
+                          {r.status === "paid" && (
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Paid{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
                           )}
                         </>
                       )}
