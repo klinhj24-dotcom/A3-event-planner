@@ -13,34 +13,37 @@ import {
   FlaskConical, RefreshCw, Pencil, Save, X, ToggleLeft, ToggleRight, ExternalLink, Repeat,
 } from "lucide-react";
 
-const RECURRENCE_OPTIONS = [
-  { value: "first_sunday",    label: "1st Sunday of the month" },
-  { value: "first_monday",    label: "1st Monday of the month" },
-  { value: "first_tuesday",   label: "1st Tuesday of the month" },
-  { value: "first_wednesday", label: "1st Wednesday of the month" },
-  { value: "first_thursday",  label: "1st Thursday of the month" },
-  { value: "first_friday",    label: "1st Friday of the month" },
-  { value: "first_saturday",  label: "1st Saturday of the month" },
-  { value: "second_sunday",   label: "2nd Sunday of the month" },
-  { value: "second_monday",   label: "2nd Monday of the month" },
-  { value: "second_tuesday",  label: "2nd Tuesday of the month" },
-  { value: "second_wednesday",label: "2nd Wednesday of the month" },
-  { value: "second_thursday", label: "2nd Thursday of the month" },
-  { value: "second_friday",   label: "2nd Friday of the month" },
-  { value: "second_saturday", label: "2nd Saturday of the month" },
-  { value: "third_sunday",    label: "3rd Sunday of the month" },
-  { value: "third_monday",    label: "3rd Monday of the month" },
-  { value: "third_tuesday",   label: "3rd Tuesday of the month" },
-  { value: "third_wednesday", label: "3rd Wednesday of the month" },
-  { value: "third_thursday",  label: "3rd Thursday of the month" },
-  { value: "third_friday",    label: "3rd Friday of the month" },
-  { value: "third_saturday",  label: "3rd Saturday of the month" },
-  { value: "fourth_friday",   label: "4th Friday of the month" },
-  { value: "fourth_saturday", label: "4th Saturday of the month" },
+const ORDINAL_OPTIONS = [
+  { value: "first",  label: "1st" },
+  { value: "second", label: "2nd" },
+  { value: "third",  label: "3rd" },
+  { value: "fourth", label: "4th" },
 ];
 
+const WEEKDAY_OPTIONS = [
+  { value: "sunday",    label: "Sunday" },
+  { value: "monday",    label: "Monday" },
+  { value: "tuesday",   label: "Tuesday" },
+  { value: "wednesday", label: "Wednesday" },
+  { value: "thursday",  label: "Thursday" },
+  { value: "friday",    label: "Friday" },
+  { value: "saturday",  label: "Saturday" },
+];
+
+const ORDINAL_LABELS: Record<string, string> = { first: "1st", second: "2nd", third: "3rd", fourth: "4th" };
+
+function parseRecurrenceType(val: string): { ordinal: string; day: string } {
+  const parts = val.split("_");
+  return { ordinal: parts[0] ?? "first", day: parts.slice(1).join("_") || "friday" };
+}
+
+function buildRecurrenceType(ordinal: string, day: string) { return `${ordinal}_${day}`; }
+
 function recurrenceLabel(val: string) {
-  return RECURRENCE_OPTIONS.find(o => o.value === val)?.label ?? val;
+  const { ordinal, day } = parseRecurrenceType(val);
+  const ord = ORDINAL_LABELS[ordinal] ?? ordinal;
+  const dow = day.charAt(0).toUpperCase() + day.slice(1);
+  return `${ord} ${dow} of the month`;
 }
 
 const BASE = "";
@@ -103,14 +106,16 @@ export default function OpenMicSeriesPage() {
   const [newTime, setNewTime] = useState("6:00 PM");
   const [newSlug, setNewSlug] = useState("");
   const [newAddress, setNewAddress] = useState("");
-  const [newRecurrence, setNewRecurrence] = useState("first_friday");
+  const [newRecurrenceOrdinal, setNewRecurrenceOrdinal] = useState("first");
+  const [newRecurrenceDay, setNewRecurrenceDay] = useState("friday");
 
   // Edit form state (mirrors selected series)
   const [editName, setEditName] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editTime, setEditTime] = useState("");
   const [editAddress, setEditAddress] = useState("");
-  const [editRecurrence, setEditRecurrence] = useState("first_friday");
+  const [editRecurrenceOrdinal, setEditRecurrenceOrdinal] = useState("first");
+  const [editRecurrenceDay, setEditRecurrenceDay] = useState("friday");
   const [editSaveTheDateTpl, setEditSaveTheDateTpl] = useState("");
   const [editPerformerTpl, setEditPerformerTpl] = useState("");
 
@@ -146,7 +151,8 @@ export default function OpenMicSeriesPage() {
     setSelected(s);
     setEditMode(false);
     setEditName(s.name); setEditLocation(s.location); setEditTime(s.eventTime);
-    setEditRecurrence(s.recurrenceType ?? "first_friday");
+    const parsed = parseRecurrenceType(s.recurrenceType ?? "first_friday");
+    setEditRecurrenceOrdinal(parsed.ordinal); setEditRecurrenceDay(parsed.day);
     setEditAddress(s.address ?? ""); setEditSaveTheDateTpl(s.saveTheDateTemplate ?? "");
     setEditPerformerTpl(s.performerReminderTemplate ?? "");
     loadSeriesDetail(s);
@@ -157,10 +163,10 @@ export default function OpenMicSeriesPage() {
     try {
       const data = await apiFetch("/open-mic/series", {
         method: "POST",
-        body: JSON.stringify({ name: newName, location: newLocation, eventTime: newTime, slug: newSlug, address: newAddress, recurrenceType: newRecurrence }),
+        body: JSON.stringify({ name: newName, location: newLocation, eventTime: newTime, slug: newSlug, address: newAddress, recurrenceType: buildRecurrenceType(newRecurrenceOrdinal, newRecurrenceDay) }),
       });
       toast({ title: `Series created — ${data.eventsCreated} event(s) auto-created` });
-      setCreating(false); setNewName(""); setNewLocation("CVP Towson"); setNewTime("6:00 PM"); setNewSlug(""); setNewAddress(""); setNewRecurrence("first_friday");
+      setCreating(false); setNewName(""); setNewLocation("CVP Towson"); setNewTime("6:00 PM"); setNewSlug(""); setNewAddress(""); setNewRecurrenceOrdinal("first"); setNewRecurrenceDay("friday");
       await loadSeries();
       selectSeries(data.series);
     } catch (err: any) { toast({ title: err.message ?? "Failed to create series", variant: "destructive" }); }
@@ -173,7 +179,7 @@ export default function OpenMicSeriesPage() {
         method: "PUT",
         body: JSON.stringify({
           name: editName, location: editLocation, eventTime: editTime,
-          recurrenceType: editRecurrence,
+          recurrenceType: buildRecurrenceType(editRecurrenceOrdinal, editRecurrenceDay),
           address: editAddress, saveTheDateTemplate: editSaveTheDateTpl || null,
           performerReminderTemplate: editPerformerTpl || null,
         }),
@@ -302,10 +308,17 @@ export default function OpenMicSeriesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-[#888]">Recurrence *</label>
-                  <select value={newRecurrence} onChange={e => setNewRecurrence(e.target.value)}
-                    className="w-full rounded-md bg-[#1a1a1a] border border-white/10 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#7250ef]/50">
-                    {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  <div className="flex gap-2">
+                    <select value={newRecurrenceOrdinal} onChange={e => setNewRecurrenceOrdinal(e.target.value)}
+                      className="w-24 rounded-md bg-[#1a1a1a] border border-white/10 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#7250ef]/50">
+                      {ORDINAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <select value={newRecurrenceDay} onChange={e => setNewRecurrenceDay(e.target.value)}
+                      className="flex-1 rounded-md bg-[#1a1a1a] border border-white/10 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#7250ef]/50">
+                      {WEEKDAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <span className="flex items-center text-xs text-[#555] whitespace-nowrap">of the month</span>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-[#888]">Address (optional)</label>
@@ -347,10 +360,16 @@ export default function OpenMicSeriesPage() {
                     </span>
                     <span className="flex items-center gap-1"><Repeat className="h-3.5 w-3.5" />
                       {editMode ? (
-                        <select value={editRecurrence} onChange={e => setEditRecurrence(e.target.value)}
-                          className="h-6 text-xs rounded bg-[#1a1a1a] border border-white/10 px-1 text-white outline-none">
-                          {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                        <span className="flex items-center gap-1">
+                          <select value={editRecurrenceOrdinal} onChange={e => setEditRecurrenceOrdinal(e.target.value)}
+                            className="h-6 text-xs rounded bg-[#1a1a1a] border border-white/10 px-1 text-white outline-none">
+                            {ORDINAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                          <select value={editRecurrenceDay} onChange={e => setEditRecurrenceDay(e.target.value)}
+                            className="h-6 text-xs rounded bg-[#1a1a1a] border border-white/10 px-1 text-white outline-none">
+                            {WEEKDAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </span>
                       ) : recurrenceLabel(selected.recurrenceType ?? "first_friday")}
                     </span>
                     <span className="text-[#555] text-xs">/open-mic/{selected.slug}
