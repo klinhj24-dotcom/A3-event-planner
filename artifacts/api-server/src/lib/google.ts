@@ -135,11 +135,33 @@ export function buildHtmlEmail({
   ctaLabel?: string;
   ctaUrl?: string;
 }): string {
-  const escapedBody = body
+  // Step 1: pull out markdown-style links [text](url) before escaping
+  const mdLinks: Array<{ text: string; url: string }> = [];
+  let processed = body.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, text, url) => {
+    const idx = mdLinks.length;
+    mdLinks.push({ text, url });
+    return `\x00LINK${idx}\x00`;
+  });
+
+  // Step 2: escape HTML entities
+  processed = processed
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br>");
+    .replace(/>/g, "&gt;");
+
+  // Step 3: auto-link bare URLs (not already inside a LINK sentinel)
+  processed = processed.replace(/https?:\/\/[^\s<>"&]+/g, url =>
+    `<a href="${url}" style="color:#7250ef;text-decoration:none;">${url}</a>`
+  );
+
+  // Step 4: restore markdown links as styled anchors
+  processed = processed.replace(/\x00LINK(\d+)\x00/g, (_, idx) => {
+    const { text, url } = mdLinks[Number(idx)];
+    return `<a href="${url}" style="color:#7250ef;text-decoration:none;">${text}</a>`;
+  });
+
+  // Step 5: newlines → line breaks
+  const escapedBody = processed.replace(/\n/g, "<br>");
 
   const ctaBlock = ctaLabel && ctaUrl
     ? `<div style="text-align:center;margin:32px 0;">
