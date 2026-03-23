@@ -533,4 +533,121 @@ router.post("/events/:id/ticket-requests/remind", async (req, res) => {
   }
 });
 
+// ── Admin: bulk import pre-paid registrations (no emails sent) ────────────────
+router.post("/admin/bulk-import-tickets", async (req, res) => {
+  const IMPORT_SECRET = process.env.ADMIN_IMPORT_SECRET;
+  if (!IMPORT_SECRET || req.headers["x-import-secret"] !== IMPORT_SECRET) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { eventId, registrations } = req.body as {
+    eventId: number;
+    registrations: Array<{
+      contactFirstName: string;
+      contactLastName: string;
+      contactEmail: string;
+      studentFirstName: string;
+      studentLastName: string;
+      instrument: string;
+      recitalSong?: string | null;
+      teacher: string;
+      specialConsiderations?: string | null;
+    }>;
+  };
+
+  if (!eventId || !Array.isArray(registrations) || registrations.length === 0) {
+    res.status(400).json({ error: "eventId and registrations[] required" });
+    return;
+  }
+
+  const results: { name: string; status: string; error?: string }[] = [];
+
+  for (const r of registrations) {
+    const name = `${r.studentFirstName} ${r.studentLastName}`;
+    try {
+      // Skip if already registered by email
+      const [existingEmail] = await db
+        .select({ id: eventTicketRequestsTable.id })
+        .from(eventTicketRequestsTable)
+        .where(and(
+          eq(eventTicketRequestsTable.eventId, eventId),
+          eq(eventTicketRequestsTable.contactEmail, r.contactEmail.toLowerCase().trim()),
+          ne(eventTicketRequestsTable.status, "cancelled"),
+        ))
+        .limit(1);
+
+      if (existingEmail) {
+        results.push({ name, status: "skipped — email already registered" });
+        continue;
+      }
+
+      // Skip if student already registered by name
+      const [existingStudent] = await db
+        .select({ id: eventTicketRequestsTable.id })
+        .from(eventTicketRequestsTable)
+        .where(and(
+          eq(eventTicketRequestsTable.eventId, eventId),
+          sql`LOWER(${eventTicketRequestsTable.studentFirstName}) = LOWER(${r.studentFirstName.trim()})`,
+          sql`LOWER(${eventTicketRequestsTable.studentLastName}) = LOWER(${r.studentLastName.trim()})`,
+          ne(eventTicketRequestsTable.status, "cancelled"),
+        ))
+        .limit(1);
+
+      if (existingStudent) {
+        results.push({ name, status: "skipped — student already registered" });
+        continue;
+      }
+
+      // Insert ticket request as paid, skipping all emails
+      const [inserted] = await db
+        .insert(eventTicketRequestsTable)
+        .values({
+          eventId,
+          formType: "recital",
+          contactFirstName: r.contactFirstName,
+          contactLastName: r.contactLastName,
+          contactEmail: r.contactEmail.toLowerCase().trim(),
+          studentFirstName: r.studentFirstName,
+          studentLastName: r.studentLastName,
+          instrument: r.instrument,
+          recitalSong: r.recitalSong ?? null,
+          teacher: r.teacher,
+          specialConsiderations: r.specialConsiderations ?? null,
+          status: "paid",
+        })
+        .returning();
+
+      // Add to lineup
+      const [{ total }] = await db
+        .select({ total: count() })
+        .from(eventLineupTable)
+        .where(eq(eventLineupTable.eventId, eventId));
+
+      const notesParts = [r.instrument, r.recitalSong].filter(Boolean);
+      await db.insert(eventLineupTable).values({
+        eventId,
+        type: "act",
+        label: name,
+        groupName: r.teacher ?? null,
+        notes: notesParts.length ? notesParts.join(" · ") : null,
+        durationMinutes: 5,
+        bufferMinutes: 2,
+        position: Number(total) + 1,
+        inviteStatus: "not_sent",
+        isOverlapping: false,
+        confirmed: false,
+        confirmationSent: false,
+        reminderSent: false,
+      });
+
+      results.push({ name, status: "imported" });
+    } catch (err: any) {
+      results.push({ name, status: "error", error: err.message });
+    }
+  }
+
+  res.json({ results });
+});
+
 export default router;
