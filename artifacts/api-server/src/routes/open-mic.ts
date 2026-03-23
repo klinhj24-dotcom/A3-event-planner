@@ -312,6 +312,11 @@ Show up early for a better performance slot — order is based on arrival time.
 
 We'll send a reminder a few days before with the performer list. See you there!
 
+A couple quick notes & promos:
+1) We have upcoming shows at The Music Space (jazz + songwriter sessions). https://www.eventbrite.com/o/the-music-space-119103783971
+2) We are still offering a free trial lesson for any instrument or voice. Reach out for more info or signup at https://www.themusicspace.com
+3) Need help recording your songs? We'd love to help. Just reply to this email and tell us what you have in mind.
+
 The Music Space Team`;
         const html = buildHtmlEmail({ body });
         const raw = makeHtmlEmail({ to: email.trim(), from, subject: `You're on the list! ${series.name} – ${dateLabel}`, html, cc: [TMS_INFO] });
@@ -355,6 +360,12 @@ You're on the list! We've got you signed up for the Music Space Open Mic on ${ff
 Show up early for a better performance slot — order is based on arrival time.
 
 See you there!
+
+A couple quick notes & promos:
+1) We have upcoming shows at The Music Space (jazz + songwriter sessions). https://www.eventbrite.com/o/the-music-space-119103783971
+2) We are still offering a free trial lesson for any instrument or voice. Reach out for more info or signup at https://www.themusicspace.com
+3) Need help recording your songs? We'd love to help. Just reply to this email and tell us what you have in mind.
+
 The Music Space Team`;
         const html = buildHtmlEmail({ body });
         const raw = makeHtmlEmail({ to: email.trim(), from, subject: `You're on the list! Open Mic – ${ff.label}`, html, cc: [TMS_INFO] });
