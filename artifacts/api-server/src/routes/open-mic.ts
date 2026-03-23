@@ -24,18 +24,65 @@ const INSTRUMENTS = [
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function firstFridayOf(year: number, month: number): { year: number; month: number; day: number } {
-  const d = new Date(Date.UTC(year, month, 1));
-  const dow = d.getUTCDay();
-  const daysUntilFri = dow <= 5 ? 5 - dow : 12 - dow;
-  return { year, month, day: 1 + daysUntilFri };
+const ORDINAL_MAP: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4 };
+const WEEKDAY_MAP: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+
+export const RECURRENCE_OPTIONS = [
+  { value: "first_sunday",   label: "1st Sunday of the month" },
+  { value: "first_monday",   label: "1st Monday of the month" },
+  { value: "first_tuesday",  label: "1st Tuesday of the month" },
+  { value: "first_wednesday",label: "1st Wednesday of the month" },
+  { value: "first_thursday", label: "1st Thursday of the month" },
+  { value: "first_friday",   label: "1st Friday of the month" },
+  { value: "first_saturday", label: "1st Saturday of the month" },
+  { value: "second_sunday",  label: "2nd Sunday of the month" },
+  { value: "second_monday",  label: "2nd Monday of the month" },
+  { value: "second_tuesday", label: "2nd Tuesday of the month" },
+  { value: "second_wednesday",label: "2nd Wednesday of the month" },
+  { value: "second_thursday",label: "2nd Thursday of the month" },
+  { value: "second_friday",  label: "2nd Friday of the month" },
+  { value: "second_saturday",label: "2nd Saturday of the month" },
+  { value: "third_sunday",   label: "3rd Sunday of the month" },
+  { value: "third_monday",   label: "3rd Monday of the month" },
+  { value: "third_tuesday",  label: "3rd Tuesday of the month" },
+  { value: "third_wednesday",label: "3rd Wednesday of the month" },
+  { value: "third_thursday", label: "3rd Thursday of the month" },
+  { value: "third_friday",   label: "3rd Friday of the month" },
+  { value: "third_saturday", label: "3rd Saturday of the month" },
+  { value: "fourth_friday",  label: "4th Friday of the month" },
+  { value: "fourth_saturday",label: "4th Saturday of the month" },
+];
+
+/** Parse a recurrence_type string like "first_friday" → { n: 1, weekday: 5 } */
+function parseRecurrence(recurrenceType: string): { n: number; weekday: number } {
+  const parts = recurrenceType.split("_");
+  const ordinalStr = parts[0] ?? "first";
+  const weekdayStr = parts.slice(1).join("_");
+  return {
+    n: ORDINAL_MAP[ordinalStr] ?? 1,
+    weekday: WEEKDAY_MAP[weekdayStr] ?? 5,
+  };
 }
 
-function formatFirstFriday(year: number, month: number) {
-  const { day } = firstFridayOf(year, month);
-  const dow = new Date(Date.UTC(year, month, day)).getUTCDay();
+export function recurrenceLabel(recurrenceType: string): string {
+  return RECURRENCE_OPTIONS.find(o => o.value === recurrenceType)?.label ?? recurrenceType;
+}
+
+/** Get the Nth occurrence of a weekday in a given year/month (UTC) */
+function getNthWeekdayOf(year: number, month: number, n: number, weekday: number): { year: number; month: number; day: number } {
+  const firstOfMonth = new Date(Date.UTC(year, month, 1));
+  const dow = firstOfMonth.getUTCDay();
+  const daysUntil = (weekday - dow + 7) % 7;
+  const firstOccurrence = 1 + daysUntil;
+  const day = firstOccurrence + (n - 1) * 7;
+  return { year, month, day };
+}
+
+function formatOccurrence(year: number, month: number, recurrenceType = "first_friday") {
+  const { n, weekday } = parseRecurrence(recurrenceType);
+  const { day } = getNthWeekdayOf(year, month, n, weekday);
   return {
-    label: `${WEEKDAY_NAMES[dow]}, ${MONTH_NAMES[month]} ${day}, ${year}`,
+    label: `${WEEKDAY_NAMES[weekday]}, ${MONTH_NAMES[month]} ${day}, ${year}`,
     monthKey: `${year}-${String(month + 1).padStart(2, "0")}`,
     date: new Date(Date.UTC(year, month, day, 17, 0, 0)),
     day,
@@ -44,8 +91,9 @@ function formatFirstFriday(year: number, month: number) {
   };
 }
 
-/** Returns the next N first Fridays starting from the current month (or next if current has passed) */
-export function getUpcomingFirstFridays(count: number) {
+/** Returns the next N occurrences for a recurrence type, starting from today */
+export function getUpcomingOccurrences(recurrenceType = "first_friday", count: number) {
+  const { n, weekday } = parseRecurrence(recurrenceType);
   const now = new Date();
   const todayYear = now.getUTCFullYear();
   const todayMonth = now.getUTCMonth();
@@ -56,19 +104,20 @@ export function getUpcomingFirstFridays(count: number) {
     let y = todayYear;
     let m = todayMonth + offset;
     if (m > 11) { y += Math.floor(m / 12); m = m % 12; }
-    const ff = formatFirstFriday(y, m);
-    const isUpcoming = (ff.year > todayYear) || (ff.year === todayYear && ff.month > todayMonth) ||
-      (ff.year === todayYear && ff.month === todayMonth && ff.day >= todayDay);
-    if (isUpcoming) results.push(ff);
+    const occ = formatOccurrence(y, m, recurrenceType);
+    const isUpcoming = (occ.year > todayYear) || (occ.year === todayYear && occ.month > todayMonth) ||
+      (occ.year === todayYear && occ.month === todayMonth && occ.day >= todayDay);
+    if (isUpcoming) results.push(occ);
     offset++;
     if (offset > 20) break;
   }
   return results;
 }
 
-function getNextOpenMicDate() {
-  return getUpcomingFirstFridays(1)[0];
-}
+// Keep backward-compat export used by cron
+export function getUpcomingFirstFridays(count: number) { return getUpcomingOccurrences("first_friday", count); }
+
+function getNextOpenMicDate() { return getUpcomingOccurrences("first_friday", 1)[0]; }
 
 async function getSenderUser() {
   const users = await db.select().from(usersTable);
@@ -138,9 +187,9 @@ async function sendEmailToList(opts: {
   return uniqueRecipients.length;
 }
 
-/** Auto-create events for a series for the next N months (idempotent) */
+/** Auto-create events for a series for the next N occurrences (idempotent) */
 export async function ensureUpcomingEvents(series: any, count = 3) {
-  const upcoming = getUpcomingFirstFridays(count);
+  const upcoming = getUpcomingOccurrences(series.recurrenceType ?? "first_friday", count);
   const created = [];
   for (const ff of upcoming) {
     const existing = await db.select({ id: eventsTable.id })
