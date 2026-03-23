@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "wouter";
 import tmsLogo from "@assets/TMS_Symbol_Gradient@4x_1773281994585.png";
 
 const INSTRUMENT_OPTIONS = [
@@ -19,6 +20,9 @@ interface OpenMicInfo {
 }
 
 export default function OpenMicSignup() {
+  const params = useParams<{ slug?: string }>();
+  const slug = params.slug ?? null;
+
   const [info, setInfo] = useState<OpenMicInfo | null>(null);
   const [form, setForm] = useState({ name: "", email: "", instrument: "", artistWebsite: "", musicLink: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -26,11 +30,12 @@ export default function OpenMicSignup() {
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    fetch("/api/open-mic/info")
+    const url = slug ? `/api/open-mic/${slug}/info` : "/api/open-mic/info";
+    fetch(url)
       .then(r => r.json())
       .then(setInfo)
       .catch(() => {});
-  }, []);
+  }, [slug]);
 
   function validate() {
     const e: Record<string, string> = {};
@@ -48,7 +53,8 @@ export default function OpenMicSignup() {
     setErrors({});
     setStatus("submitting");
     try {
-      const r = await fetch("/api/open-mic/signup", {
+      const submitUrl = slug ? `/api/open-mic/${slug}/signup` : "/api/open-mic/signup";
+      const r = await fetch(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

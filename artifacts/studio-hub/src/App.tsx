@@ -57,6 +57,7 @@ function Router() {
       <Route path="/ticket/:token" component={TicketForm} />
       <Route path="/guest-list/:token" component={GuestListForm} />
       <Route path="/band-confirm/:token" component={BandConfirm} />
+      <Route path="/open-mic/:slug" component={OpenMicSignup} />
       <Route path="/open-mic" component={OpenMicSignup} />
       <Route path="/my-schedule">{() => <ProtectedRoute component={MySchedule} />}</Route>
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
