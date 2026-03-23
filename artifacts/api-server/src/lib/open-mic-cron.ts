@@ -91,8 +91,9 @@ async function runOpenMicCron() {
             const performers = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.eventId, event.id));
             const mlEntries3 = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
             const mailingList = mlEntries3.map(e => e.email);
-            const performerBlock = performers.length
-              ? performers.map((p, i) => `  ${i + 1}. ${p.name}`).join("\n")
+            const sortedPerformers = [...performers].sort((a, b) => a.name.localeCompare(b.name));
+            const performerBlock = sortedPerformers.length
+              ? sortedPerformers.map((p, i) => `  ${i + 1}. ${p.name}`).join("\n")
               : "  No performers have signed up yet.";
             if (!mailingList.length) {
               console.log(`[open-mic-cron] Series ${series.id}: 3-day email skipped — no mailing list yet`);

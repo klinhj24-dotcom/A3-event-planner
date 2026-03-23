@@ -822,6 +822,52 @@ type OverviewActions = {
   onDelete: (ev: OverviewEvent) => void;
 };
 
+function OpenMicPerformerList({ performers }: { performers: any[] }) {
+  const [sortBy, setSortBy] = useState<"date" | "alpha">("date");
+  const sorted = [...performers].sort((a, b) =>
+    sortBy === "alpha"
+      ? a.name.localeCompare(b.name)
+      : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Mic className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Performers Signed Up</span>
+        <span className="ml-1 bg-[#7250ef]/10 text-[#7250ef] rounded-full px-2 py-0.5 text-[10px] font-bold">{performers.length}</span>
+        <div className="ml-auto flex items-center border border-border/40 rounded-lg overflow-hidden text-[10px]">
+          <button
+            onClick={() => setSortBy("date")}
+            className={`px-2 py-1 transition-colors ${sortBy === "date" ? "bg-[#7250ef]/20 text-[#7250ef]" : "text-muted-foreground hover:text-foreground"}`}
+          >Date</button>
+          <button
+            onClick={() => setSortBy("alpha")}
+            className={`px-2 py-1 transition-colors border-l border-border/40 ${sortBy === "alpha" ? "bg-[#7250ef]/20 text-[#7250ef]" : "text-muted-foreground hover:text-foreground"}`}
+          >A–Z</button>
+        </div>
+      </div>
+      {performers.length === 0 ? (
+        <p className="text-xs text-muted-foreground/60 py-1">No one has signed up yet.</p>
+      ) : (
+        <div className="space-y-1.5 max-h-52 overflow-y-auto">
+          {sorted.map((p: any, i: number) => (
+            <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/40 bg-muted/40 text-xs">
+              <span className="text-muted-foreground/40 font-mono w-4 shrink-0 text-right">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-foreground">{p.name}</div>
+                <div className="text-muted-foreground truncate">{p.instrument}</div>
+              </div>
+              <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                {p.createdAt ? format(new Date(p.createdAt), "MMM d") : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EventOverviewSheet({
   event,
   open,
@@ -1642,27 +1688,7 @@ function EventOverviewSheet({
 
           {/* Open Mic performer signup list */}
           {event.openMicSeriesId && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Mic className="h-3.5 w-3.5" /> Performers Signed Up
-                <span className="ml-auto bg-[#7250ef]/10 text-[#7250ef] rounded-full px-2 py-0.5 text-[10px] font-bold">{openMicPerformers.length}</span>
-              </h4>
-              {openMicPerformers.length === 0 ? (
-                <p className="text-xs text-muted-foreground/60 py-1">No one has signed up yet.</p>
-              ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {openMicPerformers.map((p: any, i: number) => (
-                    <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/40 bg-muted/40 text-xs">
-                      <span className="text-muted-foreground/40 font-mono w-4 shrink-0 text-right">{i + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground">{p.name}</div>
-                        <div className="text-muted-foreground truncate">{p.instrument}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <OpenMicPerformerList performers={openMicPerformers} />
           )}
 
           {/* Quick actions */}

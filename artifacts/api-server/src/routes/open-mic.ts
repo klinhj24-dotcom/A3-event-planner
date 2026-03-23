@@ -771,9 +771,9 @@ router.post("/open-mic/events/:eventId/send-performer-list", async (req, res) =>
     const gmail = google.gmail({ version: "v1", auth });
     const from = sender.googleEmail ?? sender.email ?? "";
 
-    // Get performers signed up for THIS event
+    // Get performers signed up for THIS event, sorted alphabetically
     const performers = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.eventId, eventId));
-    const performerNames = performers.map(p => p.name);
+    const performerNames = [...performers].sort((a, b) => a.name.localeCompare(b.name)).map(p => p.name);
 
     // Mailing list = dedicated mailing list table
     const mailingListEntries = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
