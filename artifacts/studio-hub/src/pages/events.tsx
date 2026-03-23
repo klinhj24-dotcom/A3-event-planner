@@ -1469,12 +1469,14 @@ function EventOverviewSheet({
                         onChange={e => updateTicketStatus({ requestId: r.id, status: e.target.value })}
                         className={`rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize border-0 outline-none cursor-pointer ${
                           r.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
+                          r.status === "paid" ? "bg-emerald-500/10 text-emerald-600" :
                           r.status === "cancelled" ? "bg-destructive/10 text-destructive" :
                           "bg-amber-500/10 text-amber-600"
                         }`}
                       >
                         <option value="pending">pending</option>
                         <option value="confirmed">confirmed</option>
+                        <option value="paid">paid</option>
                         <option value="cancelled">cancelled</option>
                       </select>
                       <button
