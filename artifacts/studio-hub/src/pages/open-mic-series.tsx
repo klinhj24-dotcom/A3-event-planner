@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import {
   Plus, Mic, MapPin, Clock, Users, Mail, CheckCircle2, Send,
   FlaskConical, RefreshCw, Pencil, Save, X, ToggleLeft, ToggleRight, ExternalLink, Repeat,
+  Upload, Download, Trash2, UserPlus,
 } from "lucide-react";
 
 const ORDINAL_OPTIONS = [
@@ -63,6 +64,9 @@ type Signup = {
   id: number; name: string; email: string; instrument: string;
   artistWebsite?: string; musicLink?: string; eventMonth?: string; createdAt: string;
 };
+type MailingListEntry = {
+  id: number; seriesId: number; name: string; email: string; source: string; addedAt: string;
+};
 
 const DEFAULT_SAVE_THE_DATE = `Hi everyone,
 
@@ -96,7 +100,12 @@ export default function OpenMicSeriesPage() {
   const [selected, setSelected] = useState<Series | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [signups, setSignups] = useState<Signup[]>([]);
+  const [mailingList, setMailingList] = useState<MailingListEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mlAddName, setMlAddName] = useState("");
+  const [mlAddEmail, setMlAddEmail] = useState("");
+  const [mlAdding, setMlAdding] = useState(false);
+  const [mlImporting, setMlImporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [sendingState, setSendingState] = useState<Record<string, boolean>>({});
@@ -136,15 +145,70 @@ export default function OpenMicSeriesPage() {
   const loadSeriesDetail = useCallback(async (s: Series) => {
     setLoading(true);
     try {
-      const [evData, sgData] = await Promise.all([
+      const [evData, sgData, mlData] = await Promise.all([
         apiFetch(`/open-mic/series/${s.id}/events`),
         apiFetch(`/open-mic/series/${s.id}/signups`),
+        apiFetch(`/open-mic/series/${s.id}/mailing-list`),
       ]);
       setEvents(evData);
       setSignups(sgData);
+      setMailingList(mlData);
     } catch { toast({ title: "Failed to load series details", variant: "destructive" }); }
     setLoading(false);
   }, []);
+
+  async function handleAddToMailingList() {
+    if (!selected || !mlAddEmail.trim()) return;
+    setMlAdding(true);
+    try {
+      const entry = await apiFetch(`/open-mic/series/${selected.id}/mailing-list`, {
+        method: "POST",
+        body: JSON.stringify({ name: mlAddName.trim() || mlAddEmail.trim(), email: mlAddEmail.trim() }),
+      });
+      setMailingList(prev => [...prev, entry]);
+      setMlAddName(""); setMlAddEmail("");
+      toast({ title: "Added to mailing list" });
+    } catch (e: any) { toast({ title: e.message ?? "Failed to add", variant: "destructive" }); }
+    setMlAdding(false);
+  }
+
+  async function handleRemoveFromMailingList(entryId: number) {
+    if (!selected) return;
+    try {
+      await apiFetch(`/open-mic/series/${selected.id}/mailing-list/${entryId}`, { method: "DELETE" });
+      setMailingList(prev => prev.filter(e => e.id !== entryId));
+    } catch { toast({ title: "Failed to remove", variant: "destructive" }); }
+  }
+
+  function handleExportCSV() {
+    if (!selected) return;
+    window.open(`/api/open-mic/series/${selected.id}/mailing-list/export.csv`, "_blank");
+  }
+
+  async function handleImportCSV(file: File) {
+    if (!selected) return;
+    setMlImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      const header = lines[0].toLowerCase();
+      const hasHeader = header.includes("email");
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      const emailIdx = hasHeader ? header.split(",").findIndex(h => h.includes("email")) : 1;
+      const nameIdx  = hasHeader ? header.split(",").findIndex(h => h.includes("name"))  : 0;
+      const rows = dataLines.map(line => {
+        const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+        return { name: cols[nameIdx] ?? "", email: cols[emailIdx < 0 ? 0 : emailIdx] ?? "" };
+      }).filter(r => r.email.includes("@"));
+      const result = await apiFetch(`/open-mic/series/${selected.id}/mailing-list/import`, {
+        method: "POST", body: JSON.stringify({ rows }),
+      });
+      toast({ title: `Imported ${result.added} contacts` });
+      const mlData = await apiFetch(`/open-mic/series/${selected.id}/mailing-list`);
+      setMailingList(mlData);
+    } catch (e: any) { toast({ title: e.message ?? "Import failed", variant: "destructive" }); }
+    setMlImporting(false);
+  }
 
   useEffect(() => { loadSeries(); }, [loadSeries]);
 
@@ -405,7 +469,7 @@ export default function OpenMicSeriesPage() {
               <Tabs defaultValue="events">
                 <TabsList className="bg-[#1a1a1a] border border-white/10">
                   <TabsTrigger value="events">Events</TabsTrigger>
-                  <TabsTrigger value="mailing-list">Mailing List ({signups.length})</TabsTrigger>
+                  <TabsTrigger value="mailing-list">Mailing List ({mailingList.length})</TabsTrigger>
                   <TabsTrigger value="templates">Email Templates</TabsTrigger>
                 </TabsList>
 
@@ -519,10 +583,53 @@ export default function OpenMicSeriesPage() {
                 </TabsContent>
 
                 {/* ── MAILING LIST TAB ── */}
-                <TabsContent value="mailing-list" className="mt-4">
-                  <p className="text-sm text-[#888] mb-3">
-                    Everyone who has signed up for any event in this series. Both the 21-day save-the-date and the 3-day performer list go to this full list.
-                  </p>
+                <TabsContent value="mailing-list" className="mt-4 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-sm text-[#888]">
+                      Both the 21-day save-the-date and 3-day performer list go to this full list.
+                      Performers who sign up are added automatically.
+                    </p>
+                    <div className="flex gap-2 shrink-0">
+                      <label className="cursor-pointer">
+                        <input type="file" accept=".csv" className="hidden" onChange={e => {
+                          const f = e.target.files?.[0];
+                          if (f) handleImportCSV(f);
+                          e.target.value = "";
+                        }} />
+                        <Button size="sm" variant="outline" className="border-white/10 h-8 pointer-events-none" asChild>
+                          <span>
+                            {mlImporting ? <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                            Import CSV
+                          </span>
+                        </Button>
+                      </label>
+                      <Button size="sm" variant="outline" className="border-white/10 h-8" onClick={handleExportCSV}>
+                        <Download className="h-3.5 w-3.5 mr-1.5" />Export CSV
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Add manually */}
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      placeholder="Name"
+                      value={mlAddName}
+                      onChange={e => setMlAddName(e.target.value)}
+                      className="bg-[#1a1a1a] border-white/10 h-8 text-sm max-w-[180px]"
+                    />
+                    <Input
+                      placeholder="Email address"
+                      value={mlAddEmail}
+                      onChange={e => setMlAddEmail(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleAddToMailingList()}
+                      className="bg-[#1a1a1a] border-white/10 h-8 text-sm max-w-[220px]"
+                    />
+                    <Button size="sm" onClick={handleAddToMailingList} disabled={mlAdding || !mlAddEmail.trim()}
+                      className="h-8 bg-[#7250ef] hover:bg-[#5f3dd4]">
+                      <UserPlus className="h-3.5 w-3.5 mr-1.5" />{mlAdding ? "Adding…" : "Add"}
+                    </Button>
+                  </div>
+
                   {loading ? (
                     <div className="text-center py-8 text-[#555] text-sm animate-pulse">Loading…</div>
                   ) : (
@@ -532,23 +639,37 @@ export default function OpenMicSeriesPage() {
                           <TableRow className="hover:bg-transparent border-white/10">
                             <TableHead className="text-[#888] font-semibold text-xs">Name</TableHead>
                             <TableHead className="text-[#888] font-semibold text-xs">Email</TableHead>
-                            <TableHead className="text-[#888] font-semibold text-xs">Instrument</TableHead>
-                            <TableHead className="text-[#888] font-semibold text-xs">Month</TableHead>
-                            <TableHead className="text-[#888] font-semibold text-xs">Signed Up</TableHead>
+                            <TableHead className="text-[#888] font-semibold text-xs">Source</TableHead>
+                            <TableHead className="text-[#888] font-semibold text-xs">Added</TableHead>
+                            <TableHead className="w-8" />
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {signups.length === 0 && (
-                            <TableRow><TableCell colSpan={5} className="text-center text-[#555] text-sm py-6">No signups yet.</TableCell></TableRow>
+                          {mailingList.length === 0 && (
+                            <TableRow><TableCell colSpan={5} className="text-center text-[#555] text-sm py-6">No contacts yet. Add manually or import a CSV.</TableCell></TableRow>
                           )}
-                          {signups.map(s => (
-                            <TableRow key={s.id} className="border-white/5">
-                              <TableCell className="font-medium text-sm">{s.name}</TableCell>
-                              <TableCell className="text-sm text-[#aaa]">{s.email}</TableCell>
-                              <TableCell className="text-sm text-[#aaa]">{s.instrument}</TableCell>
-                              <TableCell className="text-xs text-[#666]">{s.eventMonth ?? "—"}</TableCell>
+                          {mailingList.map(entry => (
+                            <TableRow key={entry.id} className="border-white/5">
+                              <TableCell className="font-medium text-sm">{entry.name}</TableCell>
+                              <TableCell className="text-sm text-[#aaa]">{entry.email}</TableCell>
+                              <TableCell>
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                  entry.source === "signup" ? "bg-[#7250ef]/15 text-[#a88ef5]" :
+                                  entry.source === "import" ? "bg-[#00b199]/15 text-[#00b199]" :
+                                  "bg-white/5 text-[#888]"
+                                }`}>
+                                  {entry.source}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-xs text-[#666]">
-                                {s.createdAt ? format(new Date(s.createdAt), "MMM d, yyyy") : "—"}
+                                {entry.addedAt ? format(new Date(entry.addedAt), "MMM d, yyyy") : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  onClick={() => handleRemoveFromMailingList(entry.id)}
+                                  className="text-[#555] hover:text-red-400 transition-colors p-1">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
                               </TableCell>
                             </TableRow>
                           ))}

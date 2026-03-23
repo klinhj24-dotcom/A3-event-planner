@@ -125,6 +125,16 @@ async function runMigrations() {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_month VARCHAR(20)`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_save_the_date_sent BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_performer_list_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    // ── Open Mic Mailing List ────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS open_mic_mailing_list (
+      id SERIAL PRIMARY KEY,
+      series_id INTEGER NOT NULL REFERENCES open_mic_series(id) ON DELETE CASCADE,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      source VARCHAR(50) NOT NULL DEFAULT 'signup',
+      added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS open_mic_mailing_list_series_email ON open_mic_mailing_list (series_id, email)`,
   ];
   for (const m of migrations) {
     try {

@@ -29,6 +29,19 @@ export const openMicSignupsTable = pgTable("open_mic_signups", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const openMicMailingListTable = pgTable("open_mic_mailing_list", {
+  id: serial("id").primaryKey(),
+  seriesId: integer("series_id").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  source: varchar("source", { length: 50 }).notNull().default("signup"), // 'signup' | 'import' | 'manual'
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertOpenMicMailingListSchema = createInsertSchema(openMicMailingListTable).omit({ id: true, addedAt: true });
+export type InsertOpenMicMailingListEntry = z.infer<typeof insertOpenMicMailingListSchema>;
+export type OpenMicMailingListEntry = typeof openMicMailingListTable.$inferSelect;
+
 export const insertOpenMicSeriesSchema = createInsertSchema(openMicSeriesTable).omit({ id: true, createdAt: true });
 export type InsertOpenMicSeries = z.infer<typeof insertOpenMicSeriesSchema>;
 export type OpenMicSeries = typeof openMicSeriesTable.$inferSelect;

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, openMicSignupsTable, openMicSeriesTable, eventsTable, usersTable } from "@workspace/db";
+import { db, openMicSignupsTable, openMicSeriesTable, openMicMailingListTable, eventsTable, usersTable } from "@workspace/db";
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { google } from "googleapis";
@@ -122,6 +122,15 @@ function getNextOpenMicDate() { return getUpcomingOccurrences("first_friday", 1)
 async function getSenderUser() {
   const users = await db.select().from(usersTable);
   return users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+}
+
+/** Upsert a person onto a series mailing list (no-op if email already exists for that series) */
+async function addToMailingList(seriesId: number, name: string, email: string, source: "signup" | "import" | "manual" = "signup") {
+  try {
+    await db.insert(openMicMailingListTable)
+      .values({ seriesId, name, email: email.toLowerCase().trim(), source })
+      .onConflictDoNothing();
+  } catch (_) { /* ignore duplicate key */ }
 }
 
 function buildSaveTheDateBody(series: any, eventLabel: string, signupUrl: string, template?: string | null): string {
@@ -359,6 +368,9 @@ router.post("/open-mic/:slug/signup", async (req, res) => {
       eventId: nextEvent?.id ?? null,
     }).returning();
 
+    // Auto-add to series mailing list
+    await addToMailingList(series.id, name.trim(), email.trim(), "signup");
+
     // Confirmation email
     (async () => {
       try {
@@ -505,7 +517,7 @@ router.put("/open-mic/series/:id", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to update series" }); }
 });
 
-// ── Admin: get series signups (mailing list) ──────────────────────────────────
+// ── Admin: get series signups (per-event performer list) ──────────────────────
 router.get("/open-mic/series/:id/signups", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
@@ -515,6 +527,81 @@ router.get("/open-mic/series/:id/signups", async (req, res) => {
       .orderBy(desc(openMicSignupsTable.createdAt));
     res.json(signups);
   } catch (err) { res.status(500).json({ error: "Failed to fetch signups" }); }
+});
+
+// ── Admin: mailing list CRUD ───────────────────────────────────────────────────
+router.get("/open-mic/series/:id/mailing-list", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const list = await db.select().from(openMicMailingListTable)
+      .where(eq(openMicMailingListTable.seriesId, id))
+      .orderBy(openMicMailingListTable.addedAt);
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: "Failed to fetch mailing list" }); }
+});
+
+router.post("/open-mic/series/:id/mailing-list", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const { name, email } = req.body;
+    if (!name?.trim() || !email?.trim()) { res.status(400).json({ error: "Name and email required" }); return; }
+    await addToMailingList(id, name.trim(), email.trim(), "manual");
+    const [entry] = await db.select().from(openMicMailingListTable)
+      .where(and(eq(openMicMailingListTable.seriesId, id), eq(openMicMailingListTable.email, email.toLowerCase().trim())));
+    res.json(entry);
+  } catch (err) { res.status(500).json({ error: "Failed to add to mailing list" }); }
+});
+
+router.delete("/open-mic/series/:id/mailing-list/:entryId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const entryId = parseInt(req.params.entryId);
+    await db.delete(openMicMailingListTable).where(eq(openMicMailingListTable.id, entryId));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: "Failed to remove entry" }); }
+});
+
+// ── Admin: mailing list CSV export ────────────────────────────────────────────
+router.get("/open-mic/series/:id/mailing-list/export.csv", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const list = await db.select().from(openMicMailingListTable)
+      .where(eq(openMicMailingListTable.seriesId, id))
+      .orderBy(openMicMailingListTable.addedAt);
+    const rows = [
+      ["Name", "Email", "Source", "Added"],
+      ...list.map(e => [
+        `"${e.name.replace(/"/g, '""')}"`,
+        e.email,
+        e.source,
+        e.addedAt.toISOString(),
+      ]),
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="mailing-list-series-${id}.csv"`);
+    res.send(csv);
+  } catch (err) { res.status(500).json({ error: "Failed to export" }); }
+});
+
+// ── Admin: mailing list CSV import ────────────────────────────────────────────
+router.post("/open-mic/series/:id/mailing-list/import", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const { rows } = req.body as { rows: { name: string; email: string }[] };
+    if (!Array.isArray(rows)) { res.status(400).json({ error: "rows array required" }); return; }
+    let added = 0;
+    for (const row of rows) {
+      if (!row.email?.trim()) continue;
+      await addToMailingList(id, (row.name ?? "").trim() || row.email.trim(), row.email.trim(), "import");
+      added++;
+    }
+    res.json({ ok: true, added });
+  } catch (err) { res.status(500).json({ error: "Failed to import" }); }
 });
 
 // ── Admin: get events for a series ────────────────────────────────────────────
@@ -630,11 +717,9 @@ router.post("/open-mic/events/:eventId/send-save-the-date", async (req, res) => 
     const gmail = google.gmail({ version: "v1", auth });
     const from = sender.googleEmail ?? sender.email ?? "";
 
-    // Get mailing list (all-time signups for this series, deduped by email)
-    const allSignups = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, series.id));
-    const emailSet = new Set<string>();
-    allSignups.forEach(s => s.email && emailSet.add(s.email));
-    const mailingList = [...emailSet];
+    // Get mailing list from the dedicated table
+    const mailingListEntries = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
+    const mailingList = mailingListEntries.map(e => e.email);
 
     const d = event.startDate;
     const dateLabel = d
@@ -678,11 +763,9 @@ router.post("/open-mic/events/:eventId/send-performer-list", async (req, res) =>
     const performers = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.eventId, eventId));
     const performerNames = performers.map(p => p.name);
 
-    // Mailing list = all series signups (deduped)
-    const allSignups = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, series.id));
-    const emailSet = new Set<string>();
-    allSignups.forEach(s => s.email && emailSet.add(s.email));
-    const mailingList = [...emailSet];
+    // Mailing list = dedicated mailing list table
+    const mailingListEntries = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
+    const mailingList = mailingListEntries.map(e => e.email);
 
     const d = event.startDate;
     const dateLabel = d

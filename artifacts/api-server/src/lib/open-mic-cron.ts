@@ -1,4 +1,4 @@
-import { db, openMicSeriesTable, openMicSignupsTable, eventsTable, usersTable } from "@workspace/db";
+import { db, openMicSeriesTable, openMicSignupsTable, openMicMailingListTable, eventsTable, usersTable } from "@workspace/db";
 import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
@@ -59,10 +59,8 @@ async function runOpenMicCron() {
               ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
               : "http://localhost:3000";
             const signupUrl = `${BASE_URL}/open-mic/${series.slug}`;
-            const allSignups = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, series.id));
-            const emailSet = new Set<string>();
-            allSignups.forEach(s => s.email && emailSet.add(s.email));
-            const mailingList = [...emailSet];
+            const mlEntries = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
+            const mailingList = mlEntries.map(e => e.email);
             if (!mailingList.length) {
               console.log(`[open-mic-cron] Series ${series.id}: 21-day email skipped — no mailing list yet`);
             } else {
@@ -91,10 +89,8 @@ async function runOpenMicCron() {
         if (!event.openMicPerformerListSent && daysUntil >= 2.5 && daysUntil <= 3.5) {
           try {
             const performers = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.eventId, event.id));
-            const allSignups = await db.select().from(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, series.id));
-            const emailSet = new Set<string>();
-            allSignups.forEach(s => s.email && emailSet.add(s.email));
-            const mailingList = [...emailSet];
+            const mlEntries3 = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
+            const mailingList = mlEntries3.map(e => e.email);
             const performerBlock = performers.length
               ? performers.map((p, i) => `  ${i + 1}. ${p.name}`).join("\n")
               : "  No performers have signed up yet.";
