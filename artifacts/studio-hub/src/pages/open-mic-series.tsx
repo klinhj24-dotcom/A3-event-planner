@@ -109,6 +109,8 @@ export default function OpenMicSeriesPage() {
   const [creating, setCreating] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [sendingState, setSendingState] = useState<Record<string, boolean>>({});
+  const [archivedLists, setArchivedLists] = useState<{ seriesId: number; seriesName: string; entries: MailingListEntry[] }[]>([]);
+  const [showArchive, setShowArchive] = useState(false);
 
   // New series form
   const [newName, setNewName] = useState("");
@@ -137,8 +139,12 @@ export default function OpenMicSeriesPage() {
 
   const loadSeries = useCallback(async () => {
     try {
-      const data = await apiFetch("/open-mic/series");
+      const [data, archived] = await Promise.all([
+        apiFetch("/open-mic/series"),
+        apiFetch("/open-mic/archived-mailing-lists"),
+      ]);
       setSeriesList(data);
+      setArchivedLists(archived);
     } catch { toast({ title: "Failed to load series", variant: "destructive" }); }
   }, []);
 
@@ -368,6 +374,44 @@ export default function OpenMicSeriesPage() {
               <div className="text-center py-8 text-[#555] text-xs">No series yet.<br />Click + to create one.</div>
             )}
           </div>
+
+          {/* Archived mailing lists */}
+          {archivedLists.length > 0 && (
+            <div className="border-t border-white/10">
+              <button
+                onClick={() => setShowArchive(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <span className="font-semibold uppercase tracking-wider">Archived Mailing Lists</span>
+                <span>{archivedLists.reduce((n, a) => n + a.entries.length, 0)} contacts</span>
+              </button>
+              {showArchive && (
+                <div className="px-2 pb-2 space-y-1">
+                  {archivedLists.map(archive => (
+                    <div key={archive.seriesId} className="rounded-lg border border-white/10 bg-[#1a1a1a] p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold truncate">{archive.seriesName}</span>
+                        <Badge variant="outline" className="text-[10px] text-[#888] border-white/10">{archive.entries.length}</Badge>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const rows = [["Name", "Email", "Source", "Added"], ...archive.entries.map(e => [e.name, e.email, e.source, new Date(e.addedAt).toLocaleDateString()])];
+                          const csv = rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+                          const a = document.createElement("a");
+                          a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+                          a.download = `${archive.seriesName.replace(/\s+/g, "-").toLowerCase()}-mailing-list-archive.csv`;
+                          a.click();
+                        }}
+                        className="flex items-center gap-1.5 text-[11px] text-[#7250ef] hover:text-[#9575f5] transition-colors"
+                      >
+                        <Download className="h-3 w-3" />Export CSV
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── RIGHT: Detail / Create ────────────────────────────── */}

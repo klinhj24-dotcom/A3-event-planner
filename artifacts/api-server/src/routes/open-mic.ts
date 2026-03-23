@@ -522,7 +522,13 @@ router.delete("/open-mic/series/:id", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const id = parseInt(req.params.id);
-    // Remove related data first to avoid FK violations (mailing list kept as archive)
+    // Fetch the series name before deletion so we can stamp it on archived mailing list entries
+    const [series] = await db.select().from(openMicSeriesTable).where(eq(openMicSeriesTable.id, id));
+    if (!series) { res.status(404).json({ error: "Series not found" }); return; }
+    // Stamp the series name onto all mailing list entries (archive preservation)
+    await db.update(openMicMailingListTable).set({ seriesName: series.name })
+      .where(eq(openMicMailingListTable.seriesId, id));
+    // Remove signups (not kept)
     await db.delete(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, id));
     // Unlink events from this series (don't delete the events themselves)
     await db.update(eventsTable).set({ openMicSeriesId: null, openMicMonth: null })
@@ -533,6 +539,27 @@ router.delete("/open-mic/series/:id", async (req, res) => {
     console.error("Delete series error:", err);
     res.status(500).json({ error: "Failed to delete series" });
   }
+});
+
+// ── Admin: list archived mailing lists (from deleted series) ──────────────────
+router.get("/open-mic/archived-mailing-lists", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    // Find mailing list entries whose series no longer exists
+    const allEntries = await db.select().from(openMicMailingListTable).orderBy(openMicMailingListTable.seriesId, openMicMailingListTable.name);
+    const activeSeries = await db.select({ id: openMicSeriesTable.id }).from(openMicSeriesTable);
+    const activeIds = new Set(activeSeries.map(s => s.id));
+    const archived = allEntries.filter(e => !activeIds.has(e.seriesId));
+    // Group by series
+    const grouped: Record<number, { seriesId: number; seriesName: string; entries: typeof archived }> = {};
+    for (const entry of archived) {
+      if (!grouped[entry.seriesId]) {
+        grouped[entry.seriesId] = { seriesId: entry.seriesId, seriesName: entry.seriesName ?? `Series #${entry.seriesId}`, entries: [] };
+      }
+      grouped[entry.seriesId].entries.push(entry);
+    }
+    res.json(Object.values(grouped));
+  } catch (err) { res.status(500).json({ error: "Failed to fetch archived mailing lists" }); }
 });
 
 // ── Admin: get series signups (per-event performer list) ──────────────────────

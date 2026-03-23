@@ -135,6 +135,10 @@ async function runMigrations() {
       added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS open_mic_mailing_list_series_email ON open_mic_mailing_list (series_id, email)`,
+    // Drop CASCADE FK so mailing list entries survive series deletion (archive)
+    `ALTER TABLE open_mic_mailing_list DROP CONSTRAINT IF EXISTS open_mic_mailing_list_series_id_fkey`,
+    // Add series_name column to preserve the name after series deletion
+    `ALTER TABLE open_mic_mailing_list ADD COLUMN IF NOT EXISTS series_name VARCHAR(255)`,
   ];
   for (const m of migrations) {
     try {

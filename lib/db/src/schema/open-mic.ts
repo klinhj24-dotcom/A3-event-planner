@@ -32,6 +32,7 @@ export const openMicSignupsTable = pgTable("open_mic_signups", {
 export const openMicMailingListTable = pgTable("open_mic_mailing_list", {
   id: serial("id").primaryKey(),
   seriesId: integer("series_id").notNull(),
+  seriesName: varchar("series_name", { length: 255 }), // preserved when series is deleted
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull(),
   source: varchar("source", { length: 50 }).notNull().default("signup"), // 'signup' | 'import' | 'manual'
