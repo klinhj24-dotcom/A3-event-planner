@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, ChevronRight, Users, Calendar, LayoutDashboard, Music2, UserSquare2, DollarSign, CreditCard, BarChart2, Radio, CalendarDays, Settings, Shield, ClipboardList, ListChecks, Send, Star } from "lucide-react";
+import { BookOpen, ChevronRight, Users, Calendar, LayoutDashboard, Music2, UserSquare2, DollarSign, CreditCard, BarChart2, Radio, CalendarDays, Settings, Shield, ClipboardList, ListChecks, Send, Star, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 
 interface Section {
   id: string;
@@ -454,6 +455,13 @@ export default function Manual() {
     <div className="flex h-full overflow-hidden">
       {/* Sidebar TOC */}
       <div className="w-56 shrink-0 border-r border-border/20 overflow-y-auto py-6 px-3 space-y-1">
+        <Link
+          href="/"
+          className="flex items-center gap-2 px-3 mb-4 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to app
+        </Link>
         <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 mb-3">User Manual</p>
         {visibleSections.map(s => {
           const isActive = s.id === active.id;
