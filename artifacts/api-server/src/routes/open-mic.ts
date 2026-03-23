@@ -604,6 +604,18 @@ router.post("/open-mic/series/:id/mailing-list/import", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to import" }); }
 });
 
+// ── Admin: get performers for a specific event ─────────────────────────────────
+router.get("/open-mic/events/:eventId/performers", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const eventId = parseInt(req.params.eventId);
+    const performers = await db.select().from(openMicSignupsTable)
+      .where(eq(openMicSignupsTable.eventId, eventId))
+      .orderBy(openMicSignupsTable.createdAt);
+    res.json(performers);
+  } catch (err) { res.status(500).json({ error: "Failed to fetch performers" }); }
+});
+
 // ── Admin: get events for a series ────────────────────────────────────────────
 router.get("/open-mic/series/:id/events", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }

@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download, Mic
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -847,6 +847,11 @@ function EventOverviewSheet({
     queryFn: () => fetch(`/api/events/${event!.id}/signups`, { credentials: "include" }).then(r => r.json()),
     enabled: !!event?.id,
   });
+  const { data: openMicPerformers = [] } = useQuery<any[]>({
+    queryKey: [`/api/open-mic/events/${event?.id}/performers`],
+    queryFn: () => fetch(`/api/open-mic/events/${event!.id}/performers`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!event?.id && !!event?.openMicSeriesId,
+  });
   const { mutate: remindSignups, isPending: remindingSignups } = useMutation({
     mutationFn: () => fetch(`/api/events/${event!.id}/signups/remind`, { method: "POST", credentials: "include" }).then(r => r.json()),
     onSuccess: (d) => toast({ title: d.sent > 0 ? `Sent ${d.sent} reminder${d.sent !== 1 ? "s" : ""}` : "No signups with email addresses" }),
@@ -1632,6 +1637,31 @@ function EventOverviewSheet({
                 <Send className="h-3.5 w-3.5" />
                 {remindingSignups ? "Sending reminders…" : "Send reminders to all signups"}
               </button>
+            </div>
+          )}
+
+          {/* Open Mic performer signup list */}
+          {event.openMicSeriesId && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Mic className="h-3.5 w-3.5" /> Performers Signed Up
+                <span className="ml-auto bg-[#7250ef]/10 text-[#7250ef] rounded-full px-2 py-0.5 text-[10px] font-bold">{openMicPerformers.length}</span>
+              </h4>
+              {openMicPerformers.length === 0 ? (
+                <p className="text-xs text-muted-foreground/60 py-1">No one has signed up yet.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {openMicPerformers.map((p: any, i: number) => (
+                    <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/40 bg-muted/40 text-xs">
+                      <span className="text-muted-foreground/40 font-mono w-4 shrink-0 text-right">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground">{p.name}</div>
+                        <div className="text-muted-foreground truncate">{p.instrument}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
