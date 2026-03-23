@@ -12,6 +12,7 @@ import {
   Music2,
   CreditCard,
   BarChart2,
+  BookOpen,
 } from "lucide-react";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
@@ -43,11 +44,13 @@ const adminNavItems = [
   { title: "Card Charges", url: "/charges", icon: CreditCard },
   { title: "Reports", url: "/reports", icon: BarChart2 },
   { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Manual", url: "/manual", icon: BookOpen },
 ];
 
 const employeeNavItems = [
   { title: "My Schedule", url: "/my-schedule", icon: CalendarDays },
   { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Manual", url: "/manual", icon: BookOpen },
 ];
 
 export function AppSidebar() {

@@ -21,6 +21,7 @@ import Bands from "@/pages/bands";
 import MySchedule from "@/pages/my-schedule";
 import Charges from "@/pages/charges";
 import Reports from "@/pages/reports";
+import Manual from "@/pages/manual";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +66,7 @@ function Router() {
       <Route path="/bands">{() => <AdminRoute component={Bands} />}</Route>
       <Route path="/charges">{() => <AdminRoute component={Charges} />}</Route>
       <Route path="/reports">{() => <AdminRoute component={Reports} />}</Route>
+      <Route path="/manual">{() => <ProtectedRoute component={Manual} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );
