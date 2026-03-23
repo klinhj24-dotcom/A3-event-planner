@@ -256,6 +256,20 @@ export default function OpenMicSeriesPage() {
     } catch (err: any) { toast({ title: err.message ?? "Failed to update", variant: "destructive" }); }
   }
 
+  async function handleDeleteSeries() {
+    if (!selected) return;
+    const confirmed = window.confirm(
+      `Delete "${selected.name}"? This will remove all signups and mailing list entries for this series. Events linked to this series will be kept but unlinked. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await apiFetch(`/open-mic/series/${selected.id}`, { method: "DELETE" });
+      toast({ title: "Series deleted" });
+      setSelected(null);
+      await loadSeries();
+    } catch (err: any) { toast({ title: err.message ?? "Failed to delete series", variant: "destructive" }); }
+  }
+
   async function handleToggleActive() {
     if (!selected) return;
     try {
@@ -458,9 +472,14 @@ export default function OpenMicSeriesPage() {
                       <Button size="sm" variant="ghost" onClick={() => setEditMode(false)} className="h-8">Cancel</Button>
                     </>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="h-8 border-white/10">
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
-                    </Button>
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="h-8 border-white/10">
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleDeleteSeries} className="h-8 border-red-500/30 text-red-400 hover:bg-red-500/10">
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

@@ -517,6 +517,25 @@ router.put("/open-mic/series/:id", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to update series" }); }
 });
 
+// ── Admin: delete series (and all related data) ────────────────────────────────
+router.delete("/open-mic/series/:id", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    // Remove related data first to avoid FK violations
+    await db.delete(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, id));
+    await db.delete(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, id));
+    // Unlink events from this series (don't delete the events themselves)
+    await db.update(eventsTable).set({ openMicSeriesId: null, openMicMonth: null })
+      .where(eq(eventsTable.openMicSeriesId, id));
+    await db.delete(openMicSeriesTable).where(eq(openMicSeriesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Delete series error:", err);
+    res.status(500).json({ error: "Failed to delete series" });
+  }
+});
+
 // ── Admin: get series signups (per-event performer list) ──────────────────────
 router.get("/open-mic/series/:id/signups", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
