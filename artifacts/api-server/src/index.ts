@@ -8,6 +8,7 @@ import { seedTeachers } from "./seeds/teachers";
 import { startStaffReminderCron } from "./lib/staff-reminders";
 import { startBandReminderCron } from "./lib/band-reminders";
 import { startDebriefReminderCron } from "./lib/debrief-reminders";
+import { startOpenMicCron } from "./lib/open-mic-cron";
 
 const rawPort = process.env["PORT"];
 
@@ -104,6 +105,26 @@ async function runMigrations() {
       event_month VARCHAR(20),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // ── Open Mic Series ─────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS open_mic_series (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      location VARCHAR(255) NOT NULL DEFAULT 'CVP Towson',
+      address TEXT,
+      event_time VARCHAR(50) NOT NULL DEFAULT '6:00 PM',
+      slug VARCHAR(100) NOT NULL UNIQUE,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      recurrence_type VARCHAR(50) NOT NULL DEFAULT 'first_friday',
+      save_the_date_template TEXT,
+      performer_reminder_template TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `ALTER TABLE open_mic_signups ADD COLUMN IF NOT EXISTS series_id INTEGER REFERENCES open_mic_series(id) ON DELETE SET NULL`,
+    `ALTER TABLE open_mic_signups ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_series_id INTEGER REFERENCES open_mic_series(id) ON DELETE SET NULL`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_month VARCHAR(20)`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_save_the_date_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_performer_list_sent BOOLEAN NOT NULL DEFAULT FALSE`,
   ];
   for (const m of migrations) {
     try {
@@ -174,5 +195,6 @@ runMigrations().then(() => runOneTimeFixes()).then(() => initDb()).then(async ()
     startStaffReminderCron();
     startBandReminderCron();
     startDebriefReminderCron();
+    startOpenMicCron();
   });
 });

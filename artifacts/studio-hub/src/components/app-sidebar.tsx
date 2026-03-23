@@ -13,6 +13,7 @@ import {
   CreditCard,
   BarChart2,
   BookOpen,
+  Mic,
 } from "lucide-react";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
@@ -39,6 +40,7 @@ const adminNavItems = [
   { title: "Events", url: "/events", icon: Calendar },
   { title: "Comm Schedule", url: "/comm-schedule", icon: Radio },
   { title: "Bands", url: "/bands", icon: Music2 },
+  { title: "Open Mic", url: "/open-mic-series", icon: Mic },
   { title: "Employees", url: "/employees", icon: UserSquare2 },
   { title: "Payroll", url: "/payroll", icon: DollarSign },
   { title: "Card Charges", url: "/charges", icon: CreditCard },

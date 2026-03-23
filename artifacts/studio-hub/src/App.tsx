@@ -23,6 +23,7 @@ import Charges from "@/pages/charges";
 import Reports from "@/pages/reports";
 import Manual from "@/pages/manual";
 import OpenMicSignup from "@/pages/open-mic-signup";
+import OpenMicSeries from "@/pages/open-mic-series";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,6 +69,7 @@ function Router() {
       <Route path="/bands">{() => <AdminRoute component={Bands} />}</Route>
       <Route path="/charges">{() => <AdminRoute component={Charges} />}</Route>
       <Route path="/reports">{() => <AdminRoute component={Reports} />}</Route>
+      <Route path="/open-mic-series">{() => <AdminRoute component={OpenMicSeries} />}</Route>
       <Route path="/manual">{() => <ProtectedRoute component={Manual} />}</Route>
       <Route component={NotFound} />
     </Switch>
