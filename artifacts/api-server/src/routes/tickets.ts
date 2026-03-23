@@ -6,6 +6,10 @@ import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google
 
 const router = Router();
 
+// ── Pending charge-email timers (5-min grace period before sending) ────────────
+const pendingChargeEmails = new Map<number, ReturnType<typeof setTimeout>>();
+const CHARGE_EMAIL_DELAY_MS = 5 * 60 * 1000;
+
 // ── Public: get event info for ticket form ────────────────────────────────────
 router.get("/ticket/:token", async (req, res) => {
   try {
@@ -410,61 +414,87 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
       .returning();
     res.json(updated);
 
-    // Send charge confirmation email when status transitions to "paid"
-    if (chargingNow && updated?.contactEmail) {
-      try {
-        const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, updated.eventId));
-        const users = await db.select().from(usersTable);
-        const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
-        if (event && sender) {
-          const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
-          auth.on("tokens", async (tokens) => {
-            if (tokens.access_token) {
-              await db.update(usersTable).set({
-                googleAccessToken: tokens.access_token,
-                googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
-                googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-              }).where(eq(usersTable.id, sender.id));
-            }
-          });
-          const gmail = google.gmail({ version: "v1", auth });
-
-          // Build CC list: always desk; add email2 from contacts table if found
-          const cc: string[] = ["info@themusicspace.com"];
-          const [contact] = await db.select().from(contactsTable)
-            .where(sql`LOWER(${contactsTable.email}) = LOWER(${updated.contactEmail})`).limit(1);
-          if (contact?.email2) cc.push(contact.email2);
-
-          const isRecital = updated.formType === "recital";
-          const performerLine = isRecital && updated.studentFirstName
-            ? `\nPerformer: ${updated.studentFirstName} ${updated.studentLastName ?? ""}\n`
-            : "";
-
-          // Resolve the charged amount
-          let amountLine = "";
-          if (isRecital) {
-            const fee = event.ticketPrice ? parseFloat(event.ticketPrice) : 30;
-            amountLine = `\nAmount charged: $${fee.toFixed(2)}\n`;
-          } else if (updated.ticketCount && event.ticketPrice) {
-            const resolvedPrice = event.isTwoDay && updated.ticketType
-              ? updated.ticketType === "day1" ? event.day1Price : updated.ticketType === "day2" ? event.day2Price : event.ticketPrice
-              : event.ticketPrice;
-            if (resolvedPrice) {
-              const price = parseFloat(resolvedPrice);
-              const total = price * updated.ticketCount;
-              amountLine = `\nTickets: ${updated.ticketCount} × $${price.toFixed(2)} = $${total.toFixed(2)}\n`;
-            }
-          }
-
-          const bodyText = `Hi ${updated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
-          const html = buildHtmlEmail({ recipientName: updated.contactFirstName ?? "there", body: bodyText });
-          const subject = `Payment Confirmed — ${event.title}`;
-          const raw = makeHtmlEmail({ to: updated.contactEmail, from: sender.email || "", subject, html, cc });
-          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-        }
-      } catch (emailErr) {
-        console.error("Charge confirmation email failed (non-fatal):", emailErr);
+    // Cancel any pending charge email if status is being reverted away from "paid"
+    if (unchargingNow) {
+      const pending = pendingChargeEmails.get(requestId);
+      if (pending) {
+        clearTimeout(pending);
+        pendingChargeEmails.delete(requestId);
+        console.log(`[tickets] Charge email cancelled for request ${requestId} (status reverted)`);
       }
+    }
+
+    // Schedule charge confirmation email with 5-min grace period when status → "paid"
+    if (chargingNow && updated?.contactEmail) {
+      // Cancel any existing timer (safety)
+      const existing = pendingChargeEmails.get(requestId);
+      if (existing) clearTimeout(existing);
+
+      const capturedUpdated = updated;
+      const timer = setTimeout(async () => {
+        pendingChargeEmails.delete(requestId);
+        // Re-verify status is still "paid" before sending
+        const [current] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+        if (current?.status !== "paid") {
+          console.log(`[tickets] Charge email skipped for request ${requestId} — status changed before send`);
+          return;
+        }
+        try {
+          const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, capturedUpdated.eventId));
+          const users = await db.select().from(usersTable);
+          const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+          if (event && sender && capturedUpdated.contactEmail) {
+            const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+            auth.on("tokens", async (tokens) => {
+              if (tokens.access_token) {
+                await db.update(usersTable).set({
+                  googleAccessToken: tokens.access_token,
+                  googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+                  googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+                }).where(eq(usersTable.id, sender.id));
+              }
+            });
+            const gmail = google.gmail({ version: "v1", auth });
+
+            const cc: string[] = ["info@themusicspace.com"];
+            const [contact] = await db.select().from(contactsTable)
+              .where(sql`LOWER(${contactsTable.email}) = LOWER(${capturedUpdated.contactEmail})`).limit(1);
+            if (contact?.email2) cc.push(contact.email2);
+
+            const isRecital = capturedUpdated.formType === "recital";
+            const performerLine = isRecital && capturedUpdated.studentFirstName
+              ? `\nPerformer: ${capturedUpdated.studentFirstName} ${capturedUpdated.studentLastName ?? ""}\n`
+              : "";
+
+            let amountLine = "";
+            if (isRecital) {
+              const fee = event.ticketPrice ? parseFloat(event.ticketPrice) : 30;
+              amountLine = `\nAmount charged: $${fee.toFixed(2)}\n`;
+            } else if (capturedUpdated.ticketCount && event.ticketPrice) {
+              const resolvedPrice = event.isTwoDay && capturedUpdated.ticketType
+                ? capturedUpdated.ticketType === "day1" ? event.day1Price : capturedUpdated.ticketType === "day2" ? event.day2Price : event.ticketPrice
+                : event.ticketPrice;
+              if (resolvedPrice) {
+                const price = parseFloat(resolvedPrice);
+                const total = price * capturedUpdated.ticketCount;
+                amountLine = `\nTickets: ${capturedUpdated.ticketCount} × $${price.toFixed(2)} = $${total.toFixed(2)}\n`;
+              }
+            }
+
+            const bodyText = `Hi ${capturedUpdated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
+            const html = buildHtmlEmail({ recipientName: capturedUpdated.contactFirstName ?? "there", body: bodyText });
+            const subject = `Payment Confirmed — ${event.title}`;
+            const raw = makeHtmlEmail({ to: capturedUpdated.contactEmail, from: sender.email || "", subject, html, cc });
+            await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+            console.log(`[tickets] Charge email sent for request ${requestId}`);
+          }
+        } catch (emailErr) {
+          console.error("Charge confirmation email failed (non-fatal):", emailErr);
+        }
+      }, CHARGE_EMAIL_DELAY_MS);
+
+      pendingChargeEmails.set(requestId, timer);
+      console.log(`[tickets] Charge email for request ${requestId} scheduled in 5 min`);
     }
   } catch (err) {
     console.error("updateTicketRequest error:", err);
