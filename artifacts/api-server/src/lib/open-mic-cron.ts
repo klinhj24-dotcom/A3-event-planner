@@ -1,10 +1,11 @@
 import { db, openMicSeriesTable, openMicSignupsTable, openMicMailingListTable, eventsTable, usersTable } from "@workspace/db";
-import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
 import { ensureUpcomingEvents, getUpcomingFirstFridays } from "../routes/open-mic";
 
 const TMS_INFO = "info@themusicspace.com";
+const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -33,6 +34,60 @@ async function runOpenMicCron() {
         await ensureUpcomingEvents(series, 3);
       } catch (err) {
         console.error(`[open-mic-cron] Failed to ensure events for series ${series.id}:`, err);
+      }
+
+      // 2. Auto-push confirmed Open Mic events that haven't been pushed to Google Calendar yet
+      if (sender) {
+        try {
+          const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({
+                googleAccessToken: tokens.access_token,
+                googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+                googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+              }).where(eq(usersTable.id, sender.id));
+            }
+          });
+          const cal = google.calendar({ version: "v3", auth });
+
+          const unpushed = await db.select().from(eventsTable).where(
+            and(
+              eq(eventsTable.openMicSeriesId, series.id),
+              eq(eventsTable.status, "confirmed"),
+              isNull(eventsTable.googleCalendarEventId),
+              isNotNull(eventsTable.startDate),
+            )
+          );
+
+          for (const ev of unpushed) {
+            try {
+              const summary = (ev.calendarTag && ev.calendarTag !== "none")
+                ? `${ev.title} [${ev.calendarTag}]`
+                : ev.title;
+              const descParts: string[] = [];
+              if (ev.location) descParts.push(`[venue] ${ev.location}`);
+              const calEvent = {
+                summary,
+                location: ev.location ?? undefined,
+                description: descParts.join("\n") || undefined,
+                start: { dateTime: ev.startDate!.toISOString() },
+                end: ev.endDate
+                  ? { dateTime: ev.endDate.toISOString() }
+                  : { dateTime: new Date(ev.startDate!.getTime() + 3 * 60 * 60 * 1000).toISOString() },
+              };
+              const result = await cal.events.insert({ calendarId: TMS_CALENDAR_ID, requestBody: calEvent });
+              if (result.data.id) {
+                await db.update(eventsTable).set({ googleCalendarEventId: result.data.id }).where(eq(eventsTable.id, ev.id));
+                console.log(`[open-mic-cron] Pushed "${ev.title}" to Google Calendar`);
+              }
+            } catch (pushErr) {
+              console.error(`[open-mic-cron] Failed to push "${ev.title}" to Google Calendar:`, pushErr);
+            }
+          }
+        } catch (err) {
+          console.error(`[open-mic-cron] Google Calendar push failed for series ${series.id}:`, err);
+        }
       }
 
       if (!sender) continue;
