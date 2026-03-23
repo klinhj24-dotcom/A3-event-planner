@@ -5,7 +5,7 @@ import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable, employ
 import { eq, desc, and, lt, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { addDays, subDays } from "date-fns";
-import { createAuthedClient, makeRawEmail } from "../lib/google";
+import { createAuthedClient, makeRawEmail, encodeSubject } from "../lib/google";
 
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
@@ -406,7 +406,7 @@ router.post("/comm-schedule/tasks/late-report", async (req, res) => {
     const rawEmail = [
       `From: ${from}`,
       `To: ${to}`,
-      `Subject: ${subject}`,
+      `Subject: ${encodeSubject(subject)}`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
       "",

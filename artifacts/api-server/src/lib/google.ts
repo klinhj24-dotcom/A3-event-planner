@@ -47,7 +47,7 @@ export function createAuthedClient(accessToken: string, refreshToken: string, ex
 }
 
 // RFC 2047 encode a subject that contains non-ASCII characters
-function encodeSubject(subject: string): string {
+export function encodeSubject(subject: string): string {
   if (/[^\x00-\x7F]/.test(subject)) {
     return `=?UTF-8?B?${Buffer.from(subject, "utf-8").toString("base64")}?=`;
   }
