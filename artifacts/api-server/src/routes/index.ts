@@ -22,6 +22,7 @@ import eventTypesRouter from "./event-types";
 import eventStaffingRouter from "./event-staffing";
 import ticketsRouter from "./tickets";
 import guestListRouter from "./guest-list";
+import openMicRouter from "./open-mic";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(eventTypesRouter);
 router.use(eventStaffingRouter);
 router.use(ticketsRouter);
 router.use(guestListRouter);
+router.use(openMicRouter);
 
 export default router;

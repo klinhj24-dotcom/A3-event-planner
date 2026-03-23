@@ -94,6 +94,16 @@ async function runMigrations() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    `CREATE TABLE IF NOT EXISTS open_mic_signups (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      instrument VARCHAR(255) NOT NULL,
+      artist_website TEXT,
+      music_link TEXT,
+      event_month VARCHAR(20),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ];
   for (const m of migrations) {
     try {

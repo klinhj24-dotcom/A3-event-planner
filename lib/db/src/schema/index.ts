@@ -9,3 +9,4 @@ export * from "./bands";
 export * from "./packing";
 export * from "./event-types";
 export * from "./event_staffing";
+export * from "./open-mic";

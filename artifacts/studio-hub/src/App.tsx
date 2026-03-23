@@ -22,6 +22,7 @@ import MySchedule from "@/pages/my-schedule";
 import Charges from "@/pages/charges";
 import Reports from "@/pages/reports";
 import Manual from "@/pages/manual";
+import OpenMicSignup from "@/pages/open-mic-signup";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +56,7 @@ function Router() {
       <Route path="/ticket/:token" component={TicketForm} />
       <Route path="/guest-list/:token" component={GuestListForm} />
       <Route path="/band-confirm/:token" component={BandConfirm} />
+      <Route path="/open-mic" component={OpenMicSignup} />
       <Route path="/my-schedule">{() => <ProtectedRoute component={MySchedule} />}</Route>
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
       <Route path="/">{() => <AdminRoute component={Dashboard} />}</Route>
