@@ -521,7 +521,7 @@ export default function OpenMicSeriesPage() {
                 {/* ── MAILING LIST TAB ── */}
                 <TabsContent value="mailing-list" className="mt-4">
                   <p className="text-sm text-[#888] mb-3">
-                    Everyone who has signed up for any event in this series. 21-day emails go to this full list.
+                    Everyone who has signed up for any event in this series. Both the 21-day save-the-date and the 3-day performer list go to this full list.
                   </p>
                   {loading ? (
                     <div className="text-center py-8 text-[#555] text-sm animate-pulse">Loading…</div>
