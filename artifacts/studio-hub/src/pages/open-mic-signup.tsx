@@ -193,7 +193,7 @@ export default function OpenMicSignup() {
               type="url"
               value={form.musicLink}
               onChange={e => setForm(f => ({ ...f, musicLink: e.target.value }))}
-              placeholder="Spotify, SoundCloud, YouTube, etc."
+              placeholder="Link to Spotify, SoundCloud, YouTube, etc."
               className="w-full rounded-xl bg-[#111] border border-white/10 focus:border-[#7250ef]/50 px-4 py-3 text-sm text-white placeholder-[#444] outline-none focus:ring-2 focus:ring-[#7250ef]/50 transition-all"
             />
           </div>
