@@ -199,13 +199,14 @@ function InviteRow({ group }: { group: InviteGroup }) {
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
   slot, calcTime, bands, eventId, isRecital, isTwoDay,
-  onUpdate, onDelete, onSendInvite, onSendConfirmation,
+  onUpdate, onDelete, onSendInvite, onSendConfirmation, onSendTimeUpdate,
 }: {
   slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
   onDelete: (id: number) => void;
   onSendInvite: (slotId: number, staffNote: string) => void;
   onSendConfirmation: (slotId: number) => void;
+  onSendTimeUpdate: (slotId: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: slot.id });
@@ -256,6 +257,7 @@ function SlotRow({
 
   const [sendingInvite, setSendingInvite] = useState(false);
   const [sendingConfirm, setSendingConfirm] = useState(false);
+  const [sendingTimeUpdate, setSendingTimeUpdate] = useState(false);
 
   const displayName = slot.bandName || slot.label || (SLOT_TYPE_META[slot.type]?.label ?? slot.type);
   const meta = SLOT_TYPE_META[slot.type] ?? SLOT_TYPE_META.act;
@@ -304,6 +306,15 @@ function SlotRow({
       await onSendConfirmation(slot.id);
     } finally {
       setSendingConfirm(false);
+    }
+  }
+
+  async function handleSendTimeUpdate() {
+    setSendingTimeUpdate(true);
+    try {
+      await onSendTimeUpdate(slot.id);
+    } finally {
+      setSendingTimeUpdate(false);
     }
   }
 
@@ -556,6 +567,9 @@ function SlotRow({
                   className="rounded-lg h-7 text-xs gap-1.5 flex-1"
                   disabled={sendingInvite}
                   onClick={handleSendInvite}
+                  title={slot.inviteStatus === "not_sent"
+                    ? "Send a personal confirmation link to every family contact for this band. Each contact gets their own link."
+                    : "Send invites to any contacts added since the original invite went out. Already-invited contacts are skipped."}
                 >
                   <Send className="h-3 w-3" />
                   {sendingInvite ? "Sending…" : slot.inviteStatus === "not_sent" ? "Send Invite" : "Re-invite New Contacts"}
@@ -566,15 +580,29 @@ function SlotRow({
                     className="rounded-lg h-7 text-xs gap-1.5 flex-1 bg-emerald-600 hover:bg-emerald-500"
                     disabled={sendingConfirm}
                     onClick={handleSendConfirmation}
+                    title="Send the official booking confirmation to all families (BCC) and the band leader (CC). Goes to info@ as the To address. Only shows once the band is confirmed."
                   >
                     <CheckCircle2 className="h-3 w-3" />
                     {sendingConfirm ? "Sending…" : "Send Lock-In Email"}
                   </Button>
                 )}
                 {slot.confirmationSent && (
-                  <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                    ✓ Lock-in sent
-                  </Badge>
+                  <>
+                    <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shrink-0">
+                      ✓ Lock-in sent
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg h-7 text-xs gap-1.5 flex-1 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                      disabled={sendingTimeUpdate}
+                      onClick={handleSendTimeUpdate}
+                      title="Use this if the set time changed after the lock-in email was already sent. Emails all non-declined families (BCC) with the updated time. Can be sent multiple times."
+                    >
+                      <Clock className="h-3 w-3" />
+                      {sendingTimeUpdate ? "Sending…" : "Send Time Update"}
+                    </Button>
+                  </>
                 )}
               </div>
 
@@ -1056,6 +1084,19 @@ export function LineupSheet({ event, open, onClose }: {
     queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
   }
 
+  async function handleSendTimeUpdate(slotId: number): Promise<void> {
+    const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-time-update`, {
+      method: "POST",
+      credentials: "include",
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      toast({ title: "Failed to send time update", description: data.error, variant: "destructive" });
+      throw new Error(data.error);
+    }
+    toast({ title: "Time update sent!", description: `Families notified${data.bcc > 0 ? ` (${data.bcc} BCC'd)` : ""}.` });
+  }
+
   async function handleBulkInvite() {
     setBulkInviting(true);
     try {
@@ -1217,7 +1258,7 @@ export function LineupSheet({ event, open, onClose }: {
                   className="h-8 text-xs rounded-lg gap-1.5"
                   disabled={bulkInviting || uninvitedCount === 0}
                   onClick={handleBulkInvite}
-                  title={uninvitedCount === 0 ? "All bands already invited" : `Send invites to ${uninvitedCount} uninvited band(s)`}
+                  title={uninvitedCount === 0 ? "All bands in this lineup have already been invited" : `Send personal confirmation links to all family contacts for ${uninvitedCount} band(s) that haven't been invited yet. Already-invited bands are skipped.`}
                 >
                   <Send className="h-3.5 w-3.5" />
                   {bulkInviting ? "Sending…" : `Invite All Bands${uninvitedCount > 0 ? ` (${uninvitedCount})` : ""}`}
@@ -1229,7 +1270,7 @@ export function LineupSheet({ event, open, onClose }: {
                   className="h-8 text-xs rounded-lg gap-1.5 bg-emerald-600 hover:bg-emerald-500"
                   disabled={bulkLockingIn}
                   onClick={handleBulkLockIn}
-                  title={`Send lock-in email to ${unlockedConfirmedCount} confirmed band(s)`}
+                  title={`Send the official booking confirmation email to ${unlockedConfirmedCount} confirmed band(s) that haven't been locked in yet. Each email goes To: info@, CC: band leader, BCC: all non-declined family contacts. Bands that already have a lock-in email sent are skipped.`}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   {bulkLockingIn ? "Sending…" : `Lock In All (${unlockedConfirmedCount})`}
@@ -1374,6 +1415,7 @@ export function LineupSheet({ event, open, onClose }: {
                                 onDelete={handleDelete}
                                 onSendInvite={handleSendInvite}
                                 onSendConfirmation={handleSendConfirmation}
+                                onSendTimeUpdate={handleSendTimeUpdate}
                               />
                             ))}
                           </div>
@@ -1397,6 +1439,7 @@ export function LineupSheet({ event, open, onClose }: {
                       onDelete={handleDelete}
                       onSendInvite={handleSendInvite}
                       onSendConfirmation={handleSendConfirmation}
+                      onSendTimeUpdate={handleSendTimeUpdate}
                     />
                   ))}
                 </div>

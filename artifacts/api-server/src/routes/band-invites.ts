@@ -503,6 +503,101 @@ The Music Space`;
   }
 });
 
+// ── Send set-time update email (post lock-in) ─────────────────────────────────
+router.post("/events/:eventId/lineup/:slotId/send-time-update", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const eventId = parseInt(req.params.eventId);
+    const slotId = parseInt(req.params.slotId);
+
+    const sender = await getSenderUser();
+    if (!sender) { res.status(400).json({ error: "No Google-authenticated user found." }); return; }
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
+    const [slot] = await db
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay, confirmationSent: eventLineupTable.confirmationSent })
+      .from(eventLineupTable)
+      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .where(eq(eventLineupTable.id, slotId));
+
+    if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
+    if (!slot.bandId) { res.status(400).json({ error: "Slot has no band assigned" }); return; }
+    if (!slot.confirmationSent) { res.status(400).json({ error: "Lock-in email hasn't been sent yet — send that first." }); return; }
+
+    const allInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
+    const bccEmails = allInvites
+      .filter(i => i.status !== "declined" && i.contactEmail)
+      .map(i => i.contactEmail!)
+      .filter((e, idx, arr) => arr.indexOf(e) === idx);
+
+    if (!bccEmails.length) { res.status(400).json({ error: "No contacts to notify." }); return; }
+
+    const members = await db.select().from(bandMembersTable).where(eq(bandMembersTable.bandId, slot.bandId!));
+    const bandLeader = members.find(m => m.isBandLeader && m.email);
+
+    const fmt12 = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+    };
+
+    const bandName = slot.bandName ?? "Your Band";
+    const performanceDay = formatPerformanceDay(event, slot.eventDay);
+    const timeLine = slot.startTime
+      ? `Updated Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
+      : slot.staffNote
+        ? `Updated Estimated Slot: ${slot.staffNote}`
+        : "The set time is still being finalized — we'll be in touch.";
+
+    const emailBody = `Hi ${bandName} Band Families,
+
+We're writing to let you know that the set time for ${bandName} at ${event.title} has been updated.
+
+${timeLine}
+Performance Date: ${performanceDay}
+Location: ${event.location ?? "TBD"}
+
+Please update your plans accordingly. If you have any questions, reply to this email.
+
+Thank you,
+The Music Space`;
+
+    const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+    auth.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(usersTable).set({
+          googleAccessToken: tokens.access_token,
+          googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        }).where(eq(usersTable.id, sender.id));
+      }
+    });
+    const gmail = google.gmail({ version: "v1", auth });
+    const from = sender.googleEmail ?? sender.email ?? "";
+
+    const ccAddresses = bandLeader?.email ? [bandLeader.email] : [];
+    const bccAddresses = bccEmails.filter(e => e !== TMS_CC && !ccAddresses.includes(e));
+    const html = buildHtmlEmail({ body: emailBody });
+
+    const raw = makeHtmlEmail({
+      to: TMS_CC,
+      from,
+      subject: `Set Time Update: ${bandName} @ ${event.title}`,
+      html,
+      cc: ccAddresses,
+      bcc: bccAddresses,
+    });
+
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+
+    res.json({ ok: true, to: TMS_CC, bcc: bccAddresses.length, cc: ccAddresses.length });
+  } catch (err) {
+    console.error("sendTimeUpdate error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Send lock-in confirmation email to all confirmed-but-unlocked slots ───────
 router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) => {
   if (!requireAuth(req, res)) return;
