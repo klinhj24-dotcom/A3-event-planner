@@ -233,6 +233,15 @@ function buildEventDate(year: number, month: number, day: number, timeStr: strin
   return new Date(Date.UTC(year, month, day, utcHours, minutes, 0));
 }
 
+const OPEN_MIC_DEFAULTS = {
+  hasDebrief: true,
+  hasPackingList: true,
+  hasStaffSchedule: true,
+  calendarTag: "MSH",
+  isPaid: true,
+  ticketFormType: "none",
+} as const;
+
 /** Auto-create events for a series for the next N occurrences (idempotent) */
 export async function ensureUpcomingEvents(series: any, count = 3) {
   const upcoming = getUpcomingOccurrences(series.recurrenceType ?? "first_friday", count);
@@ -243,9 +252,11 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
       .where(and(eq(eventsTable.openMicSeriesId, series.id), eq(eventsTable.openMicMonth, ff.monthKey)));
     const startDate = buildEventDate(ff.year, ff.month, ff.day, series.eventTime ?? "6:00 PM");
     const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000); // +3 hours
+
     if (existing.length) {
-      // Fix time and ensure hasDebrief on already-existing events
-      await db.update(eventsTable).set({ startDate, endDate, hasDebrief: true }).where(eq(eventsTable.id, existing[0].id));
+      await db.update(eventsTable)
+        .set({ startDate, endDate, ...OPEN_MIC_DEFAULTS })
+        .where(eq(eventsTable.id, existing[0].id));
       continue;
     }
     const title = `${series.name} — ${MONTH_NAMES[ff.month]} ${ff.year}`;
@@ -256,7 +267,7 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
       location: series.location,
       startDate,
       endDate,
-      hasDebrief: true,
+      ...OPEN_MIC_DEFAULTS,
       openMicSeriesId: series.id,
       openMicMonth: ff.monthKey,
     }).returning();
