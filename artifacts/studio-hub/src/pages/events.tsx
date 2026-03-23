@@ -1498,22 +1498,12 @@ function EventOverviewSheet({
                   <Plus className="h-3 w-3" /> Add Manual
                 </button>
                 {guestListEntries.length > 0 && (
-                  <>
-                    <button
-                      onClick={() => sendGuestListLinks()}
-                      disabled={sendingGuestListLinks}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 border border-border/40 rounded-lg px-2.5 py-1"
-                    >
-                      {sendingGuestListLinks ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                      Email all links
-                    </button>
-                    <button
-                      onClick={() => printGuestList()}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
-                    >
-                      <Printer className="h-3 w-3" /> Print
-                    </button>
-                  </>
+                  <button
+                    onClick={() => printGuestList()}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
+                  >
+                    <Printer className="h-3 w-3" /> Print
+                  </button>
                 )}
               </div>
 
