@@ -1712,6 +1712,7 @@ export default function Events() {
   const [staffSlotsEvent, setStaffSlotsEvent] = useState<{ id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean } | null>(null);
   const [inviteEvent, setInviteEvent] = useState<{ id: number; title: string; startDate?: string | null; location?: string | null; signupToken?: string | null } | null>(null);
   const [overviewEvent, setOverviewEvent] = useState<any | null>(null);
+  const [applyToSeries, setApplyToSeries] = useState<"this" | "future">("this");
   const searchStr = useSearch();
   useEffect(() => {
     if (!events) return;
@@ -1776,7 +1777,7 @@ export default function Events() {
   });
 
   const { mutate: updateEvent, isPending: isUpdating } = useMutation({
-    mutationFn: async (data: z.infer<typeof eventSchema> & { id: number }) => {
+    mutationFn: async (data: z.infer<typeof eventSchema> & { id: number; openMicSeriesId?: number | null }) => {
       const res = await fetch(`/api/events/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1785,11 +1786,33 @@ export default function Events() {
       if (!res.ok) throw new Error("Failed to update event");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
+      // Propagate to all future series events if requested
+      if (applyToSeries === "future" && variables.openMicSeriesId) {
+        try {
+          await fetch(`/api/open-mic/series/${variables.openMicSeriesId}/propagate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              location: variables.location,
+              startDate: variables.startDate,
+              hasDebrief: variables.hasDebrief,
+              hasBandLineup: variables.hasBandLineup,
+              hasStaffSchedule: variables.hasStaffSchedule,
+              hasCallSheet: variables.hasCallSheet,
+              hasPackingList: variables.hasPackingList,
+              allowGuestList: variables.allowGuestList,
+              isLeadGenerating: variables.isLeadGenerating,
+            }),
+          });
+        } catch {}
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setApplyToSeries("this");
       setEditEvent(null);
-      toast({ title: "Event updated" });
+      toast({ title: applyToSeries === "future" ? "Event updated — changes applied to all future events" : "Event updated" });
     },
     onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
   });
@@ -2729,14 +2752,14 @@ export default function Events() {
       </div>
 
       {/* Edit Event Dialog */}
-      <Dialog open={!!editEvent} onOpenChange={(open) => !open && setEditEvent(null)}>
+      <Dialog open={!!editEvent} onOpenChange={(open) => { if (!open) { setEditEvent(null); setApplyToSeries("this"); } }}>
         <DialogContent className="sm:max-w-[620px] rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display text-2xl">Edit Event</DialogTitle>
             <DialogDescription>Update event details. Hit Save when done.</DialogDescription>
           </DialogHeader>
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit((data) => updateEvent({ ...data, id: editEvent.id }))} className="space-y-5 py-4">
+            <form onSubmit={editForm.handleSubmit((data) => updateEvent({ ...data, id: editEvent.id, openMicSeriesId: editEvent.openMicSeriesId ?? null }))} className="space-y-5 py-4">
               <FormField control={editForm.control} name="title" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Event Title *</FormLabel>
@@ -3231,6 +3254,27 @@ export default function Events() {
                   </Select>
                 )}
               </div>
+
+              {editEvent?.openMicSeriesId && (
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Apply changes to</p>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="radio" name="applyToSeries" value="this" checked={applyToSeries === "this"}
+                        onChange={() => setApplyToSeries("this")}
+                        className="accent-[#7250ef] w-4 h-4" />
+                      <span className="text-sm">This event only</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="radio" name="applyToSeries" value="future" checked={applyToSeries === "future"}
+                        onChange={() => setApplyToSeries("future")}
+                        className="accent-[#7250ef] w-4 h-4" />
+                      <span className="text-sm">All future events in this series</span>
+                      <span className="text-[10px] text-muted-foreground">(location, time, features)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               <DialogFooter className="pt-4">
                 <Button type="button" variant="outline" className="rounded-xl" onClick={() => setEditEvent(null)}>Cancel</Button>

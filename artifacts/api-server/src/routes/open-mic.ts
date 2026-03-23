@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, openMicSignupsTable, openMicSeriesTable, eventsTable, usersTable } from "@workspace/db";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { google } from "googleapis";
 
@@ -244,8 +244,8 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
     const startDate = buildEventDate(ff.year, ff.month, ff.day, series.eventTime ?? "6:00 PM");
     const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000); // +3 hours
     if (existing.length) {
-      // Fix time on already-existing events (e.g. if eventTime changed or was previously wrong)
-      await db.update(eventsTable).set({ startDate, endDate }).where(eq(eventsTable.id, existing[0].id));
+      // Fix time and ensure hasDebrief on already-existing events
+      await db.update(eventsTable).set({ startDate, endDate, hasDebrief: true }).where(eq(eventsTable.id, existing[0].id));
       continue;
     }
     const title = `${series.name} — ${MONTH_NAMES[ff.month]} ${ff.year}`;
@@ -256,6 +256,7 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
       location: series.location,
       startDate,
       endDate,
+      hasDebrief: true,
       openMicSeriesId: series.id,
       openMicMonth: ff.monthKey,
     }).returning();
@@ -532,6 +533,72 @@ router.post("/open-mic/series/:id/create-upcoming", async (req, res) => {
     const created = await ensureUpcomingEvents(series, 3);
     res.json({ created: created.length, events: created });
   } catch (err) { res.status(500).json({ error: "Failed to create upcoming events" }); }
+});
+
+// ── Admin: propagate event changes to all future series events ────────────────
+router.post("/open-mic/series/:id/propagate", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const seriesId = parseInt(req.params.id);
+    const [series] = await db.select().from(openMicSeriesTable).where(eq(openMicSeriesTable.id, seriesId));
+    if (!series) { res.status(404).json({ error: "Series not found" }); return; }
+
+    const {
+      location, startDate: startDateStr,
+      hasDebrief, hasBandLineup, hasStaffSchedule, hasCallSheet,
+      hasPackingList, allowGuestList, isLeadGenerating,
+    } = req.body;
+
+    // Derive time from the edited event's startDate
+    let newEventTime = series.eventTime ?? "6:00 PM";
+    if (startDateStr) {
+      const d = new Date(startDateStr);
+      const offset = easternUtcOffset(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+      const localHours = d.getUTCHours() + offset;
+      const localMins = d.getUTCMinutes();
+      const h12 = ((localHours % 12) || 12);
+      const ampm = localHours >= 12 ? "PM" : "AM";
+      const mm = String(localMins).padStart(2, "0");
+      newEventTime = localMins === 0 ? `${h12}:00 ${ampm}` : `${h12}:${mm} ${ampm}`;
+    }
+
+    // Update the series record
+    const newLocation = location ?? series.location;
+    await db.update(openMicSeriesTable)
+      .set({ location: newLocation, eventTime: newEventTime })
+      .where(eq(openMicSeriesTable.id, seriesId));
+
+    // Update all future events in this series
+    const now = new Date();
+    const futureEvents = await db.select().from(eventsTable)
+      .where(and(eq(eventsTable.openMicSeriesId, seriesId), gte(eventsTable.startDate, now)));
+
+    const featureFlags: Record<string, boolean> = {};
+    if (hasDebrief !== undefined) featureFlags.hasDebrief = !!hasDebrief;
+    if (hasBandLineup !== undefined) featureFlags.hasBandLineup = !!hasBandLineup;
+    if (hasStaffSchedule !== undefined) featureFlags.hasStaffSchedule = !!hasStaffSchedule;
+    if (hasCallSheet !== undefined) featureFlags.hasCallSheet = !!hasCallSheet;
+    if (hasPackingList !== undefined) featureFlags.hasPackingList = !!hasPackingList;
+    if (allowGuestList !== undefined) featureFlags.allowGuestList = !!allowGuestList;
+    if (isLeadGenerating !== undefined) featureFlags.isLeadGenerating = !!isLeadGenerating;
+
+    let updated = 0;
+    for (const ev of futureEvents) {
+      if (!ev.startDate) continue;
+      const d = ev.startDate;
+      const newStart = buildEventDate(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), newEventTime);
+      const newEnd = new Date(newStart.getTime() + 3 * 60 * 60 * 1000);
+      await db.update(eventsTable)
+        .set({ location: newLocation, startDate: newStart, endDate: newEnd, ...featureFlags })
+        .where(eq(eventsTable.id, ev.id));
+      updated++;
+    }
+
+    res.json({ updated, newEventTime, newLocation });
+  } catch (err) {
+    console.error("[open-mic] Propagate error:", err);
+    res.status(500).json({ error: "Failed to propagate changes" });
+  }
 });
 
 // ── Admin: send or test save-the-date ────────────────────────────────────────
