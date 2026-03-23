@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -444,7 +445,9 @@ export default function OpenMicSeriesPage() {
                             return (
                               <TableRow key={ev.id} className={`border-white/5 ${past ? "opacity-50" : ""}`}>
                                 <TableCell className="font-medium text-sm">
-                                  {formatEventDate(ev)}
+                                  <Link href={`/events?open=${ev.id}`} className="hover:text-[#7250ef] transition-colors">
+                                    {formatEventDate(ev)}
+                                  </Link>
                                   {past && <span className="ml-2 text-[10px] text-[#555]">past</span>}
                                 </TableCell>
                                 <TableCell>
