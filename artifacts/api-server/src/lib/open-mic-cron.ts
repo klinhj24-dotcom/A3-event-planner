@@ -119,7 +119,7 @@ async function runOpenMicCron() {
             if (!mailingList.length) {
               console.log(`[open-mic-cron] Series ${series.id}: 21-day email skipped — no mailing list yet`);
             } else {
-              const tpl = series.saveTheDateTemplate ?? `Hi everyone,\n\nThe Music Space Open Mic at {location} is coming up on {date} at {time}!\n\nSign up to perform: {signup_url}\n\nAll are welcome!\n\nThe Music Space Team`;
+              const tpl = series.saveTheDateTemplate ?? `Hi everyone,\n\nThe Music Space Open Mic at {location} is coming up on {date} at {time}!\n\nWhether you're performing or just coming to enjoy great live music — all are welcome.\n\nSign up to perform: {signup_url}\n\nWhile you're at it, a few things happening at The Music Space:\n→ Upcoming shows (jazz, songwriters & more): https://www.eventbrite.com/o/the-music-space-119103783971\n→ Free trial lesson available for any instrument or voice: https://www.themusicspace.com\n→ Looking to record your music? Hit reply — we'd love to hear about your project.\n\nSee you there!\nThe Music Space Team`;
               const body = tpl
                 .replace(/\{location\}/g, series.location)
                 .replace(/\{date\}/g, dateLabel)

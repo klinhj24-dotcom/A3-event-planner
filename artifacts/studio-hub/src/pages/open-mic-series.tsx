@@ -76,6 +76,11 @@ Whether you're performing or just coming to enjoy great live music — all are w
 
 Sign up to perform: {signup_url}
 
+While you're at it, a few things happening at The Music Space:
+→ Upcoming shows (jazz, songwriters & more): https://www.eventbrite.com/o/the-music-space-119103783971
+→ Free trial lesson available for any instrument or voice: https://www.themusicspace.com
+→ Looking to record your music? Hit reply — we'd love to hear about your project.
+
 See you there!
 The Music Space Team`;
 
