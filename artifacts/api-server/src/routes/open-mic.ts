@@ -234,6 +234,7 @@ function buildEventDate(year: number, month: number, day: number, timeStr: strin
 }
 
 const OPEN_MIC_DEFAULTS = {
+  status: "confirmed",
   hasDebrief: true,
   hasPackingList: true,
   hasStaffSchedule: true,
