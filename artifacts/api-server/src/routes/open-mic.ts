@@ -522,8 +522,7 @@ router.delete("/open-mic/series/:id", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const id = parseInt(req.params.id);
-    // Remove related data first to avoid FK violations
-    await db.delete(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, id));
+    // Remove related data first to avoid FK violations (mailing list kept as archive)
     await db.delete(openMicSignupsTable).where(eq(openMicSignupsTable.seriesId, id));
     // Unlink events from this series (don't delete the events themselves)
     await db.update(eventsTable).set({ openMicSeriesId: null, openMicMonth: null })
@@ -571,6 +570,15 @@ router.post("/open-mic/series/:id/mailing-list", async (req, res) => {
       .where(and(eq(openMicMailingListTable.seriesId, id), eq(openMicMailingListTable.email, email.toLowerCase().trim())));
     res.json(entry);
   } catch (err) { res.status(500).json({ error: "Failed to add to mailing list" }); }
+});
+
+router.delete("/open-mic/series/:id/mailing-list", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, id));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: "Failed to clear mailing list" }); }
 });
 
 router.delete("/open-mic/series/:id/mailing-list/:entryId", async (req, res) => {

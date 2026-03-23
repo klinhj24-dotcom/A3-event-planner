@@ -185,6 +185,17 @@ export default function OpenMicSeriesPage() {
     window.open(`/api/open-mic/series/${selected.id}/mailing-list/export.csv`, "_blank");
   }
 
+  async function handleClearMailingList() {
+    if (!selected) return;
+    const confirmed = window.confirm(`Clear the entire mailing list for "${selected.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      await apiFetch(`/open-mic/series/${selected.id}/mailing-list`, { method: "DELETE" });
+      toast({ title: "Mailing list cleared" });
+      setMailingList([]);
+    } catch (err: any) { toast({ title: err.message ?? "Failed to clear", variant: "destructive" }); }
+  }
+
   async function handleImportCSV(file: File) {
     if (!selected) return;
     setMlImporting(true);
@@ -259,7 +270,7 @@ export default function OpenMicSeriesPage() {
   async function handleDeleteSeries() {
     if (!selected) return;
     const confirmed = window.confirm(
-      `Delete "${selected.name}"? This will remove all signups and mailing list entries for this series. Events linked to this series will be kept but unlinked. This cannot be undone.`
+      `Delete "${selected.name}"? This will remove all signups for this series. The mailing list will be kept as an archive. Events linked to this series will be kept but unlinked. This cannot be undone.`
     );
     if (!confirmed) return;
     try {
@@ -624,6 +635,9 @@ export default function OpenMicSeriesPage() {
                       </label>
                       <Button size="sm" variant="outline" className="border-white/10 h-8" onClick={handleExportCSV}>
                         <Download className="h-3.5 w-3.5 mr-1.5" />Export CSV
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleClearMailingList} className="h-8 border-red-500/30 text-red-400 hover:bg-red-500/10">
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />Clear List
                       </Button>
                     </div>
                   </div>
