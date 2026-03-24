@@ -791,6 +791,7 @@ router.post("/band-confirm/:token", async (req, res) => {
     const [invite] = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.token, token));
     if (!invite) { res.status(404).json({ error: "Invalid token." }); return; }
 
+    const wasAlreadyResponded = invite.status === "confirmed" || invite.status === "declined";
     const newStatus = action === "decline" ? "declined" : "confirmed";
     await db.update(eventBandInvitesTable).set({
       status: newStatus,
@@ -858,8 +859,8 @@ router.post("/band-confirm/:token", async (req, res) => {
       }
     }
 
-    // Send confirmation email to the contact
-    if (newStatus === "confirmed" && invite.contactEmail) {
+    // Send confirmation email to the contact — only on first-time confirmation, never on re-submission
+    if (newStatus === "confirmed" && !wasAlreadyResponded && invite.contactEmail) {
       try {
         const users = await db.select().from(usersTable);
         const gmailUser = users.find(u => u.googleAccessToken && u.googleRefreshToken);
