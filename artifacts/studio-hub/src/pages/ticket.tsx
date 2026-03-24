@@ -389,8 +389,9 @@ function RecitalRegistrationForm({ event, token }: { event: any; token: string }
           )} />
           <FormField control={form.control} name="specialConsiderations" render={({ field }) => (
             <FormItem>
-              <FormLabel>Special Considerations <span className="text-muted-foreground font-normal text-xs">(time restraints, etc.)</span></FormLabel>
-              <FormControl><Textarea className="rounded-xl min-h-[72px]" placeholder="Let us know if you have any time restraints on this date." {...field} /></FormControl>
+              <FormLabel>Scheduling Conflicts / Special Considerations <span className="text-muted-foreground font-normal text-xs">(required if you have time constraints)</span></FormLabel>
+              <FormControl><Textarea className="rounded-xl min-h-[72px]" placeholder="e.g. 'We can't be there before 6:30pm' or 'Need to leave by 8pm' — please be specific so we can schedule accordingly." {...field} /></FormControl>
+              <p className="text-[11px] text-muted-foreground">If your student has a scheduling conflict on this date, please describe it here. This helps us place them at the right time in the program.</p>
             </FormItem>
           )} />
         </div>

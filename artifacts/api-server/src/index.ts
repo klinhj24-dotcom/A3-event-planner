@@ -143,6 +143,9 @@ async function runMigrations() {
     `UPDATE event_ticket_requests SET status = 'confirmed' WHERE status = 'paid'`,
     // Lineup pre-show buffer (minutes from event start to first slot)
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS lineup_pre_buffer_minutes INTEGER DEFAULT 0`,
+    // Schedule conflict detection columns on lineup slots
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS schedule_conflict BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS conflict_reason TEXT`,
   ];
   for (const m of migrations) {
     try {

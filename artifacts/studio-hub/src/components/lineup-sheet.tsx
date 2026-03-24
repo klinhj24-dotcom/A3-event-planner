@@ -22,7 +22,7 @@ import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
   Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
   Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe, Loader2,
-  Copy, Check,
+  Copy, Check, TriangleAlert, ShieldCheck,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -95,6 +95,8 @@ interface LineupSlot {
   // Band leader attendance
   leaderAttending?: boolean; leaderStaffSlotId?: number | null;
   bandLeaderName?: string | null;
+  // Schedule conflict detection
+  scheduleConflict?: boolean; conflictReason?: string | null;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -225,7 +227,7 @@ function InviteRow({ group }: { group: InviteGroup }) {
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
   slot, calcTime, bands, eventId, isRecital, isTwoDay, isFirstGroupHeader,
-  onUpdate, onDelete, onSendInvite, onSendConfirmation, onSendTimeUpdate,
+  onUpdate, onDelete, onSendInvite, onSendConfirmation, onSendTimeUpdate, onClearConflict,
 }: {
   slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
@@ -233,6 +235,7 @@ function SlotRow({
   onSendInvite: (slotId: number, staffNote: string) => void;
   onSendConfirmation: (slotId: number) => void;
   onSendTimeUpdate: (slotId: number) => void;
+  onClearConflict: (id: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: slot.id });
@@ -395,8 +398,24 @@ function SlotRow({
     );
   }
 
+  const hasConflict = slot.type === "act" && slot.scheduleConflict;
+
   return (
-    <div ref={setNodeRef} style={style} className={`rounded-xl border transition-all ${slot.isOverlapping ? "border-[#00b199]/30 bg-[#00b199]/5 ml-6" : "border-border/50 bg-card"} ${isDragging ? "shadow-lg" : "shadow-sm"}`}>
+    <div ref={setNodeRef} style={style} className={`rounded-xl border transition-all ${hasConflict ? "border-red-500/50 bg-red-950/20" : slot.isOverlapping ? "border-[#00b199]/30 bg-[#00b199]/5 ml-6" : "border-border/50 bg-card"} ${isDragging ? "shadow-lg" : "shadow-sm"}`}>
+      {/* Conflict banner */}
+      {hasConflict && (
+        <div className="flex items-start gap-2 px-4 pt-2.5 pb-1">
+          <TriangleAlert className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+          <span className="text-[11px] text-red-400 flex-1 leading-snug">{slot.conflictReason || "Schedule conflict detected"}</span>
+          <button
+            onClick={() => onClearConflict(slot.id)}
+            className="text-red-400/60 hover:text-red-300 transition-colors shrink-0"
+            title="Clear conflict flag"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       {/* Main row */}
       <div className="flex items-center gap-3 px-4 py-3">
         <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 touch-none">
@@ -1141,6 +1160,44 @@ export function LineupSheet({ event, open, onClose }: {
     },
   });
 
+  // ── Conflict detection ─────────────────────────────────────────────────────
+  const [checkingConflicts, setCheckingConflicts] = useState(false);
+
+  async function handleCheckConflicts() {
+    if (!eventId) return;
+    setCheckingConflicts(true);
+    try {
+      const r = await fetch(`/api/events/${eventId}/lineup/check-conflicts`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Conflict check failed", description: data.error, variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+      if (data.conflicts === 0) {
+        toast({ title: data.checked === 0 ? "No slots with times to check" : "No conflicts found", description: data.checked > 0 ? `Checked ${data.checked} slot${data.checked !== 1 ? "s" : ""} — all clear` : undefined });
+      } else {
+        toast({ title: `${data.conflicts} conflict${data.conflicts !== 1 ? "s" : ""} detected`, description: `Checked ${data.checked} slot${data.checked !== 1 ? "s" : ""} — look for red cards`, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Conflict check failed", variant: "destructive" });
+    } finally {
+      setCheckingConflicts(false);
+    }
+  }
+
+  async function handleClearConflict(slotId: number) {
+    if (!eventId) return;
+    await fetch(`/api/events/${eventId}/lineup/${slotId}/conflict`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+  }
+
   // ── Invite mutations ───────────────────────────────────────────────────────
   const [bulkInviting, setBulkInviting] = useState(false);
   const [bulkLockingIn, setBulkLockingIn] = useState(false);
@@ -1338,6 +1395,19 @@ export function LineupSheet({ event, open, onClose }: {
             </SheetTitle>
             <div className="flex items-center gap-2 flex-wrap">
 
+              {slots.filter(s => s.type === "act" && s.startTime).length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs rounded-lg gap-1.5"
+                  disabled={checkingConflicts}
+                  onClick={handleCheckConflicts}
+                  title="Use AI to check each performer's schedule conflict notes against their assigned time"
+                >
+                  {checkingConflicts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TriangleAlert className="h-3.5 w-3.5" />}
+                  {checkingConflicts ? "Checking…" : "Check Conflicts"}
+                </Button>
+              )}
               {isRecital && slots.length > 0 && (
                 <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5" onClick={() => printRecitalOrder(event?.title ?? "Recital", slots, calcTimes)}>
                   <Printer className="h-3.5 w-3.5" /> Print Order
@@ -1556,6 +1626,7 @@ export function LineupSheet({ event, open, onClose }: {
                                 onSendInvite={handleSendInvite}
                                 onSendConfirmation={handleSendConfirmation}
                                 onSendTimeUpdate={handleSendTimeUpdate}
+                                onClearConflict={handleClearConflict}
                               />
                             ))}
                           </div>
@@ -1581,6 +1652,7 @@ export function LineupSheet({ event, open, onClose }: {
                       onSendInvite={handleSendInvite}
                       onSendConfirmation={handleSendConfirmation}
                       onSendTimeUpdate={handleSendTimeUpdate}
+                      onClearConflict={handleClearConflict}
                     />
                   ))}
                 </div>

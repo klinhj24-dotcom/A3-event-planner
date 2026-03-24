@@ -82,6 +82,9 @@ export const eventLineupTable = pgTable("event_lineup", {
   // Band leader attendance
   leaderAttending: boolean("leader_attending").notNull().default(false),
   leaderStaffSlotId: integer("leader_staff_slot_id"), // plain ref to event_staff_slots.id (no FK to avoid circular)
+  // Schedule conflict detection
+  scheduleConflict: boolean("schedule_conflict").notNull().default(false),
+  conflictReason: text("conflict_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { google } from "googleapis";
-import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable } from "@workspace/db";
+import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable, eventTicketRequestsTable, eventBandInvitesTable } from "@workspace/db";
 import { eq, asc, and, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -319,6 +320,9 @@ const LINEUP_SELECT = {
   leaderStaffSlotId: eventLineupTable.leaderStaffSlotId,
   bandLeaderEmployeeId: bandsTable.leaderEmployeeId,
   bandLeaderName: leaderEmp.name,
+  // Schedule conflict
+  scheduleConflict: eventLineupTable.scheduleConflict,
+  conflictReason: eventLineupTable.conflictReason,
 };
 
 router.get("/events/:id/lineup", async (req, res) => {
@@ -409,6 +413,9 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
       }
     }
 
+    // If startTime is changing, auto-clear any schedule conflict flag
+    const clearConflict = startTime !== undefined ? { scheduleConflict: false, conflictReason: null } : {};
+
     const [slot] = await db.update(eventLineupTable)
       .set({
         ...(bandId !== undefined ? { bandId: bandId ? Number(bandId) : null } : {}),
@@ -427,6 +434,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
         ...(confirmationSent !== undefined ? { confirmationSent } : {}),
         ...(leaderUpdates.leaderAttending !== undefined ? { leaderAttending: leaderUpdates.leaderAttending } : {}),
         ...(leaderUpdates.leaderStaffSlotId !== undefined ? { leaderStaffSlotId: leaderUpdates.leaderStaffSlotId } : {}),
+        ...clearConflict,
         updatedAt: new Date(),
       })
       .where(eq(eventLineupTable.id, slotId))
@@ -450,6 +458,118 @@ router.delete("/events/:id/lineup/:slotId", async (req, res) => {
     res.status(204).send();
   } catch (err) {
     console.error("deleteLineupSlot error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Schedule Conflict Detection ───────────────────────────────────────────────
+
+async function analyzeConflict(conflictNote: string, assignedTime: string): Promise<{ conflict: boolean; reason: string }> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      max_completion_tokens: 200,
+      messages: [
+        {
+          role: "system",
+          content: `You analyze schedule conflict notes and determine if a person can make their assigned performance time.
+Return ONLY valid JSON in this exact format: {"conflict": true/false, "reason": "brief explanation"}
+Be concise. If no time constraint is mentioned, return conflict: false.`,
+        },
+        {
+          role: "user",
+          content: `Assigned performance time: ${assignedTime}\nSchedule conflict note: "${conflictNote}"\n\nIs there a conflict?`,
+        },
+      ],
+    });
+    const raw = response.choices[0]?.message?.content?.trim() ?? '{"conflict":false,"reason":""}';
+    const parsed = JSON.parse(raw);
+    return { conflict: Boolean(parsed.conflict), reason: String(parsed.reason ?? "") };
+  } catch {
+    return { conflict: false, reason: "" };
+  }
+}
+
+// POST /events/:id/lineup/check-conflicts — runs AI conflict detection for all slots
+router.post("/events/:id/lineup/check-conflicts", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const eventId = parseInt(req.params.id);
+
+    // Fetch all act slots with assigned times
+    const slots = await db.select(LINEUP_SELECT)
+      .from(eventLineupTable)
+      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
+      .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.type as any, "act")));
+
+    const actSlots = slots.filter(s => s.startTime);
+    if (actSlots.length === 0) { res.json({ checked: 0, conflicts: 0 }); return; }
+
+    // Fetch recital ticket requests for this event (for specialConsiderations lookup)
+    const ticketRequests = await db.select().from(eventTicketRequestsTable)
+      .where(eq(eventTicketRequestsTable.eventId, eventId));
+
+    // Fetch band invites with conflict notes for this event
+    const bandInvites = await db.select().from(eventBandInvitesTable)
+      .where(eq(eventBandInvitesTable.eventId, eventId));
+
+    let checked = 0;
+    let conflicts = 0;
+
+    for (const slot of actSlots) {
+      const assignedTime = slot.startTime!;
+      let notesToCheck: string[] = [];
+
+      if (slot.bandId) {
+        // Band slot: gather all member conflict notes
+        const invitesForSlot = bandInvites.filter(inv => inv.lineupSlotId === slot.id && inv.conflictNote?.trim());
+        notesToCheck = invitesForSlot.map(inv => `${inv.contactName ?? "Member"}: ${inv.conflictNote}`);
+      } else {
+        // Recital slot: match by student name from label or ticket requests
+        const label = slot.label?.trim().toLowerCase() ?? "";
+        const match = ticketRequests.find(tr =>
+          tr.specialConsiderations?.trim() &&
+          (label.includes(tr.studentFirstName?.toLowerCase() ?? "____") ||
+           label.includes(tr.studentLastName?.toLowerCase() ?? "____") ||
+           `${tr.studentFirstName} ${tr.studentLastName}`.toLowerCase().trim() === label)
+        );
+        if (match?.specialConsiderations?.trim()) {
+          notesToCheck = [match.specialConsiderations];
+        }
+      }
+
+      if (notesToCheck.length === 0) continue;
+
+      checked++;
+      const noteText = notesToCheck.join("; ");
+      const { conflict, reason } = await analyzeConflict(noteText, assignedTime);
+
+      await db.update(eventLineupTable)
+        .set({ scheduleConflict: conflict, conflictReason: conflict ? reason : null, updatedAt: new Date() })
+        .where(eq(eventLineupTable.id, slot.id));
+
+      if (conflict) conflicts++;
+    }
+
+    res.json({ checked, conflicts });
+  } catch (err) {
+    console.error("checkConflicts error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /events/:id/lineup/:slotId/conflict — clears the conflict flag manually
+router.delete("/events/:id/lineup/:slotId/conflict", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const slotId = parseInt(req.params.slotId);
+    await db.update(eventLineupTable)
+      .set({ scheduleConflict: false, conflictReason: null, updatedAt: new Date() })
+      .where(eq(eventLineupTable.id, slotId));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("clearConflict error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
