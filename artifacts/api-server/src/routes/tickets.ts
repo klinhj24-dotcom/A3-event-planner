@@ -91,28 +91,27 @@ router.post("/ticket/:token/submit", async (req, res) => {
       return;
     }
 
-    // Check for an existing non-cancelled submission from this email
-    const [existing] = await db
-      .select({ id: eventTicketRequestsTable.id })
-      .from(eventTicketRequestsTable)
-      .where(
-        and(
+    if (event.ticketFormType === "recital" && studentFirstName && studentLastName) {
+      // Recital duplicate checks:
+      // 1. Same email + same student name → definite re-submission
+      const [existingByEmailAndStudent] = await db
+        .select({ id: eventTicketRequestsTable.id })
+        .from(eventTicketRequestsTable)
+        .where(and(
           eq(eventTicketRequestsTable.eventId, event.id),
           eq(eventTicketRequestsTable.contactEmail, contactEmail.toLowerCase().trim()),
+          sql`LOWER(${eventTicketRequestsTable.studentFirstName}) = LOWER(${studentFirstName.trim()})`,
+          sql`LOWER(${eventTicketRequestsTable.studentLastName}) = LOWER(${studentLastName.trim()})`,
           ne(eventTicketRequestsTable.status, "cancelled"),
-        )
-      )
-      .limit(1);
-
-    if (existing) {
-      res.json({ alreadySubmitted: true, eventTitle: event.title });
-      return;
-    }
-
-    // For recital forms: also block duplicate registrations for the same student, regardless of who submitted
-    if (event.ticketFormType === "recital" && studentFirstName && studentLastName) {
+        ))
+        .limit(1);
+      if (existingByEmailAndStudent) {
+        res.json({ alreadySubmitted: true, eventTitle: event.title });
+        return;
+      }
+      // 2. Same student name from any email → prevent same student being registered twice
       const [existingByStudent] = await db
-        .select()
+        .select({ id: eventTicketRequestsTable.id })
         .from(eventTicketRequestsTable)
         .where(and(
           eq(eventTicketRequestsTable.eventId, event.id),
@@ -123,6 +122,21 @@ router.post("/ticket/:token/submit", async (req, res) => {
         .limit(1);
       if (existingByStudent) {
         res.json({ alreadySubmitted: true, eventTitle: event.title, studentAlreadyRegistered: true });
+        return;
+      }
+    } else {
+      // Non-recital: block on email alone
+      const [existing] = await db
+        .select({ id: eventTicketRequestsTable.id })
+        .from(eventTicketRequestsTable)
+        .where(and(
+          eq(eventTicketRequestsTable.eventId, event.id),
+          eq(eventTicketRequestsTable.contactEmail, contactEmail.toLowerCase().trim()),
+          ne(eventTicketRequestsTable.status, "cancelled"),
+        ))
+        .limit(1);
+      if (existing) {
+        res.json({ alreadySubmitted: true, eventTitle: event.title });
         return;
       }
     }
