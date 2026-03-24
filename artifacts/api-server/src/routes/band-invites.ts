@@ -8,9 +8,10 @@ import { format } from "date-fns";
 
 const router = Router();
 
-const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-  : "https://event-mgmt.replit.app";
+const BASE_URL = process.env.PUBLIC_BASE_URL
+  || (process.env.REPLIT_DOMAINS?.split(",")[0]
+    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+    : "https://event-mgmt.replit.app");
 
 const TMS_CC = "info@themusicspace.com";
 

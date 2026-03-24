@@ -49,6 +49,9 @@ async function upsertPocContact(eventId: number, pocName: string | null | undefi
 }
 
 function getAppDomain() {
+  if (process.env.PUBLIC_BASE_URL) {
+    return process.env.PUBLIC_BASE_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
   // Prefer the stable REPLIT_DOMAINS (works in both dev and deployed) over the
   // ephemeral REPLIT_DEV_DOMAIN which can change between restarts
   return process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "localhost";
@@ -860,7 +863,7 @@ router.post("/events/:id/notify", async (req, res) => {
       res.status(404).json({ error: "Event not found" });
       return;
     }
-    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
+    const domain = getAppDomain();
     const signupUrl = `https://${domain}/signup/${event.signupToken}`;
     res.json({
       success: true,
@@ -902,7 +905,7 @@ router.post("/events/:id/send-invite", async (req, res) => {
     const recipientPhone = empRecord?.phone || contactRecord?.phone || "";
 
     // Build event variables
-    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
+    const domain = getAppDomain();
     const signupParams = new URLSearchParams();
     if (recipientName) signupParams.set("name", recipientName);
     if (recipientEmail) signupParams.set("email", recipientEmail);

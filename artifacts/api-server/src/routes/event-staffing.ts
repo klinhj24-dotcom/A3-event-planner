@@ -8,9 +8,10 @@ import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/emplo
 
 const router = Router();
 
-const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-  : "https://event-mgmt.replit.app";
+const BASE_URL = process.env.PUBLIC_BASE_URL
+  || (process.env.REPLIT_DOMAINS?.split(",")[0]
+    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+    : "https://event-mgmt.replit.app");
 
 function requireAuth(req: any, res: any): boolean {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return false; }

@@ -272,9 +272,10 @@ router.post("/events/:eventId/guest-list/send-links", async (req, res) => {
       return;
     }
 
-    const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-      ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-      : "https://event-mgmt.replit.app";
+    const BASE_URL = process.env.PUBLIC_BASE_URL
+      || (process.env.REPLIT_DOMAINS?.split(",")[0]
+        ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+        : "https://event-mgmt.replit.app");
 
     // Get Gmail client for this user
     const [userRow] = await db.select().from(usersTable).where(eq(usersTable.id, userId));

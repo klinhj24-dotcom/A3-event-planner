@@ -8,9 +8,10 @@ import { tryAutoGenerateAndPushComms } from "./events";
 const router = Router();
 const TMS_INFO = "info@themusicspace.com";
 
-const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-  : "http://localhost:3000";
+const BASE_URL = process.env.PUBLIC_BASE_URL
+  || (process.env.REPLIT_DOMAINS?.split(",")[0]
+    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+    : "http://localhost:3000");
 
 const INSTRUMENTS = [
   "Acoustic Guitar",
