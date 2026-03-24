@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download, Mic
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download, Mic, Zap
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -26,7 +26,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
-import { useCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmployee, useTeamMembers, type CommTask } from "@/hooks/use-team";
+import { useCommTasks, useGenerateCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmployee, useTeamMembers, type CommTask } from "@/hooks/use-team";
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
 import { PackingSheet } from "@/components/packing-sheet";
@@ -62,13 +62,14 @@ function CommTasksSheet({
   onClose,
   employees = [],
 }: {
-  event: { id: number; title: string; type: string; startDate?: string | null } | null;
+  event: { id: number; title: string; type: string; startDate?: string | null; status?: string | null } | null;
   open: boolean;
   onClose: () => void;
   employees?: any[];
 }) {
   const { data: tasks = [], isLoading } = useCommTasks(event?.id ?? null);
   const { mutate: updateTask } = useUpdateCommTask();
+  const { mutate: generateTasks, isPending: generating } = useGenerateCommTasks();
   const [pendingCompleteId, setPendingCompleteId] = useState<number | null>(null);
   const [pendingCompletedBy, setPendingCompletedBy] = useState<string>("");
   const { mutate: pushComms, isPending: pushing } = useMutation({
@@ -252,13 +253,28 @@ function CommTasksSheet({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : sorted.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground space-y-2">
+            <div className="text-center py-12 text-muted-foreground space-y-3">
               <ClipboardList className="h-10 w-10 mx-auto opacity-20" />
-              <p className="text-sm">
-                {event.status === "confirmed"
-                  ? "No comm tasks generated yet."
-                  : "No comm tasks yet — they'll appear here once the event is confirmed."}
-              </p>
+              {event.status === "confirmed" ? (
+                <>
+                  <p className="text-sm">No comm tasks generated yet.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10"
+                    disabled={generating}
+                    onClick={() => generateTasks(event.id, {
+                      onSuccess: (data: any) => toast({ title: `${data.generated ?? 0} comm tasks generated` }),
+                      onError: (err: any) => toast({ title: err.message ?? "Failed to generate tasks", variant: "destructive" }),
+                    })}
+                  >
+                    {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                    Generate Comm Tasks
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm">No comm tasks yet — they'll appear here once the event is confirmed.</p>
+              )}
             </div>
           ) : (
             sorted.map(task => {
@@ -1760,7 +1776,7 @@ export default function Events() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<any | null>(null);
-  const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null } | null>(null);
+  const [tasksEvent, setTasksEvent] = useState<{ id: number; title: string; type: string; startDate?: string | null; status?: string | null } | null>(null);
   const [debriefEvent, setDebriefEvent] = useState<{ id: number; title: string; type: string; imageUrl?: string | null; isLeadGenerating?: boolean; primaryStaffId?: string | null; startDate?: string | null; endDate?: string | null; isTwoDay?: boolean; day1EndTime?: string | null; day2StartTime?: string | null } | null>(null);
   const [lineupEvent, setLineupEvent] = useState<{ id: number; title: string; type: string; isTwoDay?: boolean; startDate?: string | null; lineupPreBufferMinutes?: number | null } | null>(null);
   const [packingEvent, setPackingEvent] = useState<{ id: number; title: string; type?: string } | null>(null);
@@ -2713,7 +2729,7 @@ export default function Events() {
                             <CommsPushButton
                               eventId={event.id}
                               eventTitle={event.title}
-                              onPushed={() => setTasksEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate })}
+                              onPushed={() => setTasksEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate, status: event.status })}
                             />
                             {/* Open comm tasks checklist */}
                             <Button
@@ -2721,7 +2737,7 @@ export default function Events() {
                               variant="ghost"
                               title="View comm task checklist"
                               className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                              onClick={() => setTasksEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate })}
+                              onClick={() => setTasksEvent({ id: event.id, title: event.title, type: event.type, startDate: event.startDate, status: event.status })}
                             >
                               <ClipboardList className="h-3.5 w-3.5" />
                             </Button>
@@ -3396,7 +3412,7 @@ export default function Events() {
         canViewFinances={canViewFinances}
         actions={{
           onEdit: (ev) => openEdit(ev),
-          onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate }),
+          onTasks: (ev) => setTasksEvent({ id: ev.id, title: ev.title, type: ev.type, startDate: ev.startDate, status: ev.status }),
           onDebrief: (ev) => setDebriefEvent({ id: ev.id, title: ev.title, type: ev.type, imageUrl: ev.imageUrl, isLeadGenerating: (ev as any).isLeadGenerating ?? false, primaryStaffId: (ev as any).primaryStaffId ?? null, startDate: ev.startDate, endDate: ev.endDate, isTwoDay: ev.isTwoDay ?? false, day1EndTime: (ev as any).day1EndTime ?? null, day2StartTime: (ev as any).day2StartTime ?? null }),
           onLineup: (ev) => setLineupEvent({ id: ev.id, title: ev.title, type: ev.type, isTwoDay: ev.isTwoDay ?? false, startDate: (ev as any).startDate ?? null, lineupPreBufferMinutes: (ev as any).lineupPreBufferMinutes ?? 0 }),
           onStaffSlots: (ev) => setStaffSlotsEvent({ id: ev.id, title: ev.title, startDate: ev.startDate, endDate: ev.endDate, location: ev.location, isTwoDay: ev.isTwoDay ?? false }),
