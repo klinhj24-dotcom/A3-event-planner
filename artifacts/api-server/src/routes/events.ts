@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable, eventStaffSlotsTable } from "@workspace/db";
-import { eq, desc, gte, and, ilike, inArray } from "drizzle-orm";
+import { eq, desc, asc, gte, and, ilike, inArray, sql } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
@@ -274,7 +274,7 @@ router.get("/events", async (req, res) => {
       .select()
       .from(eventsTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(eventsTable.startDate));
+      .orderBy(sql`${eventsTable.startDate} ASC NULLS LAST`);
 
     // Compute internal ticket sales totals per event (charged requests only)
     const eventIds = events.map(e => e.id);
