@@ -21,7 +21,7 @@ async function sendSignupConfirmation(signup: { name: string; email?: string | n
 
     const firstName = signup.name.split(" ")[0];
     const subject = `Signup Confirmed — ${event.title}`;
-    let body = `Hi ${firstName},\n\nYou're all set! We've received your signup for <strong>${event.title}</strong>.\n\n`;
+    let body = `Hi ${firstName},\n\nYou're all set! We've received your signup for <strong>the ${event.title}</strong>.\n\n`;
     body += `<strong>Date:</strong> ${formatEventDate(event.startDate)}\n`;
     if (event.location) body += `<strong>Location:</strong> ${event.location}\n`;
     if (signup.role) body += `<strong>Your role:</strong> ${signup.role}\n`;
@@ -128,7 +128,7 @@ router.post("/events/:id/signups/remind", async (req, res) => {
       try {
         const firstName = signup.name.split(" ")[0];
         const subject = `Reminder: ${event.title} is coming up!`;
-        let body = `Hi ${firstName},\n\nJust a friendly reminder that <strong>${event.title}</strong> is coming up soon!\n\n`;
+        let body = `Hi ${firstName},\n\nJust a friendly reminder that <strong>the ${event.title}</strong> is coming up soon!\n\n`;
         body += `<strong>Date:</strong> ${eventDate}\n`;
         if (event.location) body += `<strong>Location:</strong> ${event.location}\n`;
         if (signup.role) body += `<strong>Your role:</strong> ${signup.role}\n`;

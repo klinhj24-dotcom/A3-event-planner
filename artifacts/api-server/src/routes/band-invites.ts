@@ -460,7 +460,7 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
 
     const emailBody = `Hi ${bandName} Band Families,
 
-Great news — ${bandName} is confirmed for ${event.title}!
+Great news — ${bandName} is confirmed for the ${event.title}!
 
 Event: ${event.title}
 Performance Date: ${performanceDay}
@@ -552,7 +552,7 @@ router.post("/events/:eventId/lineup/:slotId/send-time-update", async (req, res)
 
     const emailBody = `Hi ${bandName} Band Families,
 
-We're writing to let you know that the set time for ${bandName} at ${event.title} has been updated.
+We're writing to let you know that the set time for ${bandName} at the ${event.title} has been updated.
 
 ${timeLine}
 Performance Date: ${performanceDay}
@@ -665,7 +665,7 @@ router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) =
 
         const emailBody = `Hi ${bandName} Band Families,
 
-Great news — ${bandName} is confirmed for ${event.title}!
+Great news — ${bandName} is confirmed for the ${event.title}!
 
 Event: ${event.title}
 Performance Date: ${performanceDay}

@@ -298,7 +298,7 @@ router.post("/events/:eventId/guest-list/send-links", async (req, res) => {
         const link = `${BASE_URL}/guest-list/${entry.token}`;
         const contactName = entry.contactName || "there";
 
-        const body = `Hi ${contactName},\n\n${entry.studentName || "Your student"} has been added to the guest list for ${event.title} on ${startDate}.\n\nPlease use the link below to confirm your guest registration and add any guests you're bringing.`;
+        const body = `Hi ${contactName},\n\n${entry.studentName || "Your student"} has been added to the guest list for the ${event.title} on ${startDate}.\n\nPlease use the link below to confirm your guest registration and add any guests you're bringing.`;
 
         const html = buildHtmlEmail({
           recipientName: contactName,

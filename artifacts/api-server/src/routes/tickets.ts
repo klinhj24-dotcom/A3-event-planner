@@ -200,7 +200,7 @@ router.post("/ticket/:token/submit", async (req, res) => {
           ? `Recital Registration Confirmed — ${event.title}`
           : `Ticket Request Received — ${event.title}`;
 
-        let bodyText = `Hi ${contactFirstName},\n\nThank you for your ${isRecital ? "recital registration" : "ticket request"} for ${event.title}.\n\n`;
+        let bodyText = `Hi ${contactFirstName},\n\nThank you for your ${isRecital ? "recital registration" : "ticket request"} for the ${event.title}.\n\n`;
         bodyText += `Date: ${eventDate}\n`;
         if (event.location) bodyText += `Location: ${event.location}\n`;
         bodyText += `\n`;
@@ -496,7 +496,7 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
               }
             }
 
-            const bodyText = `Hi ${capturedUpdated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
+            const bodyText = `Hi ${capturedUpdated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for the ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
             const html = buildHtmlEmail({ recipientName: capturedUpdated.contactFirstName ?? "there", body: bodyText });
             const subject = `Payment Confirmed — ${event.title}`;
             const raw = makeHtmlEmail({ to: capturedUpdated.contactEmail, from: sender.email || "", subject, html, cc });
