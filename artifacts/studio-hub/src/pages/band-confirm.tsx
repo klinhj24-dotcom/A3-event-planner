@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, Music, CheckCircle2, XCircle, AlertCircle, Users, Plus, Trash2 } from "lucide-react";
+import { Loader2, Music, CheckCircle2, XCircle, AlertCircle, Users, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -149,8 +149,35 @@ export default function BandConfirmPage() {
           </motion.div>
         )}
 
+        {/* Already confirmed — friendly shortcut view */}
+        {!result && invite && (invite.status === "confirmed" || alreadyConfirmedBy) && (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="rounded-2xl border border-emerald-500/30 bg-card p-8 text-center space-y-4">
+              <div className="h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-bold">You're already confirmed!</h1>
+                <p className="text-muted-foreground text-sm">
+                  {alreadyConfirmedBy && alreadyConfirmedBy !== invite.contactName
+                    ? `${alreadyConfirmedBy} already confirmed this booking for ${slot?.bandName ?? "your band"}.`
+                    : `Your booking for ${slot?.bandName ?? "your band"} at ${event?.title ?? "the event"} is all set.`}
+                </p>
+                <p className="text-muted-foreground text-sm flex items-center justify-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                  Check your email for your confirmation details.
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground pt-2">
+                Questions? Email us at{" "}
+                <a href={`mailto:${TMS_CC}`} className="text-primary hover:underline">{TMS_CC}</a>
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         {/* Invite view */}
-        {!result && invite && (
+        {!result && invite && invite.status !== "confirmed" && !alreadyConfirmedBy && (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
               <div className="p-6 space-y-4">
@@ -170,22 +197,10 @@ export default function BandConfirmPage() {
                 </p>
 
                 {/* Status banners */}
-                {alreadyConfirmedBy && (
-                  <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    Already confirmed by {alreadyConfirmedBy}
-                  </div>
-                )}
                 {!alreadyConfirmedBy && alreadyDeclinedBy && (
                   <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     Previously declined by {alreadyDeclinedBy} — you may still respond below
-                  </div>
-                )}
-                {invite.status === "confirmed" && !alreadyConfirmedBy && (
-                  <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    You already confirmed this booking
                   </div>
                 )}
                 {invite.status === "declined" && (
