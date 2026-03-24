@@ -3,6 +3,7 @@ import { db, openMicSignupsTable, openMicSeriesTable, openMicMailingListTable, e
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { google } from "googleapis";
+import { tryAutoGenerateAndPushComms } from "./events";
 
 const router = Router();
 const TMS_INFO = "info@themusicspace.com";
@@ -287,6 +288,9 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
       openMicMonth: ff.monthKey,
     }).returning();
     created.push(ev);
+    // Auto-generate comm tasks (fire-and-forget) using the admin account for calendar access
+    const [adminUser] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, "justin@themusicspace.com"));
+    if (adminUser) tryAutoGenerateAndPushComms(adminUser.id, ev);
   }
   return created;
 }

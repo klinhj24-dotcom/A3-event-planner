@@ -124,7 +124,7 @@ async function trySyncToCalendar(userId: string, event: typeof eventsTable.$infe
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
 /** Fire-and-forget: generate comm tasks from rules and push them to the comms Google Calendar. */
-async function tryAutoGenerateAndPushComms(userId: string, event: typeof eventsTable.$inferSelect) {
+export async function tryAutoGenerateAndPushComms(userId: string, event: typeof eventsTable.$inferSelect) {
   try {
     if (!event.startDate) return;
     const rules = await db

@@ -201,7 +201,9 @@ function CommTasksSheet({
             </div>
           ) : (
             <div className="mt-4 text-sm text-muted-foreground">
-              Comm tasks auto-generate when this event is confirmed.
+              {event.status === "confirmed"
+                ? "No comm tasks generated yet — use the generate icon on the event list, or click Sync below."
+                : "Comm tasks auto-generate when this event is confirmed."}
             </div>
           )}
 
@@ -252,7 +254,11 @@ function CommTasksSheet({
           ) : sorted.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground space-y-2">
               <ClipboardList className="h-10 w-10 mx-auto opacity-20" />
-              <p className="text-sm">No comm tasks yet — they'll appear here once the event is confirmed.</p>
+              <p className="text-sm">
+                {event.status === "confirmed"
+                  ? "No comm tasks generated yet."
+                  : "No comm tasks yet — they'll appear here once the event is confirmed."}
+              </p>
             </div>
           ) : (
             sorted.map(task => {
