@@ -1459,31 +1459,31 @@ function EventOverviewSheet({
                     {/* Status + paid + delete */}
                     <div className="flex flex-col items-end gap-1.5 py-2.5 pr-2.5">
                       <select
-                        value={r.status}
+                        value={r.status === "cancelled" ? "not_attending" : r.status}
                         onChange={e => updateTicketStatus({ requestId: r.id, status: e.target.value })}
-                        className={`rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize border-0 outline-none cursor-pointer ${
+                        className={`rounded-lg px-1.5 py-0.5 text-[10px] font-semibold border-0 outline-none cursor-pointer ${
                           r.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
-                          r.status === "cancelled" ? "bg-destructive/10 text-destructive" :
+                          (r.status === "not_attending" || r.status === "cancelled") ? "bg-muted/80 text-muted-foreground" :
                           "bg-amber-500/10 text-amber-600"
                         }`}
                       >
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
-                        <option value="cancelled">Cancelled</option>
+                        <option value="not_attending">Not Attending</option>
                       </select>
-                      {/* Paid checkbox — checking sets status → confirmed, unchecking → pending */}
-                      <label className="flex items-center gap-1 cursor-pointer select-none group">
-                        <div className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-colors ${
+                      {/* Paid checkbox — bigger, auto-confirms when checked */}
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none group">
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                           r.charged
                             ? "bg-emerald-500 border-emerald-500"
-                            : "border-border/60 group-hover:border-emerald-500/50"
+                            : "border-border/60 group-hover:border-emerald-500/60"
                         }`}
                           onClick={() => updateTicketStatus({
                             requestId: r.id,
                             status: r.charged ? "pending" : "confirmed",
                           })}
                         >
-                          {r.charged && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          {r.charged && <svg className="w-3 h-3 text-white" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                         </div>
                         <span
                           className={`text-[10px] font-medium transition-colors ${r.charged ? "text-emerald-500" : "text-muted-foreground/60 group-hover:text-muted-foreground"}`}
@@ -1491,7 +1491,7 @@ function EventOverviewSheet({
                             requestId: r.id,
                             status: r.charged ? "pending" : "confirmed",
                           })}
-                        >Paid</span>
+                        >{r.status === "confirmed" ? "Has student paid?" : "Paid"}</span>
                       </label>
                       <button
                         onClick={() => {

@@ -92,7 +92,7 @@ export const eventTicketRequestsTable = pgTable("event_ticket_requests", {
   teacher: text("teacher"),
   specialConsiderations: text("special_considerations"),
   // Admin
-  status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
+  status: text("status").notNull().default("pending"), // pending | confirmed | not_attending
   adminNotes: text("admin_notes"),
   charged: boolean("charged").notNull().default(false),
   chargedAt: timestamp("charged_at", { withTimezone: true }),

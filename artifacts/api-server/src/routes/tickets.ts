@@ -304,7 +304,7 @@ router.get("/pending-charges", async (req, res) => {
       })
       .from(eventTicketRequestsTable)
       .innerJoin(eventsTable, eq(eventTicketRequestsTable.eventId, eventsTable.id))
-      .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled")))
+      .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled"), ne(eventTicketRequestsTable.status, "not_attending")))
       .orderBy(eventsTable.startDate, eventTicketRequestsTable.createdAt);
     res.json(rows);
   } catch (err) {
@@ -414,7 +414,8 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
 
     // "confirmed" = registration accepted + card charged (same action)
     const chargingNow = status === "confirmed" && before?.status !== "confirmed";
-    const unchargingNow = status !== undefined && status !== "confirmed" && before?.status === "confirmed";
+    // Only uncharge if moving away from confirmed to pending (not to "not_attending" — they still paid)
+    const unchargingNow = status !== undefined && status === "pending" && before?.status === "confirmed";
 
     const [updated] = await db
       .update(eventTicketRequestsTable)
@@ -525,7 +526,7 @@ router.post("/events/:id/ticket-requests/remind", async (req, res) => {
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
     const requests = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.eventId, eventId));
-    const withEmail = requests.filter(r => r.contactEmail && r.status !== "cancelled");
+    const withEmail = requests.filter(r => r.contactEmail && r.status !== "cancelled" && r.status !== "not_attending");
     if (withEmail.length === 0) { res.json({ sent: 0, message: "No registrants with email addresses" }); return; }
 
     const users = await db.select().from(usersTable);
