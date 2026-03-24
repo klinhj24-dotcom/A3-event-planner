@@ -48,6 +48,7 @@ export const eventsTable = pgTable("events", {
   primaryStaffId: varchar("primary_staff_id").references(() => usersTable.id, { onDelete: "set null" }),
   revenueSharePercent: integer("revenue_share_percent").default(100),
   perTicketVenueFee: decimal("per_ticket_venue_fee", { precision: 10, scale: 2 }),
+  lineupPreBufferMinutes: integer("lineup_pre_buffer_minutes").default(0),
   openMicSeriesId: integer("open_mic_series_id"),
   openMicMonth: varchar("open_mic_month", { length: 20 }),
   openMicSaveTheDateSent: boolean("open_mic_save_the_date_sent").notNull().default(false),

@@ -141,6 +141,8 @@ async function runMigrations() {
     `ALTER TABLE open_mic_mailing_list ADD COLUMN IF NOT EXISTS series_name VARCHAR(255)`,
     // Merge "paid" into "confirmed" — they mean the same thing
     `UPDATE event_ticket_requests SET status = 'confirmed' WHERE status = 'paid'`,
+    // Lineup pre-show buffer (minutes from event start to first slot)
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS lineup_pre_buffer_minutes INTEGER DEFAULT 0`,
   ];
   for (const m of migrations) {
     try {

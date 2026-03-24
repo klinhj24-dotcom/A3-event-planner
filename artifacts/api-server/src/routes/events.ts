@@ -452,7 +452,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee, lineupPreBufferMinutes } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -504,6 +504,7 @@ router.put("/events/:id", async (req, res) => {
         primaryStaffId: primaryStaffId !== undefined ? (primaryStaffId ?? null) : undefined,
         revenueSharePercent: revenueSharePercent !== undefined ? Number(revenueSharePercent) : undefined,
         perTicketVenueFee: perTicketVenueFee !== undefined ? (perTicketVenueFee != null ? perTicketVenueFee.toString() : null) : undefined,
+        lineupPreBufferMinutes: lineupPreBufferMinutes !== undefined ? Number(lineupPreBufferMinutes) : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))

@@ -111,14 +111,14 @@ function addMinutes(t: string, mins: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function computeTimes(slots: LineupSlot[]): (string | null)[] {
+function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (string | null)[] {
   const out: (string | null)[] = [];
   for (let i = 0; i < slots.length; i++) {
     const s = slots[i];
     // Group headers don't consume time — carry forward previous time
     if (s.type === "group-header") { out.push(out[i - 1] ?? null); continue; }
     if (s.startTime) { out.push(s.startTime); continue; }
-    if (i === 0) { out.push(null); continue; }
+    if (i === 0) { out.push(baseTime); continue; }  // use baseTime (event start + buffer) for first slot
     if (s.isOverlapping) { out.push(out[i - 1]); continue; }
     // Find the last non-group-header slot before this one for time chaining
     let prevIdx = i - 1;
@@ -901,13 +901,47 @@ function DroppableDayZone({ day, children, isDragging }: { day: number; children
 
 // ── Main sheet ─────────────────────────────────────────────────────────────────
 export function LineupSheet({ event, open, onClose }: {
-  event: { id: number; title: string; type?: string; isTwoDay?: boolean } | null;
+  event: { id: number; title: string; type?: string; isTwoDay?: boolean; startDate?: string | null; lineupPreBufferMinutes?: number | null } | null;
   open: boolean;
   onClose: () => void;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const eventId = event?.id;
+
+  // ── Pre-show buffer ─────────────────────────────────────────────────────────
+  const [preBuffer, setPreBuffer] = useState<number>(0);
+  // Sync from event prop when sheet opens or event changes
+  useEffect(() => {
+    setPreBuffer(event?.lineupPreBufferMinutes ?? 0);
+  }, [event?.id, open]);
+
+  // Extract HH:mm from event.startDate (ignore if time is midnight / no time set)
+  const eventStartHHmm: string | null = (() => {
+    if (!event?.startDate) return null;
+    const d = new Date(event.startDate);
+    const h = d.getHours(), m = d.getMinutes();
+    if (h === 0 && m === 0) return null; // treat midnight as "no time set"
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  })();
+
+  const showStartHHmm: string | null = eventStartHHmm
+    ? (preBuffer !== 0 ? addMinutes(eventStartHHmm, preBuffer) : eventStartHHmm)
+    : null;
+
+  // Debounce-save buffer to event
+  useEffect(() => {
+    if (!eventId) return;
+    const t = setTimeout(async () => {
+      await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ lineupPreBufferMinutes: preBuffer }),
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [preBuffer, eventId]);
 
   const { data: rawBands = [] } = useQuery<Band[]>({
     queryKey: ["/api/bands"],
@@ -1210,7 +1244,7 @@ export function LineupSheet({ event, open, onClose }: {
   }
 
   const isRecital = event?.type === "Recital";
-  const calcTimes = computeTimes(slots);
+  const calcTimes = computeTimes(slots, showStartHHmm);
 
   const handleUpdate = useCallback(async (id: number, data: Partial<LineupSlot>) => { await updateSlot({ id, data }); }, [updateSlot]);
   const handleDelete = useCallback((id: number) => { deleteSlot(id); }, [deleteSlot]);
@@ -1246,6 +1280,7 @@ export function LineupSheet({ event, open, onClose }: {
               {isRecital ? "Recital Order" : "Band Lineup"} — <span className="text-muted-foreground font-normal">{event?.title}</span>
             </SheetTitle>
             <div className="flex items-center gap-2 flex-wrap">
+
               {isRecital && slots.length > 0 && (
                 <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5" onClick={() => printRecitalOrder(event?.title ?? "Recital", slots, calcTimes)}>
                   <Printer className="h-3.5 w-3.5" /> Print Order
@@ -1284,6 +1319,50 @@ export function LineupSheet({ event, open, onClose }: {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── Timing bar ──────────────────────────────────────────────────── */}
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            {eventStartHHmm ? (
+              <>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span>Doors <span className="text-foreground font-medium">{fmt12(eventStartHHmm)}</span></span>
+                </div>
+                <span className="text-muted-foreground/40">→</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Buffer</span>
+                  <div className="flex items-center gap-0 rounded-lg border border-border/50 overflow-hidden h-6">
+                    <button
+                      className="px-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-sm leading-none h-full"
+                      onClick={() => setPreBuffer(b => Math.max(0, b - 5))}
+                    >−</button>
+                    <input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={preBuffer}
+                      onChange={e => setPreBuffer(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-10 text-center text-xs bg-transparent border-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none h-full"
+                    />
+                    <span className="text-[10px] text-muted-foreground pr-1.5">min</span>
+                    <button
+                      className="px-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-sm leading-none h-full border-l border-border/50"
+                      onClick={() => setPreBuffer(b => b + 5)}
+                    >+</button>
+                  </div>
+                </div>
+                <span className="text-muted-foreground/40">→</span>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">Show starts</span>
+                  <span className="font-semibold text-foreground">{fmt12(showStartHHmm)}</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+                <Clock className="h-3 w-3" /> Set a start time on the event to enable automatic slot timing.
+              </p>
+            )}
           </div>
         </SheetHeader>
 
