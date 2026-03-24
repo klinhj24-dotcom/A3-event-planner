@@ -1434,7 +1434,7 @@ function EventOverviewSheet({
                       )}
                     </div>
 
-                    {/* Status + delete */}
+                    {/* Status + paid + delete */}
                     <div className="flex flex-col items-end gap-1.5 py-2.5 pr-2.5">
                       <select
                         value={r.status}
@@ -1449,6 +1449,28 @@ function EventOverviewSheet({
                         <option value="confirmed">Confirmed</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
+                      {/* Paid checkbox — checking sets status → confirmed, unchecking → pending */}
+                      <label className="flex items-center gap-1 cursor-pointer select-none group">
+                        <div className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-colors ${
+                          r.charged
+                            ? "bg-emerald-500 border-emerald-500"
+                            : "border-border/60 group-hover:border-emerald-500/50"
+                        }`}
+                          onClick={() => updateTicketStatus({
+                            requestId: r.id,
+                            status: r.charged ? "pending" : "confirmed",
+                          })}
+                        >
+                          {r.charged && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </div>
+                        <span
+                          className={`text-[10px] font-medium transition-colors ${r.charged ? "text-emerald-500" : "text-muted-foreground/60 group-hover:text-muted-foreground"}`}
+                          onClick={() => updateTicketStatus({
+                            requestId: r.id,
+                            status: r.charged ? "pending" : "confirmed",
+                          })}
+                        >Paid</span>
+                      </label>
                       <button
                         onClick={() => {
                           const name = isRecitalEntry
