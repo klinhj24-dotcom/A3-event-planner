@@ -115,18 +115,29 @@ function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (str
   const out: (string | null)[] = [];
   for (let i = 0; i < slots.length; i++) {
     const s = slots[i];
-    // Group headers don't consume time — carry forward previous time
-    if (s.type === "group-header") { out.push(out[i - 1] ?? null); continue; }
+    // Group headers: if they have a manual startTime, they become a chain reset point;
+    // otherwise they carry forward the previous slot's time
+    if (s.type === "group-header") {
+      out.push(s.startTime ? s.startTime : (out[i - 1] ?? null));
+      continue;
+    }
+    // Manual override on a regular slot always wins
     if (s.startTime) { out.push(s.startTime); continue; }
-    if (i === 0) { out.push(baseTime); continue; }  // use baseTime (event start + buffer) for first slot
+    // First slot uses baseTime (event start + buffer)
+    if (i === 0) { out.push(baseTime); continue; }
     if (s.isOverlapping) { out.push(out[i - 1]); continue; }
-    // Find the last non-group-header slot before this one for time chaining
+    // Walk back to find the previous element to chain from.
+    // Stop at group headers that have a startTime set (they act as reset points).
     let prevIdx = i - 1;
-    while (prevIdx >= 0 && slots[prevIdx].type === "group-header") prevIdx--;
-    if (prevIdx < 0) { out.push(null); continue; }
+    while (prevIdx >= 0 && slots[prevIdx].type === "group-header" && !slots[prevIdx].startTime) prevIdx--;
+    if (prevIdx < 0) { out.push(baseTime); continue; }
     const prev = slots[prevIdx];
     const prevT = out[prevIdx];
-    if (!prevT || !prev.durationMinutes) { out.push(null); continue; }
+    if (!prevT) { out.push(null); continue; }
+    // If previous element is a group header with startTime, first slot in that group starts at the group's time
+    if (prev.type === "group-header") { out.push(prevT); continue; }
+    // Normal slot: add duration + changeover buffer
+    if (!prev.durationMinutes) { out.push(null); continue; }
     out.push(addMinutes(prevT, prev.durationMinutes + (prev.bufferMinutes ?? 0)));
   }
   return out;
@@ -335,6 +346,30 @@ function SlotRow({
             onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             title="Click to rename group"
           />
+          {/* Group start time — sets the chain reset point for this group */}
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3 text-primary/40" />
+            <input
+              type="time"
+              value={draft.startTime}
+              onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))}
+              onBlur={() => {
+                if (draft.startTime !== (slot.startTime ?? ""))
+                  onUpdate(slot.id, { startTime: draft.startTime || null });
+              }}
+              title="Set group start time (overrides auto-calculated time)"
+              className="bg-transparent text-[11px] font-mono text-primary/70 border-0 outline-none focus:ring-0 w-[72px] cursor-pointer hover:text-primary transition-colors"
+            />
+            {draft.startTime && (
+              <button
+                onClick={() => { setDraft(d => ({ ...d, startTime: "" })); onUpdate(slot.id, { startTime: null }); }}
+                className="text-primary/30 hover:text-destructive transition-colors"
+                title="Clear group start time"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            )}
+          </div>
           <div className="h-px flex-1 bg-primary/20" />
         </div>
         <button onClick={() => onDelete(slot.id)} className="text-muted-foreground/30 hover:text-destructive transition-colors p-0.5">
@@ -1059,7 +1094,8 @@ export function LineupSheet({ event, open, onClose }: {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
       setLocalSlots([]);
       setAddSlotOpen(false);
-      setNewSlot({ type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false });
+      const recital = event?.type === "Recital";
+      setNewSlot({ type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: recital ? "5" : "", buffer: recital ? "2" : "15", isOverlapping: false });
       toast({ title: "Slot added" });
     },
   });
@@ -1443,7 +1479,10 @@ export function LineupSheet({ event, open, onClose }: {
                     <Layers className="h-3 w-3" /> Add Group
                   </Button>
                 )}
-                <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => setAddSlotOpen(true)}>
+                <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => {
+                  setNewSlot(s => ({ ...s, duration: isRecital ? "5" : s.duration, buffer: isRecital ? "2" : s.buffer }));
+                  setAddSlotOpen(true);
+                }}>
                   <Plus className="h-3.5 w-3.5" /> {isRecital ? "Add Performer" : "Add Slot"}
                 </Button>
               </div>
