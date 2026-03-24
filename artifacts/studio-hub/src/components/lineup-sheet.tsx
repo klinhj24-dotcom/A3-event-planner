@@ -97,6 +97,19 @@ interface LineupSlot {
   bandLeaderName?: string | null;
   // Schedule conflict detection
   scheduleConflict?: boolean; conflictReason?: string | null;
+  // Other group
+  otherGroupId?: number | null;
+  otherGroupName?: string | null;
+  otherGroupDescription?: string | null;
+  otherGroupContactName?: string | null;
+  otherGroupContactEmail?: string | null;
+  otherGroupContactPhone?: string | null;
+}
+
+interface OtherGroup {
+  id: number; name: string; description: string | null;
+  contactName: string | null; contactEmail: string | null; contactPhone: string | null;
+  notes: string | null;
 }
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
@@ -226,11 +239,11 @@ function InviteRow({ group }: { group: InviteGroup }) {
 
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
-  slot, calcTime, bands, eventId, isRecital, isTwoDay, isFirstGroupHeader,
+  slot, calcTime, bands, otherGroups, eventId, isRecital, isTwoDay, isFirstGroupHeader,
   onUpdate, onDelete, onSendInvite, onSendConfirmation, onSendTimeUpdate, onClearConflict,
   ticketRequests,
 }: {
-  slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean;
+  slot: LineupSlot; calcTime: string | null; bands: Band[]; otherGroups: OtherGroup[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
   onDelete: (id: number) => void;
   onSendInvite: (slotId: number, staffNote: string) => void;
@@ -245,6 +258,8 @@ function SlotRow({
 
   const [expanded, setExpanded] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+
+  const initActType = slot.otherGroupId ? "other" : "band";
   const [draft, setDraft] = useState({
     label: slot.label ?? "",
     startTime: slot.startTime ?? "",
@@ -253,6 +268,8 @@ function SlotRow({
     isOverlapping: slot.isOverlapping,
     notes: slot.notes ?? "",
     bandId: slot.bandId ? String(slot.bandId) : "",
+    otherGroupId: slot.otherGroupId ? String(slot.otherGroupId) : "",
+    actType: initActType as "band" | "other",
     groupName: slot.groupName ?? "",
     staffNote: slot.staffNote ?? "",
     eventDay: slot.eventDay ?? 1,
@@ -268,12 +285,14 @@ function SlotRow({
       isOverlapping: slot.isOverlapping,
       notes: slot.notes ?? "",
       bandId: slot.bandId ? String(slot.bandId) : "",
+      otherGroupId: slot.otherGroupId ? String(slot.otherGroupId) : "",
+      actType: slot.otherGroupId ? "other" : "band",
       groupName: slot.groupName ?? "",
       staffNote: slot.staffNote ?? "",
       eventDay: slot.eventDay ?? 1,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slot.id, slot.startTime, slot.durationMinutes, slot.bufferMinutes, slot.bandId, slot.label, slot.notes, slot.staffNote, slot.eventDay]);
+  }, [slot.id, slot.startTime, slot.durationMinutes, slot.bufferMinutes, slot.bandId, slot.otherGroupId, slot.label, slot.notes, slot.staffNote, slot.eventDay]);
 
   // For recital slots: find matching ticket request by student name
   const matchedRequest = isRecital && ticketRequests?.length
@@ -299,7 +318,7 @@ function SlotRow({
   const [sendingConfirm, setSendingConfirm] = useState(false);
   const [sendingTimeUpdate, setSendingTimeUpdate] = useState(false);
 
-  const displayName = slot.bandName || slot.label || (SLOT_TYPE_META[slot.type]?.label ?? slot.type);
+  const displayName = slot.bandName || slot.otherGroupName || slot.label || (SLOT_TYPE_META[slot.type]?.label ?? slot.type);
   const meta = SLOT_TYPE_META[slot.type] ?? SLOT_TYPE_META.act;
   const inviteStatusMeta = INVITE_STATUS_META[slot.inviteStatus] ?? INVITE_STATUS_META.not_sent;
 
@@ -318,7 +337,8 @@ function SlotRow({
         bufferMinutes: Number(draft.buffer) || 15,
         isOverlapping: draft.isOverlapping,
         notes: draft.notes || null,
-        bandId: draft.bandId ? Number(draft.bandId) : null,
+        bandId: draft.actType === "band" && draft.bandId && draft.bandId !== "_custom" ? Number(draft.bandId) : null,
+        otherGroupId: draft.actType === "other" && draft.otherGroupId ? Number(draft.otherGroupId) : null,
         groupName: draft.groupName || null,
         staffNote: draft.staffNote || null,
         eventDay: draft.eventDay,
@@ -440,8 +460,14 @@ function SlotRow({
         <span className={`shrink-0 ${meta.color}`}>{meta.icon}</span>
 
         <div className="flex-1 min-w-0">
-          <span className="font-medium text-sm truncate block">{displayName}</span>
-          {slot.groupName && <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>}
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-sm truncate block">{displayName}</span>
+            {slot.otherGroupId && !slot.bandId && (
+              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">Other Group</span>
+            )}
+          </div>
+          {slot.otherGroupDescription && <span className="text-[10px] text-muted-foreground truncate block">{slot.otherGroupDescription}</span>}
+          {!slot.otherGroupDescription && slot.groupName && <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>}
           {slot.isOverlapping && <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps with previous</span>}
         </div>
 
@@ -493,23 +519,67 @@ function SlotRow({
         <div className="border-t border-border/40 px-4 pb-4 pt-3 space-y-3">
           {/* Band / act selection */}
           {slot.type === "act" && !isRecital && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Band / Act</label>
-                <Select value={draft.bandId} onValueChange={(v) => setDraft(d => ({ ...d, bandId: v, label: v === "_custom" ? d.label : "" }))}>
-                  <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Pick a band…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_custom">Custom name…</SelectItem>
-                    {bands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2">
+              {/* Toggle: Student Band vs Other Group */}
+              <div className="flex items-center rounded-lg border border-border/50 bg-muted/20 p-0.5 w-fit gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setDraft(d => ({ ...d, actType: "band", otherGroupId: "" }))}
+                  className={`text-[11px] font-medium px-3 py-1 rounded-md transition-all ${draft.actType === "band" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >Student Band</button>
+                <button
+                  type="button"
+                  onClick={() => setDraft(d => ({ ...d, actType: "other", bandId: "", label: "" }))}
+                  className={`text-[11px] font-medium px-3 py-1 rounded-md transition-all ${draft.actType === "other" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >Other Group</button>
               </div>
-              {(draft.bandId === "_custom" || !draft.bandId) && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Custom Label</label>
-                  <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="Act name…" />
+              {draft.actType === "band" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Band</label>
+                    <Select value={draft.bandId} onValueChange={(v) => setDraft(d => ({ ...d, bandId: v, label: v === "_custom" ? d.label : "" }))}>
+                      <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Pick a band…" /></SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="_custom">Custom name…</SelectItem>
+                        {bands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(draft.bandId === "_custom" || !draft.bandId) && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Custom Label</label>
+                      <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="Act name…" />
+                    </div>
+                  )}
                 </div>
               )}
+              {draft.actType === "other" && (() => {
+                const selectedGroup = otherGroups.find(g => String(g.id) === draft.otherGroupId);
+                return (
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Other Group</label>
+                      <Select value={draft.otherGroupId} onValueChange={(v) => setDraft(d => ({ ...d, otherGroupId: v }))}>
+                        <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Pick a group…" /></SelectTrigger>
+                        <SelectContent position="popper">
+                          {otherGroups.length === 0
+                            ? <SelectItem value="_none" disabled>No other groups yet — add them in the Bands page</SelectItem>
+                            : otherGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}{g.description ? ` — ${g.description}` : ""}</SelectItem>)
+                          }
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {selectedGroup && (selectedGroup.contactName || selectedGroup.contactEmail || selectedGroup.contactPhone) && (
+                      <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 space-y-0.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Point of Contact</p>
+                        {selectedGroup.contactName && <p className="text-xs font-medium">{selectedGroup.contactName}</p>}
+                        {selectedGroup.contactEmail && <p className="text-[11px] text-muted-foreground">{selectedGroup.contactEmail}</p>}
+                        {selectedGroup.contactPhone && <p className="text-[11px] text-muted-foreground">{selectedGroup.contactPhone}</p>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
           {slot.type === "act" && isRecital && (
@@ -1080,6 +1150,11 @@ export function LineupSheet({ event, open, onClose }: {
     queryFn: async () => { const r = await fetch("/api/bands", { credentials: "include" }); return r.json(); },
     enabled: open,
   });
+  const { data: otherGroups = [] } = useQuery<OtherGroup[]>({
+    queryKey: ["/api/other-groups"],
+    queryFn: async () => { const r = await fetch("/api/other-groups", { credentials: "include" }); return r.json(); },
+    enabled: open,
+  });
   const { data: rawSlots = [] } = useQuery<LineupSlot[]>({
     queryKey: [`/api/events/${eventId}/lineup`],
     queryFn: async () => { const r = await fetch(`/api/events/${eventId}/lineup`, { credentials: "include" }); return r.json(); },
@@ -1179,7 +1254,7 @@ export function LineupSheet({ event, open, onClose }: {
   // ── Lineup mutations ───────────────────────────────────────────────────────
   const [addSlotOpen, setAddSlotOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
-    type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false, eventDay: 1,
+    type: "act", actType: "band" as "band" | "other", bandId: "", otherGroupId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false, eventDay: 1,
   });
 
   const { mutate: addSlot, isPending: addingSlot } = useMutation({
@@ -1192,7 +1267,7 @@ export function LineupSheet({ event, open, onClose }: {
       setLocalSlots([]);
       setAddSlotOpen(false);
       const recital = event?.type === "Recital";
-      setNewSlot({ type: "act", bandId: "", label: "", groupName: "", startTime: "", duration: recital ? "5" : "", buffer: recital ? "2" : "15", isOverlapping: false });
+      setNewSlot({ type: "act", actType: "band", bandId: "", otherGroupId: "", label: "", groupName: "", startTime: "", duration: recital ? "5" : "", buffer: recital ? "2" : "15", isOverlapping: false, eventDay: 1 });
       toast({ title: "Slot added" });
     },
   });
@@ -1430,7 +1505,8 @@ export function LineupSheet({ event, open, onClose }: {
   function submitAddSlot() {
     addSlot({
       type: newSlot.type,
-      bandId: newSlot.bandId && newSlot.bandId !== "_custom" ? Number(newSlot.bandId) : null,
+      bandId: newSlot.actType === "band" && newSlot.bandId && newSlot.bandId !== "_custom" ? Number(newSlot.bandId) : null,
+      otherGroupId: newSlot.actType === "other" && newSlot.otherGroupId ? Number(newSlot.otherGroupId) : null,
       label: newSlot.label || null,
       groupName: newSlot.groupName || null,
       startTime: newSlot.startTime || null,
@@ -1674,6 +1750,7 @@ export function LineupSheet({ event, open, onClose }: {
                                 slot={slot}
                                 calcTime={calcTimes[dayIndices[di]]}
                                 bands={rawBands}
+                                otherGroups={otherGroups}
                                 eventId={eventId!}
                                 isRecital={isRecital}
                                 isTwoDay={true}
@@ -1701,6 +1778,7 @@ export function LineupSheet({ event, open, onClose }: {
                       slot={slot}
                       calcTime={calcTimes[i]}
                       bands={rawBands}
+                      otherGroups={otherGroups}
                       eventId={eventId!}
                       isRecital={isRecital}
                       isTwoDay={false}
@@ -1836,18 +1914,47 @@ export function LineupSheet({ event, open, onClose }: {
               </div>
             )}
             {newSlot.type === "act" && !isRecital && (
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Band</label>
-                <Select value={newSlot.bandId} onValueChange={v => setNewSlot(s => ({ ...s, bandId: v }))}>
-                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a band or custom…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_custom">Custom name…</SelectItem>
-                    {rawBands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                {/* Student Band / Other Group toggle */}
+                <div className="flex items-center rounded-lg border border-border/50 bg-muted/20 p-0.5 w-fit gap-0.5">
+                  <button type="button" onClick={() => setNewSlot(s => ({ ...s, actType: "band", otherGroupId: "" }))}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${newSlot.actType === "band" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    Student Band
+                  </button>
+                  <button type="button" onClick={() => setNewSlot(s => ({ ...s, actType: "other", bandId: "", label: "" }))}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${newSlot.actType === "other" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    Other Group
+                  </button>
+                </div>
+                {newSlot.actType === "band" && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">Band</label>
+                    <Select value={newSlot.bandId} onValueChange={v => setNewSlot(s => ({ ...s, bandId: v }))}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a band or custom…" /></SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectItem value="_custom">Custom name…</SelectItem>
+                        {rawBands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {newSlot.actType === "other" && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">Other Group</label>
+                    <Select value={newSlot.otherGroupId} onValueChange={v => setNewSlot(s => ({ ...s, otherGroupId: v }))}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a group…" /></SelectTrigger>
+                      <SelectContent position="popper">
+                        {otherGroups.length === 0
+                          ? <SelectItem value="_none" disabled>No other groups yet — add them in the Bands page</SelectItem>
+                          : otherGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}{g.description ? ` — ${g.description}` : ""}</SelectItem>)
+                        }
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
-            {(newSlot.type !== "act" || newSlot.bandId === "_custom" || !newSlot.bandId || isRecital) && (
+            {(newSlot.type !== "act" || (newSlot.actType === "band" && (newSlot.bandId === "_custom" || !newSlot.bandId)) || isRecital) && (
               <div className="space-y-1">
                 <label className="text-xs font-medium">{isRecital ? "Performer Name *" : "Label"}</label>
                 <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder={isRecital ? "Alex Johnson" : "Custom name…"} />

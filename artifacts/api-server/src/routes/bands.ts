@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { google } from "googleapis";
-import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable, eventTicketRequestsTable, eventBandInvitesTable } from "@workspace/db";
+import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable, eventTicketRequestsTable, eventBandInvitesTable, otherGroupsTable } from "@workspace/db";
 import { eq, asc, and, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
@@ -291,7 +291,67 @@ router.delete("/bands/contacts/:contactId", async (req, res) => {
   }
 });
 
+// ── Other Groups CRUD ─────────────────────────────────────────────────────────
+
+router.get("/other-groups", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const groups = await db.select().from(otherGroupsTable).orderBy(asc(otherGroupsTable.name));
+    res.json(groups);
+  } catch (err) {
+    console.error("listOtherGroups error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/other-groups", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const { name, description, contactName, contactEmail, contactPhone, notes } = req.body;
+    if (!name?.trim()) { res.status(400).json({ error: "Name is required" }); return; }
+    const [group] = await db.insert(otherGroupsTable).values({ name: name.trim(), description: description || null, contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null, notes: notes || null }).returning();
+    res.status(201).json(group);
+  } catch (err) {
+    console.error("createOtherGroup error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/other-groups/:id", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const { name, description, contactName, contactEmail, contactPhone, notes } = req.body;
+    const [group] = await db.update(otherGroupsTable).set({
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(description !== undefined ? { description: description || null } : {}),
+      ...(contactName !== undefined ? { contactName: contactName || null } : {}),
+      ...(contactEmail !== undefined ? { contactEmail: contactEmail || null } : {}),
+      ...(contactPhone !== undefined ? { contactPhone: contactPhone || null } : {}),
+      ...(notes !== undefined ? { notes: notes || null } : {}),
+      updatedAt: new Date(),
+    }).where(eq(otherGroupsTable.id, parseInt(req.params.id))).returning();
+    if (!group) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    console.error("updateOtherGroup error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/other-groups/:id", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    await db.delete(otherGroupsTable).where(eq(otherGroupsTable.id, parseInt(req.params.id)));
+    res.status(204).send();
+  } catch (err) {
+    console.error("deleteOtherGroup error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Lineup CRUD ───────────────────────────────────────────────────────────────
+
+const otherGroup = alias(otherGroupsTable, "other_group");
 
 const LINEUP_SELECT = {
   id: eventLineupTable.id,
@@ -323,17 +383,27 @@ const LINEUP_SELECT = {
   // Schedule conflict
   scheduleConflict: eventLineupTable.scheduleConflict,
   conflictReason: eventLineupTable.conflictReason,
+  // Other group
+  otherGroupId: eventLineupTable.otherGroupId,
+  otherGroupName: otherGroup.name,
+  otherGroupDescription: otherGroup.description,
+  otherGroupContactName: otherGroup.contactName,
+  otherGroupContactEmail: otherGroup.contactEmail,
+  otherGroupContactPhone: otherGroup.contactPhone,
 };
+
+function lineupQuery() {
+  return db.select(LINEUP_SELECT).from(eventLineupTable)
+    .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+    .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
+    .leftJoin(otherGroup, eq(eventLineupTable.otherGroupId, otherGroup.id));
+}
 
 router.get("/events/:id/lineup", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const slots = await db
-      .select(LINEUP_SELECT)
-      .from(eventLineupTable)
-      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
-      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
+    const slots = await lineupQuery()
       .where(eq(eventLineupTable.eventId, eventId))
       .orderBy(asc(eventLineupTable.position));
     res.json(slots);
@@ -347,11 +417,12 @@ router.post("/events/:id/lineup", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position, staffNote, eventDay } = req.body;
+    const { bandId, otherGroupId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, position, staffNote, eventDay } = req.body;
     const [slot] = await db.insert(eventLineupTable)
       .values({
         eventId,
         bandId: bandId ? Number(bandId) : null,
+        otherGroupId: otherGroupId ? Number(otherGroupId) : null,
         label,
         groupName: groupName || null,
         startTime: startTime || null,
@@ -366,10 +437,7 @@ router.post("/events/:id/lineup", async (req, res) => {
         position: position ?? 0,
       })
       .returning();
-    const [full] = await db.select(LINEUP_SELECT).from(eventLineupTable)
-      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
-      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
-      .where(eq(eventLineupTable.id, slot.id));
+    const [full] = await lineupQuery().where(eq(eventLineupTable.id, slot.id));
     res.status(201).json(full);
   } catch (err) {
     console.error("addLineupSlot error:", err);
@@ -396,7 +464,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { bandId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent, leaderAttending, eventDay } = req.body;
+    const { bandId, otherGroupId, label, groupName, startTime, durationMinutes, bufferMinutes, isOverlapping, confirmed, type, notes, staffNote, inviteStatus, confirmationSent, leaderAttending, eventDay } = req.body;
 
     // Handle leader attending toggle
     let leaderUpdates: { leaderAttending?: boolean; leaderStaffSlotId?: number | null } = {};
@@ -419,6 +487,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
     const [slot] = await db.update(eventLineupTable)
       .set({
         ...(bandId !== undefined ? { bandId: bandId ? Number(bandId) : null } : {}),
+        ...(otherGroupId !== undefined ? { otherGroupId: otherGroupId ? Number(otherGroupId) : null } : {}),
         ...(label !== undefined ? { label } : {}),
         ...(groupName !== undefined ? { groupName: groupName || null } : {}),
         ...(startTime !== undefined ? { startTime: startTime || null } : {}),
@@ -440,10 +509,7 @@ router.put("/events/:id/lineup/:slotId", async (req, res) => {
       .where(eq(eventLineupTable.id, slotId))
       .returning();
     if (!slot) { res.status(404).json({ error: "Not found" }); return; }
-    const [full] = await db.select(LINEUP_SELECT).from(eventLineupTable)
-      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
-      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
-      .where(eq(eventLineupTable.id, slot.id));
+    const [full] = await lineupQuery().where(eq(eventLineupTable.id, slot.id));
     res.json(full);
   } catch (err) {
     console.error("updateLineupSlot error:", err);
@@ -497,10 +563,7 @@ router.post("/events/:id/lineup/check-conflicts", async (req, res) => {
     const eventId = parseInt(req.params.id);
 
     // Fetch all act slots with assigned times
-    const slots = await db.select(LINEUP_SELECT)
-      .from(eventLineupTable)
-      .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
-      .leftJoin(leaderEmp, eq(bandsTable.leaderEmployeeId, leaderEmp.id))
+    const slots = await lineupQuery()
       .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.type as any, "act")));
 
     const actSlots = slots.filter(s => s.startTime);

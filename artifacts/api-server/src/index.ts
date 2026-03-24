@@ -146,6 +146,19 @@ async function runMigrations() {
     // Schedule conflict detection columns on lineup slots
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS schedule_conflict BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS conflict_reason TEXT`,
+    // ── Other Groups (external acts, dance groups, local bands) ─────────────
+    `CREATE TABLE IF NOT EXISTS other_groups (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS other_group_id INTEGER REFERENCES other_groups(id) ON DELETE SET NULL`,
   ];
   for (const m of migrations) {
     try {

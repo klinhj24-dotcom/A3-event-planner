@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Music2, Plus, Search, ChevronDown, ChevronUp, Mail, Phone, Globe, Instagram,
-  Users, Send, Trash2, Pencil, UserPlus, MailCheck, Megaphone, X, Info, Loader2, User, ArrowLeft,
+  Users, Send, Trash2, Pencil, UserPlus, MailCheck, Megaphone, X, Info, Loader2, User, ArrowLeft, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,11 @@ interface LineupSlot {
 interface BandInvite {
   id: number; lineupSlotId: number; contactId: number; contactName: string;
   contactEmail: string; status: string; conflictNote: string | null;
+}
+interface OtherGroup {
+  id: number; name: string; description: string | null;
+  contactName: string | null; contactEmail: string | null; contactPhone: string | null;
+  notes: string | null; createdAt: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
@@ -973,10 +978,157 @@ function ExpandedBand({
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────────
+// ── OtherGroupsSection ───────────────────────────────────────────────────────────
+function OtherGroupsSection() {
+  const qc = useQueryClient();
+  const [dlg, setDlg] = useState<OtherGroup | null | "new">(null);
+  const [confirmDelete, setConfirmDelete] = useState<OtherGroup | null>(null);
+  const [form, setForm] = useState({ name: "", description: "", contactName: "", contactEmail: "", contactPhone: "", notes: "" });
+
+  const { data: groups = [], isLoading } = useQuery<OtherGroup[]>({
+    queryKey: ["/api/other-groups"],
+    queryFn: () => api("/api/other-groups"),
+  });
+
+  const openNew = () => {
+    setForm({ name: "", description: "", contactName: "", contactEmail: "", contactPhone: "", notes: "" });
+    setDlg("new");
+  };
+  const openEdit = (g: OtherGroup) => {
+    setForm({ name: g.name, description: g.description ?? "", contactName: g.contactName ?? "", contactEmail: g.contactEmail ?? "", contactPhone: g.contactPhone ?? "", notes: g.notes ?? "" });
+    setDlg(g);
+  };
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      if (dlg === "new") return api("/api/other-groups", { method: "POST", body: JSON.stringify(form) });
+      return api(`/api/other-groups/${(dlg as OtherGroup).id}`, { method: "PUT", body: JSON.stringify(form) });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/other-groups"] }); setDlg(null); toast({ title: dlg === "new" ? "Group added" : "Group updated" }); },
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api(`/api/other-groups/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/other-groups"] }); setConfirmDelete(null); toast({ title: "Group removed" }); },
+    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border/20 shrink-0">
+        <p className="text-sm text-muted-foreground">External acts, dance groups, and other non-student performers</p>
+        <Button size="sm" className="gap-2" onClick={openNew}><Plus className="h-4 w-4" /> Add Group</Button>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : groups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center space-y-2">
+            <Building2 className="h-8 w-8 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No other groups yet</p>
+            <Button size="sm" variant="outline" onClick={openNew} className="gap-1.5"><Plus className="h-3.5 w-3.5" /> Add First Group</Button>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/15">
+            {groups.map(g => (
+              <div key={g.id} className="flex items-start gap-3 px-5 py-4 hover:bg-muted/5 transition-colors">
+                <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Building2 className="h-4 w-4 text-violet-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm">{g.name}</span>
+                    {g.description && <span className="text-xs text-muted-foreground">— {g.description}</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                    {g.contactName && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" />{g.contactName}</span>}
+                    {g.contactEmail && <span className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{g.contactEmail}</span>}
+                    {g.contactPhone && <span className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{g.contactPhone}</span>}
+                  </div>
+                  {g.notes && <p className="text-xs text-muted-foreground mt-1 italic">{g.notes}</p>}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(g)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => setConfirmDelete(g)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {!isLoading && groups.length > 0 && (
+          <div className="px-6 py-3 border-t border-border/10 text-xs text-muted-foreground">
+            {groups.length} group{groups.length !== 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={!!dlg} onOpenChange={v => !v && setDlg(null)}>
+        <DialogContent className="sm:max-w-[440px] rounded-2xl">
+          <DialogHeader><DialogTitle className="font-display text-xl">{dlg === "new" ? "Add Other Group" : "Edit Group"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Name *</Label>
+              <Input className="rounded-xl" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. City Dance Crew" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Description</Label>
+              <Input className="rounded-xl" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Hip-hop dance troupe" />
+            </div>
+            <Separator />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Info (optional)</p>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Contact Name</Label>
+              <Input className="rounded-xl" value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} placeholder="Jane Smith" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Email</Label>
+                <Input type="email" className="rounded-xl" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="jane@example.com" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Phone</Label>
+                <Input className="rounded-xl" value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} placeholder="(555) 000-0000" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Notes</Label>
+              <Textarea className="rounded-xl resize-none text-sm" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes…" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl" onClick={() => setDlg(null)}>Cancel</Button>
+            <Button className="rounded-xl" disabled={!form.name.trim() || saveMut.isPending} onClick={() => saveMut.mutate()}>
+              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : dlg === "new" ? "Add Group" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <Dialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Remove Group?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Permanently remove <strong>{confirmDelete?.name}</strong>? Lineup slots using this group will be unlinked.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={deleteMut.isPending} onClick={() => confirmDelete && deleteMut.mutate(confirmDelete.id)}>
+              {deleteMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove Group"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 export default function Bands() {
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"bands" | "other">("bands");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [bandDlg, setBandDlg] = useState<Band | null | "new">(null);
@@ -1044,39 +1196,57 @@ export default function Bands() {
             <p className="text-sm text-muted-foreground mt-0.5">Roster, contacts, and event invite management</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 border-primary/30 text-primary hover:bg-primary/10"
-              onClick={() => setBroadcastOpen(true)}
-            >
-              <Megaphone className="h-4 w-4" /> Email All Bands
-            </Button>
-            <Button size="sm" className="gap-2" onClick={() => setBandDlg("new")}>
-              <Plus className="h-4 w-4" /> Add Band
-            </Button>
+            {activeTab === "bands" && (<>
+              <Button variant="outline" size="sm" className="gap-2 border-primary/30 text-primary hover:bg-primary/10" onClick={() => setBroadcastOpen(true)}>
+                <Megaphone className="h-4 w-4" /> Email All Bands
+              </Button>
+              <Button size="sm" className="gap-2" onClick={() => setBandDlg("new")}>
+                <Plus className="h-4 w-4" /> Add Band
+              </Button>
+            </>)}
           </div>
         </div>
 
-        {/* Search */}
-        <div className="mt-4 relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search bands or genres…"
-            className="pl-9 h-9 bg-muted/20"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mt-4 border-b border-border/30 -mx-6 px-6">
+          <button
+            onClick={() => setActiveTab("bands")}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 border-b-2 transition-colors ${activeTab === "bands" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            <Music2 className="h-3.5 w-3.5" /> Student Bands
+          </button>
+          <button
+            onClick={() => setActiveTab("other")}
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 border-b-2 transition-colors ${activeTab === "other" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            <Building2 className="h-3.5 w-3.5" /> Other Groups
+          </button>
         </div>
+
+        {/* Search (bands tab only) */}
+        {activeTab === "bands" && (
+          <div className="mt-4 relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search bands or genres…"
+              className="pl-9 h-9 bg-muted/20"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Other Groups Tab */}
+      {activeTab === "other" && <OtherGroupsSection />}
+
       {/* Band List */}
-      <div className="flex-1 overflow-y-auto">
+      {activeTab === "bands" && <div className="flex-1 overflow-y-auto">
         {bandsQ.isLoading ? (
           <div className="flex items-center justify-center h-40">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1195,7 +1365,7 @@ export default function Bands() {
             {bands.reduce((s, b) => s + contactCount(b).withEmail, 0)} contacts with email
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Dialogs */}
       <BandFormDialog

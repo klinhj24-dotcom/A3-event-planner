@@ -2,6 +2,22 @@ import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/
 import { eventsTable } from "./events";
 import { employeesTable } from "./employees";
 
+// ── Other Groups (local bands, dance groups, external acts) ───────────────────
+export const otherGroupsTable = pgTable("other_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),  // what the group is, e.g. "Hip-hop dance troupe"
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type OtherGroup = typeof otherGroupsTable.$inferSelect;
+export type InsertOtherGroup = typeof otherGroupsTable.$inferInsert;
+
 export const bandsTable = pgTable("bands", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -62,6 +78,7 @@ export const eventLineupTable = pgTable("event_lineup", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull(),
   bandId: integer("band_id").references(() => bandsTable.id, { onDelete: "set null" }),
+  otherGroupId: integer("other_group_id").references(() => otherGroupsTable.id, { onDelete: "set null" }),
   position: integer("position").notNull().default(0),
   label: text("label"),
   startTime: text("start_time"),
