@@ -228,6 +228,7 @@ function InviteRow({ group }: { group: InviteGroup }) {
 function SlotRow({
   slot, calcTime, bands, eventId, isRecital, isTwoDay, isFirstGroupHeader,
   onUpdate, onDelete, onSendInvite, onSendConfirmation, onSendTimeUpdate, onClearConflict,
+  ticketRequests,
 }: {
   slot: LineupSlot; calcTime: string | null; bands: Band[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
@@ -236,6 +237,7 @@ function SlotRow({
   onSendConfirmation: (slotId: number) => void;
   onSendTimeUpdate: (slotId: number) => void;
   onClearConflict: (id: number) => void;
+  ticketRequests?: any[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: slot.id });
@@ -272,6 +274,15 @@ function SlotRow({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot.id, slot.startTime, slot.durationMinutes, slot.bufferMinutes, slot.bandId, slot.label, slot.notes, slot.staffNote, slot.eventDay]);
+
+  // For recital slots: find matching ticket request by student name
+  const matchedRequest = isRecital && ticketRequests?.length
+    ? ticketRequests.find((tr: any) => {
+        const full = `${tr.studentFirstName ?? ""} ${tr.studentLastName ?? ""}`.trim().toLowerCase();
+        const label = (slot.label ?? "").trim().toLowerCase();
+        return full && label && (full === label || full.includes(label) || label.includes(full));
+      }) ?? null
+    : null;
 
   // Load invites when expanded and slot has a band
   const { data: invites = [], refetch: refetchInvites } = useQuery<BandInvite[]>({
@@ -502,16 +513,62 @@ function SlotRow({
             </div>
           )}
           {slot.type === "act" && isRecital && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Student / Performer</label>
-                <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="e.g. Alex Johnson" />
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Student / Performer</label>
+                  <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="e.g. Alex Johnson" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Group / Class</label>
+                  <Input className="h-8 rounded-lg text-xs" value={draft.groupName} onChange={e => setDraft(d => ({ ...d, groupName: e.target.value }))} placeholder="e.g. Beginner Guitar" />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Group / Class</label>
-                <Input className="h-8 rounded-lg text-xs" value={draft.groupName} onChange={e => setDraft(d => ({ ...d, groupName: e.target.value }))} placeholder="e.g. Beginner Guitar" />
-              </div>
-            </div>
+              {/* Registration info pulled from ticket request */}
+              {matchedRequest ? (
+                <div className="rounded-xl border border-border/30 bg-muted/20 p-3 space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Registration Info</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Instrument</p>
+                      <p className="text-xs font-medium">{matchedRequest.instrument || <span className="text-muted-foreground/50 italic">not entered</span>}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Recital Song</p>
+                      <p className="text-xs font-medium">{matchedRequest.recitalSong || <span className="text-muted-foreground/50 italic">not entered</span>}</p>
+                    </div>
+                  </div>
+                  {matchedRequest.specialConsiderations ? (
+                    <div className={`rounded-lg px-2.5 py-2 ${slot.scheduleConflict ? "bg-red-500/10 border border-red-500/30" : "bg-amber-500/10 border border-amber-500/20"}`}>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wider mb-0.5 ${slot.scheduleConflict ? "text-red-400" : "text-amber-400"}`}>
+                        {slot.scheduleConflict ? "⚠ Scheduling Conflict" : "Scheduling / Special Note"}
+                      </p>
+                      <p className={`text-[11px] leading-snug ${slot.scheduleConflict ? "text-red-300/90" : "text-amber-300/80"}`}>
+                        {matchedRequest.specialConsiderations}
+                      </p>
+                      {slot.scheduleConflict && slot.conflictReason && (
+                        <p className="text-[10px] text-red-400/70 mt-1 italic">{slot.conflictReason}</p>
+                      )}
+                      {slot.scheduleConflict && (
+                        <button
+                          onClick={() => onClearConflict(slot.id)}
+                          className="mt-1.5 text-[10px] text-red-400/60 hover:text-red-300 underline-offset-2 hover:underline transition-colors flex items-center gap-1"
+                        >
+                          <ShieldCheck className="h-3 w-3" /> Mark as resolved
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Scheduling Note</p>
+                      <p className="text-xs text-muted-foreground/50 italic">none</p>
+                    </div>
+                  )}
+                </div>
+              ) : slot.type === "act" && slot.label && (
+                <p className="text-[10px] text-muted-foreground/50 italic">No matching registration found for "{slot.label}"</p>
+              )}
+            </>
           )}
           {slot.type !== "act" && (
             <div className="space-y-1">
@@ -1627,6 +1684,7 @@ export function LineupSheet({ event, open, onClose }: {
                                 onSendConfirmation={handleSendConfirmation}
                                 onSendTimeUpdate={handleSendTimeUpdate}
                                 onClearConflict={handleClearConflict}
+                                ticketRequests={ticketRequests}
                               />
                             ))}
                           </div>
@@ -1653,6 +1711,7 @@ export function LineupSheet({ event, open, onClose }: {
                       onSendConfirmation={handleSendConfirmation}
                       onSendTimeUpdate={handleSendTimeUpdate}
                       onClearConflict={handleClearConflict}
+                      ticketRequests={ticketRequests}
                     />
                   ))}
                 </div>
