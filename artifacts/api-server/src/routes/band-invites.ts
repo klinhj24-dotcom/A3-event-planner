@@ -173,14 +173,18 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
 
     let sent = 0;
     const newInvites: any[] = [];
+    const sentEmails = new Set<string>();
 
     for (const contact of contacts) {
       if (!contact.email) continue;
 
-      // Check for existing invite — skip if already sent
+      // Check for existing invite — skip if already sent (by contactId or by email address)
       const [existing] = await db.select().from(eventBandInvitesTable)
         .where(and(eq(eventBandInvitesTable.lineupSlotId, slotId), eq(eventBandInvitesTable.contactId, contact.id)));
       if (existing) continue;
+
+      // Also skip if we already sent to this email address in this batch (deduplication by address)
+      if (sentEmails.has(contact.email.toLowerCase())) continue;
 
       const token = randomUUID();
       const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
@@ -229,15 +233,8 @@ The Music Space${admissionsLines}`;
         ctaUrl: confirmUrl,
       });
 
-      try {
-        const raw = makeHtmlEmail({ to: contact.email, from, subject: `Performance Invite: ${event.title} — ${slot.bandName ?? "Your Band"}`, html, cc: [TMS_CC] });
-        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-        sent++;
-      } catch (emailErr) {
-        console.error(`[band-invites] Failed to send to ${contact.email}:`, emailErr);
-        continue;
-      }
-
+      // Insert invite record FIRST as a reservation — prevents race-condition double-sends
+      // if the button is clicked twice before the first request completes.
       const [invite] = await db.insert(eventBandInvitesTable).values({
         eventId,
         lineupSlotId: slotId,
@@ -251,6 +248,19 @@ The Music Space${admissionsLines}`;
         staffNote: noteToSend,
         sentAt: new Date(),
       }).returning();
+
+      try {
+        const raw = makeHtmlEmail({ to: contact.email, from, subject: `Performance Invite: ${event.title} — ${slot.bandName ?? "Your Band"}`, html, cc: [TMS_CC] });
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+        sent++;
+        sentEmails.add(contact.email.toLowerCase());
+      } catch (emailErr) {
+        console.error(`[band-invites] Failed to send to ${contact.email}:`, emailErr);
+        // Roll back the reservation so it can be retried
+        await db.delete(eventBandInvitesTable).where(eq(eventBandInvitesTable.id, invite.id));
+        continue;
+      }
+
       newInvites.push(invite);
     }
 
@@ -318,9 +328,13 @@ router.post("/events/:eventId/lineup/send-invites-bulk", async (req, res) => {
       const slotEffectiveTime = slot.startTime ?? slotCalcTime;
       const performanceDate = formatPerformanceDay(event, slot.eventDay);
       let sentForSlot = 0;
+      const sentEmailsForSlot = new Set<string>();
 
       for (const contact of contacts) {
         if (!contact.email) continue;
+
+        // Deduplicate by email address — skip if already sent in this batch
+        if (sentEmailsForSlot.has(contact.email.toLowerCase())) continue;
 
         const token = randomUUID();
         const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
@@ -368,6 +382,7 @@ The Music Space${bulkAdmissionsLines}`;
           await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
           sentForSlot++;
           totalSent++;
+          sentEmailsForSlot.add(contact.email.toLowerCase());
         } catch (emailErr) {
           console.error(`[band-invites] bulk: failed to send to ${contact.email}:`, emailErr);
           continue;
