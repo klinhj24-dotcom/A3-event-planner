@@ -1531,7 +1531,7 @@ export function LineupSheet({ event, open, onClose }: {
     addSlot({
       type: newSlot.type,
       bandId: newSlot.actType === "band" && newSlot.bandId && newSlot.bandId !== "_custom" ? Number(newSlot.bandId) : null,
-      otherGroupId: newSlot.actType === "other" && newSlot.otherGroupId ? Number(newSlot.otherGroupId) : null,
+      otherGroupId: newSlot.actType === "other" && newSlot.otherGroupId && newSlot.otherGroupId !== "_custom" ? Number(newSlot.otherGroupId) : null,
       label: newSlot.label || null,
       groupName: newSlot.groupName || null,
       startTime: newSlot.startTime || null,
@@ -1982,17 +1982,23 @@ export function LineupSheet({ event, open, onClose }: {
                   </div>
                 )}
                 {newSlot.actType === "other" && (
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium">Other Group</label>
-                    <Select value={newSlot.otherGroupId} onValueChange={v => setNewSlot(s => ({ ...s, otherGroupId: v }))}>
-                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a group…" /></SelectTrigger>
-                      <SelectContent position="popper">
-                        {otherGroups.length === 0
-                          ? <SelectItem value="_none" disabled>No other groups yet — add them in the Bands page</SelectItem>
-                          : otherGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}{g.description ? ` — ${g.description}` : ""}</SelectItem>)
-                        }
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Other Group</label>
+                      <Select value={newSlot.otherGroupId} onValueChange={v => setNewSlot(s => ({ ...s, otherGroupId: v, label: v === "_custom" ? s.label : "" }))}>
+                        <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select a group or custom…" /></SelectTrigger>
+                        <SelectContent position="popper">
+                          <SelectItem value="_custom">Custom name…</SelectItem>
+                          {otherGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}{g.description ? ` — ${g.description}` : ""}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newSlot.otherGroupId === "_custom" && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">Group Name</label>
+                        <Input className="rounded-xl" value={newSlot.label} onChange={e => setNewSlot(s => ({ ...s, label: e.target.value }))} placeholder="e.g. Dance Academy, Local Opener…" />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
