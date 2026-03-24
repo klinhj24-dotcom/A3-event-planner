@@ -1867,6 +1867,7 @@ export default function Events() {
             headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({
+              title: variables.title,
               location: variables.location,
               startDate: variables.startDate,
               hasDebrief: variables.hasDebrief,
@@ -3342,7 +3343,7 @@ export default function Events() {
                         onChange={() => setApplyToSeries("future")}
                         className="accent-[#7250ef] w-4 h-4" />
                       <span className="text-sm">All future events in this series</span>
-                      <span className="text-[10px] text-muted-foreground">(location, time, features)</span>
+                      <span className="text-[10px] text-muted-foreground">(name, location, time, features)</span>
                     </label>
                   </div>
                 </div>

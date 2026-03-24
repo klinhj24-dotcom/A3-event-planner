@@ -718,10 +718,17 @@ router.post("/open-mic/series/:id/propagate", async (req, res) => {
     if (!series) { res.status(404).json({ error: "Series not found" }); return; }
 
     const {
-      location, startDate: startDateStr,
+      location, startDate: startDateStr, title,
       hasDebrief, hasBandLineup, hasStaffSchedule, hasCallSheet,
       hasPackingList, allowGuestList, isLeadGenerating,
     } = req.body;
+
+    // Derive new series name from the edited event title by stripping the " — Month Year" suffix
+    let newSeriesName = series.name;
+    if (title && typeof title === "string") {
+      const stripped = title.replace(/\s*—\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i, "").trim();
+      if (stripped) newSeriesName = stripped;
+    }
 
     // Derive time from the edited event's startDate
     let newEventTime = series.eventTime ?? "6:00 PM";
@@ -736,10 +743,10 @@ router.post("/open-mic/series/:id/propagate", async (req, res) => {
       newEventTime = localMins === 0 ? `${h12}:00 ${ampm}` : `${h12}:${mm} ${ampm}`;
     }
 
-    // Update the series record
+    // Update the series record (including name if it changed)
     const newLocation = location ?? series.location;
     await db.update(openMicSeriesTable)
-      .set({ location: newLocation, eventTime: newEventTime })
+      .set({ location: newLocation, eventTime: newEventTime, name: newSeriesName })
       .where(eq(openMicSeriesTable.id, seriesId));
 
     // Update all future events in this series
@@ -760,15 +767,19 @@ router.post("/open-mic/series/:id/propagate", async (req, res) => {
     for (const ev of futureEvents) {
       if (!ev.startDate) continue;
       const d = ev.startDate;
+      const offset = easternUtcOffset(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+      const localYear = d.getUTCFullYear() + (d.getUTCMonth() === 11 && d.getUTCHours() + offset >= 24 ? 1 : 0);
+      const localMonth = (d.getUTCMonth() + (d.getUTCHours() + offset >= 24 ? 1 : 0)) % 12;
+      const newTitle = `${newSeriesName} — ${MONTH_NAMES[localMonth]} ${localYear}`;
       const newStart = buildEventDate(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), newEventTime);
       const newEnd = new Date(newStart.getTime() + 3 * 60 * 60 * 1000);
       await db.update(eventsTable)
-        .set({ location: newLocation, startDate: newStart, endDate: newEnd, ...featureFlags })
+        .set({ title: newTitle, location: newLocation, startDate: newStart, endDate: newEnd, ...featureFlags })
         .where(eq(eventsTable.id, ev.id));
       updated++;
     }
 
-    res.json({ updated, newEventTime, newLocation });
+    res.json({ updated, newEventTime, newLocation, newSeriesName });
   } catch (err) {
     console.error("[open-mic] Propagate error:", err);
     res.status(500).json({ error: "Failed to propagate changes" });
