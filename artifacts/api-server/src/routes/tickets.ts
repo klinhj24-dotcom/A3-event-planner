@@ -398,9 +398,9 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
     // Fetch current state before update
     const [before] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
 
-    // Selecting "paid" status = card was charged; moving away from "paid" = undo charge mark
-    const chargingNow = status === "paid" && before?.status !== "paid";
-    const unchargingNow = status !== undefined && status !== "paid" && before?.status === "paid";
+    // "confirmed" = registration accepted + card charged (same action)
+    const chargingNow = status === "confirmed" && before?.status !== "confirmed";
+    const unchargingNow = status !== undefined && status !== "confirmed" && before?.status === "confirmed";
 
     const [updated] = await db
       .update(eventTicketRequestsTable)
@@ -414,7 +414,7 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
       .returning();
     res.json(updated);
 
-    // Cancel any pending charge email if status is being reverted away from "paid"
+    // Cancel any pending charge email if status is being reverted away from "confirmed"
     if (unchargingNow) {
       const pending = pendingChargeEmails.get(requestId);
       if (pending) {
@@ -424,7 +424,7 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
       }
     }
 
-    // Schedule charge confirmation email with 5-min grace period when status → "paid"
+    // Schedule charge confirmation email with 5-min grace period when status → "confirmed"
     if (chargingNow && updated?.contactEmail) {
       // Cancel any existing timer (safety)
       const existing = pendingChargeEmails.get(requestId);
@@ -433,9 +433,9 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
       const capturedUpdated = updated;
       const timer = setTimeout(async () => {
         pendingChargeEmails.delete(requestId);
-        // Re-verify status is still "paid" before sending
+        // Re-verify status is still "confirmed" before sending
         const [current] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
-        if (current?.status !== "paid") {
+        if (current?.status !== "confirmed") {
           console.log(`[tickets] Charge email skipped for request ${requestId} — status changed before send`);
           return;
         }
@@ -646,7 +646,7 @@ router.post("/admin/bulk-import-tickets", async (req, res) => {
           recitalSong: r.recitalSong ?? null,
           teacher: r.teacher,
           specialConsiderations: r.specialConsiderations ?? null,
-          status: "paid",
+          status: "confirmed",
         })
         .returning();
 

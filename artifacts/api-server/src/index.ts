@@ -139,6 +139,8 @@ async function runMigrations() {
     `ALTER TABLE open_mic_mailing_list DROP CONSTRAINT IF EXISTS open_mic_mailing_list_series_id_fkey`,
     // Add series_name column to preserve the name after series deletion
     `ALTER TABLE open_mic_mailing_list ADD COLUMN IF NOT EXISTS series_name VARCHAR(255)`,
+    // Merge "paid" into "confirmed" — they mean the same thing
+    `UPDATE event_ticket_requests SET status = 'confirmed' WHERE status = 'paid'`,
   ];
   for (const m of migrations) {
     try {

@@ -1384,7 +1384,7 @@ function EventOverviewSheet({
                   const lineTotal = price && rowCount ? (price * rowCount).toFixed(2) : null;
                   const isRecitalEntry = r.formType === "recital" && r.studentFirstName;
                   return (
-                  <div key={r.id} className={`grid grid-cols-[1fr_auto] gap-0 items-start rounded-xl border transition-colors text-xs ${r.status === "paid" ? "bg-emerald-500/8 border-emerald-500/25" : "bg-muted/30 border-border/30 hover:border-border/50"}`}>
+                  <div key={r.id} className={`grid grid-cols-[1fr_auto] gap-0 items-start rounded-xl border transition-colors text-xs ${r.status === "confirmed" ? "bg-emerald-500/8 border-emerald-500/25" : "bg-muted/30 border-border/30 hover:border-border/50"}`}>
                     {/* Name + details */}
                     <div className="py-2.5 pl-3 pr-2 min-w-0">
                       {isRecitalEntry ? (
@@ -1408,8 +1408,8 @@ function EventOverviewSheet({
                               <span className="font-bold text-foreground">${lineTotal}</span>
                             </div>
                           )}
-                          {r.status === "paid" && (
-                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Paid{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
+                          {r.charged && (
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
                           )}
                         </>
                       ) : (
@@ -1427,8 +1427,8 @@ function EventOverviewSheet({
                               {lineTotal && <span className="ml-1.5 font-bold text-foreground">${lineTotal}</span>}
                             </div>
                           )}
-                          {r.status === "paid" && (
-                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Paid{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
+                          {r.charged && (
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
                           )}
                         </>
                       )}
@@ -1441,15 +1441,13 @@ function EventOverviewSheet({
                         onChange={e => updateTicketStatus({ requestId: r.id, status: e.target.value })}
                         className={`rounded-lg px-1.5 py-0.5 text-[10px] font-semibold capitalize border-0 outline-none cursor-pointer ${
                           r.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" :
-                          r.status === "paid" ? "bg-emerald-500/10 text-emerald-600" :
                           r.status === "cancelled" ? "bg-destructive/10 text-destructive" :
                           "bg-amber-500/10 text-amber-600"
                         }`}
                       >
-                        <option value="pending">pending</option>
-                        <option value="confirmed">confirmed</option>
-                        <option value="paid">paid</option>
-                        <option value="cancelled">cancelled</option>
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="cancelled">Cancelled</option>
                       </select>
                       <button
                         onClick={() => {
