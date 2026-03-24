@@ -155,6 +155,19 @@ async function runMigrations() {
 }
 
 async function runOneTimeFixes() {
+  // Fix: bulk-imported students were inserted as status='confirmed' but charged=false.
+  // Mark them as charged silently (no email — this runs server-side only).
+  try {
+    const result = await db.execute(sql.raw(
+      `UPDATE event_ticket_requests SET charged = true, charged_at = NOW() WHERE status = 'confirmed' AND charged = false`
+    ));
+    const count = (result as any).rowCount ?? 0;
+    if (count > 0) console.log(`[fix] Marked ${count} confirmed-but-uncharged ticket(s) as charged (silent).`);
+    else console.log("[fix] All confirmed tickets already marked as charged — no update needed.");
+  } catch (err) {
+    console.error("[fix] Silent charge fix failed (non-fatal):", err);
+  }
+
   // Fix: reset contacts incorrectly auto-confirmed by the slot-wide cascade bug (slot 30, Never Early Fest)
   // Only Sara Nett (42), Katlyn Talerico (43), Greer Callender (40), Marc Callender (41) —
   // contacts for students whose own family never clicked the invite link.

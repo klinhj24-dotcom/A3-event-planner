@@ -647,6 +647,8 @@ router.post("/admin/bulk-import-tickets", async (req, res) => {
           teacher: r.teacher,
           specialConsiderations: r.specialConsiderations ?? null,
           status: "confirmed",
+          charged: true,
+          chargedAt: new Date(),
         })
         .returning();
 
