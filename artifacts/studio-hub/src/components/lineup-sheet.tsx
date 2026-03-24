@@ -448,50 +448,67 @@ function SlotRow({
         </div>
       )}
       {/* Main row */}
-      <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3">
         <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 touch-none">
           <GripVertical className="h-4 w-4" />
         </button>
 
-        <div className="w-20 shrink-0 text-sm font-mono font-medium text-muted-foreground">
-          {calcTime ? <span className="text-foreground/80">{fmt12(calcTime)}</span> : <span className="text-muted-foreground/40 text-xs">set time</span>}
+        <div className="w-16 sm:w-20 shrink-0 text-sm font-mono font-medium text-muted-foreground">
+          {calcTime ? <span className="text-foreground/80">{fmt12(calcTime)}</span> : <span className="text-muted-foreground/40 text-xs">—</span>}
         </div>
 
         <span className={`shrink-0 ${meta.color}`}>{meta.icon}</span>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium text-sm truncate block">{displayName}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium text-sm truncate">{displayName}</span>
             {slot.otherGroupId && !slot.bandId && (
-              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">Other Group</span>
+              <span className="hidden sm:inline shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">Other Group</span>
             )}
           </div>
           {slot.otherGroupDescription && <span className="text-[10px] text-muted-foreground truncate block">{slot.otherGroupDescription}</span>}
           {!slot.otherGroupDescription && slot.groupName && <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>}
-          {slot.isOverlapping && <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps with previous</span>}
+          {slot.isOverlapping && <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps</span>}
+          {/* Mobile-only secondary info line */}
+          <div className="flex items-center gap-1.5 sm:hidden mt-0.5 flex-wrap">
+            {isTwoDay && (
+              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${slot.eventDay === 2 ? "bg-orange-500/15 text-orange-400 border-orange-500/20" : "bg-sky-500/15 text-sky-400 border-sky-500/20"}`}>
+                Day {slot.eventDay ?? 1}
+              </span>
+            )}
+            {slot.otherGroupId && !slot.bandId && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">Other Group</span>
+            )}
+            {slot.type === "act" && slot.bandId && (
+              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border ${inviteStatusMeta.cls}`}>{inviteStatusMeta.label}</span>
+            )}
+            {slot.durationMinutes && (
+              <span className="text-[9px] text-muted-foreground">{slot.durationMinutes}m</span>
+            )}
+          </div>
         </div>
 
-        {/* Day badge for two-day events */}
+        {/* Day badge — desktop only */}
         {isTwoDay && (
-          <Badge variant="outline" className={`text-[10px] shrink-0 rounded-full px-2 font-semibold ${slot.eventDay === 2 ? "bg-orange-500/15 text-orange-400 border-orange-500/20" : "bg-sky-500/15 text-sky-400 border-sky-500/20"}`}>
+          <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] shrink-0 rounded-full px-2 font-semibold ${slot.eventDay === 2 ? "bg-orange-500/15 text-orange-400 border-orange-500/20" : "bg-sky-500/15 text-sky-400 border-sky-500/20"}`}>
             Day {slot.eventDay ?? 1}
           </Badge>
         )}
 
-        {/* Invite status badge (acts with bands only) */}
+        {/* Invite status badge — desktop only */}
         {slot.type === "act" && slot.bandId && (
-          <Badge variant="outline" className={`text-[10px] shrink-0 rounded-full px-2 ${inviteStatusMeta.cls}`}>
+          <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] shrink-0 rounded-full px-2 ${inviteStatusMeta.cls}`}>
             {inviteStatusMeta.label}
           </Badge>
         )}
 
         {slot.durationMinutes && (
-          <Badge variant="outline" className="text-[10px] shrink-0 gap-1 border-border/40">
+          <Badge variant="outline" className="hidden sm:inline-flex text-[10px] shrink-0 gap-1 border-border/40">
             <Timer className="h-2.5 w-2.5" />{slot.durationMinutes}m
           </Badge>
         )}
         {!slot.isOverlapping && slot.bufferMinutes != null && slot.bufferMinutes > 0 && (
-          <Badge variant="outline" className="text-[10px] shrink-0 border-dashed border-border/30 text-muted-foreground gap-1">
+          <Badge variant="outline" className="hidden sm:inline-flex text-[10px] shrink-0 border-dashed border-border/30 text-muted-foreground gap-1">
             +{slot.bufferMinutes}m
           </Badge>
         )}
