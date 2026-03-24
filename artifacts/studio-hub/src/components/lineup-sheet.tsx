@@ -1252,6 +1252,7 @@ export function LineupSheet({ event, open, onClose }: {
   }
 
   // ── Lineup mutations ───────────────────────────────────────────────────────
+  const [resendConfirmSlotId, setResendConfirmSlotId] = useState<number | null>(null);
   const [addSlotOpen, setAddSlotOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({
     type: "act", actType: "band" as "band" | "other", bandId: "", otherGroupId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false, eventDay: 1,
@@ -1353,14 +1354,37 @@ export function LineupSheet({ event, open, onClose }: {
   async function handleSendConfirmation(slotId: number): Promise<void> {
     const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-confirmation`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       credentials: "include",
     });
     const data = await r.json();
+    if (r.status === 409 && data.alreadySent) {
+      // Confirmation was already sent — prompt before resending
+      setResendConfirmSlotId(slotId);
+      return;
+    }
     if (!r.ok) {
       toast({ title: "Failed to send confirmation", description: data.error, variant: "destructive" });
       throw new Error(data.error);
     }
     toast({ title: "Lock-in confirmation sent!", description: `To: ${data.to}${data.bcc > 0 ? ` + ${data.bcc} BCC'd` : ""}` });
+    queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+  }
+
+  async function handleSendConfirmationForced(slotId: number): Promise<void> {
+    setResendConfirmSlotId(null);
+    const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-confirmation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ force: true }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      toast({ title: "Failed to resend confirmation", description: data.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Confirmation resent", description: `Sent again to ${data.bcc > 0 ? `${data.bcc} contacts` : data.to}` });
     queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
   }
 
@@ -2005,6 +2029,31 @@ export function LineupSheet({ event, open, onClose }: {
         open={!!managingMembersBand}
         onClose={() => setManagingMembersBand(null)}
       />
+
+      {/* Resend Confirmation Warning Dialog */}
+      <Dialog open={resendConfirmSlotId !== null} onOpenChange={v => !v && setResendConfirmSlotId(null)}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg">Already Sent</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            A lock-in confirmation email was already sent to this band's families. Sending again will deliver a duplicate.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to resend it?
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" className="rounded-xl" onClick={() => setResendConfirmSlotId(null)}>Cancel</Button>
+            <Button
+              variant="outline"
+              className="rounded-xl border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              onClick={() => resendConfirmSlotId !== null && handleSendConfirmationForced(resendConfirmSlotId)}
+            >
+              Resend Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

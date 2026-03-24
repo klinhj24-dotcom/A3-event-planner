@@ -430,13 +430,20 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
     if (!event) { res.status(404).json({ error: "Event not found" }); return; }
 
     const [slot] = await db
-      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay })
+      .select({ id: eventLineupTable.id, bandId: eventLineupTable.bandId, bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, staffNote: eventLineupTable.staffNote, eventDay: eventLineupTable.eventDay, confirmationSent: eventLineupTable.confirmationSent })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
       .where(eq(eventLineupTable.id, slotId));
 
     if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
     if (!slot.bandId) { res.status(400).json({ error: "Slot has no band assigned" }); return; }
+
+    // Block re-send unless the caller explicitly passes force: true
+    const force = req.body?.force === true;
+    if (slot.confirmationSent && !force) {
+      res.status(409).json({ error: "Confirmation already sent", alreadySent: true });
+      return;
+    }
 
     // Get all contacts for this slot — BCC everyone (exclude declined)
     const allInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
