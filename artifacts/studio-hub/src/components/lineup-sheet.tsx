@@ -1065,12 +1065,12 @@ function DraggableBandCard({ band, children }: { band: Band; children: React.Rea
 }
 
 // ── Droppable show order area ────────────────────────────────────────────────
-function DroppableShowOrder({ children, isEmpty }: { children: React.ReactNode; isEmpty: boolean }) {
+function DroppableShowOrder({ children, isEmpty, className }: { children: React.ReactNode; isEmpty: boolean; className?: string }) {
   const { setNodeRef, isOver } = useDroppable({ id: "show-order" });
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 overflow-y-auto p-6 space-y-4 transition-colors ${isOver && isEmpty ? "bg-primary/5" : ""}`}
+      className={`flex-1 overflow-y-auto p-6 space-y-4 transition-colors ${isOver && isEmpty ? "bg-primary/5" : ""} ${className ?? ""}`}
     >
       {children}
     </div>
@@ -1254,6 +1254,7 @@ export function LineupSheet({ event, open, onClose }: {
   // ── Lineup mutations ───────────────────────────────────────────────────────
   const [resendConfirmSlotId, setResendConfirmSlotId] = useState<number | null>(null);
   const [addSlotOpen, setAddSlotOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"roster" | "lineup">("lineup");
   const [newSlot, setNewSlot] = useState({
     type: "act", actType: "band" as "band" | "other", bandId: "", otherGroupId: "", label: "", groupName: "", startTime: "", duration: "", buffer: "15", isOverlapping: false, eventDay: 1,
   });
@@ -1650,10 +1651,28 @@ export function LineupSheet({ event, open, onClose }: {
           </div>
         </SheetHeader>
 
+        {/* Mobile tab switcher — hidden on sm+ */}
+        {!isRecital && (
+          <div className="flex sm:hidden border-b border-border/30 shrink-0">
+            <button
+              onClick={() => setMobileTab("lineup")}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === "lineup" ? "text-foreground border-b-2 border-primary" : "text-muted-foreground"}`}
+            >
+              Show Order
+            </button>
+            <button
+              onClick={() => setMobileTab("roster")}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === "roster" ? "text-foreground border-b-2 border-primary" : "text-muted-foreground"}`}
+            >
+              Band Roster
+            </button>
+          </div>
+        )}
+
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-hidden">
           {/* ── Left: Bands panel ─────────────────────────────────────────────── */}
-          {!isRecital && <div className="w-72 shrink-0 border-r border-border/30 flex flex-col overflow-hidden">
+          {!isRecital && <div className={`w-full sm:w-72 sm:shrink-0 border-r border-border/30 flex-col overflow-hidden ${mobileTab === "roster" ? "flex" : "hidden sm:flex"}`}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/20">
               <span className="text-sm font-semibold">Band Roster</span>
               <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg gap-1" onClick={() => setAddBandOpen(true)}>
@@ -1705,7 +1724,7 @@ export function LineupSheet({ event, open, onClose }: {
           </div>}
 
           {/* ── Right: Lineup panel ───────────────────────────────────────────── */}
-          <DroppableShowOrder isEmpty={slots.length === 0}>
+          <DroppableShowOrder isEmpty={slots.length === 0} className={!isRecital && mobileTab === "roster" ? "hidden sm:block" : ""}>
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-sm font-semibold">{isRecital ? "Performance Order" : "Show Order"}</p>
