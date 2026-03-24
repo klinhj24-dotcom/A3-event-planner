@@ -689,16 +689,21 @@ function SlotRow({
 
 // ── Print recital order ────────────────────────────────────────────────────────
 function printRecitalOrder(title: string, slots: LineupSlot[], calcTimes: (string | null)[]) {
+  let actNum = 0;
   const rows = slots
     .map((slot, i) => {
+      if (slot.type === "group-header") {
+        const groupTime = calcTimes[i] ? ` — ${fmt12(calcTimes[i])}` : "";
+        return `<tr><td colspan="5" style="padding:10px 12px 6px;background:#f3f4f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#4b5563;border-top:2px solid #d1d5db;border-bottom:1px solid #e5e7eb;">${slot.label ?? "Group"}${groupTime}</td></tr>`;
+      }
       if (slot.type !== "act") return "";
+      actNum++;
       const time = calcTimes[i] ? fmt12(calcTimes[i]) : "";
-      const num = i + 1;
       const name = slot.label || slot.bandName || "—";
       const group = slot.groupName || "";
       const dur = slot.durationMinutes ? `${slot.durationMinutes} min` : "";
       return `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#888;font-size:13px;">${num}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#888;font-size:13px;">${actNum}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;">${name}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">${group}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;font-family:monospace;">${time}</td>
