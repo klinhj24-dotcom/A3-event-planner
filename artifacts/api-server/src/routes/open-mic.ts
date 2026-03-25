@@ -701,6 +701,22 @@ router.get("/open-mic/series/:id/events", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to fetch events" }); }
 });
 
+// ── Admin: restore a skipped open mic event ───────────────────────────────────
+router.post("/open-mic/events/:id/restore", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const [ev] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
+    if (!ev) { res.status(404).json({ error: "Event not found" }); return; }
+    if (!ev.openMicSkipped) { res.status(400).json({ error: "Event is not skipped" }); return; }
+    const [updated] = await db.update(eventsTable)
+      .set({ openMicSkipped: false, status: "confirmed" })
+      .where(eq(eventsTable.id, id))
+      .returning();
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: "Failed to restore event" }); }
+});
+
 // ── Admin: ensure upcoming events for a series ────────────────────────────────
 router.post("/open-mic/series/:id/create-upcoming", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }

@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import {
   Plus, Mic, MapPin, Clock, Users, Mail, CheckCircle2, Send,
   FlaskConical, RefreshCw, Pencil, Save, X, ToggleLeft, ToggleRight, ExternalLink, Repeat,
-  Upload, Download, Trash2, UserPlus,
+  Upload, Download, Trash2, UserPlus, RotateCcw,
 } from "lucide-react";
 
 const ORDINAL_OPTIONS = [
@@ -58,6 +58,7 @@ type Series = {
 type EventRow = {
   id: number; title: string; startDate?: string; openMicMonth?: string;
   openMicSaveTheDateSent: boolean; openMicPerformerListSent: boolean;
+  openMicSkipped: boolean;
   performerCount: number; performers: { id: number; name: string }[];
 };
 type Signup = {
@@ -330,6 +331,14 @@ export default function OpenMicSeriesPage() {
     setSendingState(s => ({ ...s, [key]: false }));
   }
 
+  async function handleRestoreEvent(eventId: number) {
+    try {
+      await apiFetch(`/open-mic/events/${eventId}/restore`, { method: "POST" });
+      toast({ title: "Event restored" });
+      if (selected) await loadSeriesDetail(selected);
+    } catch (err: any) { toast({ title: err.message ?? "Failed to restore event", variant: "destructive" }); }
+  }
+
   function formatEventDate(ev: EventRow) {
     if (ev.startDate) {
       try { return format(new Date(ev.startDate), "EEE, MMM d, yyyy"); } catch {}
@@ -564,101 +573,127 @@ export default function OpenMicSeriesPage() {
                   </div>
                   {loading ? (
                     <div className="text-center py-8 text-[#555] text-sm animate-pulse">Loading events…</div>
-                  ) : (
-                    <div className="rounded-xl border border-white/10 overflow-hidden">
-                      <Table>
-                        <TableHeader className="bg-[#1a1a1a]">
-                          <TableRow className="hover:bg-transparent border-white/10">
-                            <TableHead className="text-[#888] font-semibold text-xs">Date</TableHead>
-                            <TableHead className="text-[#888] font-semibold text-xs">Performers</TableHead>
-                            <TableHead className="text-[#888] font-semibold text-xs">21-Day Email</TableHead>
-                            <TableHead className="text-[#888] font-semibold text-xs">3-Day Email</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {events.length === 0 && (
-                            <TableRow><TableCell colSpan={4} className="text-center text-[#555] text-sm py-6">No events yet — click Regenerate.</TableCell></TableRow>
-                          )}
-                          {events.map(ev => {
-                            const past = isPast(ev);
-                            const saveDateSending = sendingState[`${ev.id}-save-the-date-send`];
-                            const saveTestSending = sendingState[`${ev.id}-save-the-date-test`];
-                            const perfSending = sendingState[`${ev.id}-performer-list-send`];
-                            const perfTestSending = sendingState[`${ev.id}-performer-list-test`];
-                            return (
-                              <TableRow key={ev.id} className={`border-white/5 ${past ? "opacity-50" : ""}`}>
-                                <TableCell className="font-medium text-sm">
-                                  <Link href={`/events?open=${ev.id}`} className="hover:text-[#7250ef] transition-colors">
-                                    {formatEventDate(ev)}
-                                  </Link>
-                                  {past && <span className="ml-2 text-[10px] text-[#555]">past</span>}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-1.5">
-                                    <Users className="h-3.5 w-3.5 text-[#555]" />
-                                    <span className="text-sm">{ev.performerCount}</span>
-                                    {ev.performers.length > 0 && (
-                                      <span className="text-xs text-[#555] truncate max-w-[160px]">
-                                        {ev.performers.map(p => p.name).join(", ")}
-                                      </span>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  {ev.openMicSaveTheDateSent ? (
-                                    <div className="flex items-center gap-1 text-green-400 text-xs">
-                                      <CheckCircle2 className="h-3.5 w-3.5" />Sent
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1">
-                                      <Button size="sm" variant="ghost"
-                                        className="h-7 px-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
-                                        disabled={saveTestSending}
-                                        onClick={() => sendEmail(ev.id, "save-the-date", true)}
-                                        title="Send test to yourself">
-                                        <FlaskConical className="h-3 w-3 mr-1" />{saveTestSending ? "…" : "Test"}
-                                      </Button>
-                                      <Button size="sm" variant="ghost"
-                                        className="h-7 px-2 text-xs text-[#7250ef] hover:text-[#7250ef] hover:bg-[#7250ef]/10"
-                                        disabled={saveDateSending || past}
-                                        onClick={() => sendEmail(ev.id, "save-the-date", false)}
-                                        title="Send to full mailing list">
-                                        <Send className="h-3 w-3 mr-1" />{saveDateSending ? "…" : "Send"}
-                                      </Button>
-                                    </div>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {ev.openMicPerformerListSent ? (
-                                    <div className="flex items-center gap-1 text-green-400 text-xs">
-                                      <CheckCircle2 className="h-3.5 w-3.5" />Sent
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1">
-                                      <Button size="sm" variant="ghost"
-                                        className="h-7 px-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
-                                        disabled={perfTestSending}
-                                        onClick={() => sendEmail(ev.id, "performer-list", true)}
-                                        title="Send test to yourself">
-                                        <FlaskConical className="h-3 w-3 mr-1" />{perfTestSending ? "…" : "Test"}
-                                      </Button>
-                                      <Button size="sm" variant="ghost"
-                                        className="h-7 px-2 text-xs text-[#7250ef] hover:text-[#7250ef] hover:bg-[#7250ef]/10"
-                                        disabled={perfSending || past}
-                                        onClick={() => sendEmail(ev.id, "performer-list", false)}
-                                        title="Send to full mailing list">
-                                        <Send className="h-3 w-3 mr-1" />{perfSending ? "…" : "Send"}
-                                      </Button>
-                                    </div>
-                                  )}
-                                </TableCell>
+                  ) : (() => {
+                    const activeEvents = events.filter(ev => !ev.openMicSkipped);
+                    const skippedEvents = events.filter(ev => ev.openMicSkipped);
+                    return (
+                      <div className="space-y-4">
+                        <div className="rounded-xl border border-white/10 overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-[#1a1a1a]">
+                              <TableRow className="hover:bg-transparent border-white/10">
+                                <TableHead className="text-[#888] font-semibold text-xs">Date</TableHead>
+                                <TableHead className="text-[#888] font-semibold text-xs">Performers</TableHead>
+                                <TableHead className="text-[#888] font-semibold text-xs">21-Day Email</TableHead>
+                                <TableHead className="text-[#888] font-semibold text-xs">3-Day Email</TableHead>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                            </TableHeader>
+                            <TableBody>
+                              {activeEvents.length === 0 && (
+                                <TableRow><TableCell colSpan={4} className="text-center text-[#555] text-sm py-6">No events yet — click Regenerate.</TableCell></TableRow>
+                              )}
+                              {activeEvents.map(ev => {
+                                const past = isPast(ev);
+                                const saveDateSending = sendingState[`${ev.id}-save-the-date-send`];
+                                const saveTestSending = sendingState[`${ev.id}-save-the-date-test`];
+                                const perfSending = sendingState[`${ev.id}-performer-list-send`];
+                                const perfTestSending = sendingState[`${ev.id}-performer-list-test`];
+                                return (
+                                  <TableRow key={ev.id} className={`border-white/5 ${past ? "opacity-50" : ""}`}>
+                                    <TableCell className="font-medium text-sm">
+                                      <Link href={`/events?open=${ev.id}`} className="hover:text-[#7250ef] transition-colors">
+                                        {formatEventDate(ev)}
+                                      </Link>
+                                      {past && <span className="ml-2 text-[10px] text-[#555]">past</span>}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-1.5">
+                                        <Users className="h-3.5 w-3.5 text-[#555]" />
+                                        <span className="text-sm">{ev.performerCount}</span>
+                                        {ev.performers.length > 0 && (
+                                          <span className="text-xs text-[#555] truncate max-w-[160px]">
+                                            {ev.performers.map(p => p.name).join(", ")}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      {ev.openMicSaveTheDateSent ? (
+                                        <div className="flex items-center gap-1 text-green-400 text-xs">
+                                          <CheckCircle2 className="h-3.5 w-3.5" />Sent
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1">
+                                          <Button size="sm" variant="ghost"
+                                            className="h-7 px-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
+                                            disabled={saveTestSending}
+                                            onClick={() => sendEmail(ev.id, "save-the-date", true)}
+                                            title="Send test to yourself">
+                                            <FlaskConical className="h-3 w-3 mr-1" />{saveTestSending ? "…" : "Test"}
+                                          </Button>
+                                          <Button size="sm" variant="ghost"
+                                            className="h-7 px-2 text-xs text-[#7250ef] hover:text-[#7250ef] hover:bg-[#7250ef]/10"
+                                            disabled={saveDateSending || past}
+                                            onClick={() => sendEmail(ev.id, "save-the-date", false)}
+                                            title="Send to full mailing list">
+                                            <Send className="h-3 w-3 mr-1" />{saveDateSending ? "…" : "Send"}
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {ev.openMicPerformerListSent ? (
+                                        <div className="flex items-center gap-1 text-green-400 text-xs">
+                                          <CheckCircle2 className="h-3.5 w-3.5" />Sent
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1">
+                                          <Button size="sm" variant="ghost"
+                                            className="h-7 px-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
+                                            disabled={perfTestSending}
+                                            onClick={() => sendEmail(ev.id, "performer-list", true)}
+                                            title="Send test to yourself">
+                                            <FlaskConical className="h-3 w-3 mr-1" />{perfTestSending ? "…" : "Test"}
+                                          </Button>
+                                          <Button size="sm" variant="ghost"
+                                            className="h-7 px-2 text-xs text-[#7250ef] hover:text-[#7250ef] hover:bg-[#7250ef]/10"
+                                            disabled={perfSending || past}
+                                            onClick={() => sendEmail(ev.id, "performer-list", false)}
+                                            title="Send to full mailing list">
+                                            <Send className="h-3 w-3 mr-1" />{perfSending ? "…" : "Send"}
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                        {skippedEvents.length > 0 && (
+                          <div className="rounded-xl border border-white/10 overflow-hidden">
+                            <div className="px-4 py-2 bg-[#1a1a1a] border-b border-white/10">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-[#555]">Skipped Months</span>
+                            </div>
+                            <div className="divide-y divide-white/5">
+                              {skippedEvents.map(ev => (
+                                <div key={ev.id} className="flex items-center justify-between px-4 py-3">
+                                  <span className="text-sm text-[#555]">{formatEventDate(ev)}</span>
+                                  <Button size="sm" variant="ghost"
+                                    className="h-7 px-2 text-xs text-[#00b199] hover:text-[#00c9af] hover:bg-[#00b199]/10"
+                                    onClick={() => handleRestoreEvent(ev.id)}>
+                                    <RotateCcw className="h-3 w-3 mr-1.5" />Restore
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </TabsContent>
 
                 {/* ── MAILING LIST TAB ── */}
