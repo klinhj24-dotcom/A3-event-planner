@@ -332,6 +332,7 @@ function SlotRow({
   const [sendingInvite, setSendingInvite] = useState(false);
   const [sendingConfirm, setSendingConfirm] = useState(false);
   const [sendingTimeUpdate, setSendingTimeUpdate] = useState(false);
+  const [lockInConfirmOpen, setLockInConfirmOpen] = useState(false);
 
   const displayName = slot.bandName || slot.otherGroupName || slot.label || (SLOT_TYPE_META[slot.type]?.label ?? slot.type);
   const meta = SLOT_TYPE_META[slot.type] ?? SLOT_TYPE_META.act;
@@ -830,18 +831,45 @@ function SlotRow({
                   <Send className="h-3 w-3" />
                   {sendingInvite ? "Sending…" : slot.inviteStatus === "not_sent" ? "Send Invite" : "Re-invite New Contacts"}
                 </Button>
-                {(slot.confirmed || slot.inviteStatus === "confirmed") && !slot.confirmationSent && (
+                {slot.inviteStatus !== "not_sent" && (slot.confirmed || slot.inviteStatus === "confirmed") && !slot.confirmationSent && (
                   <Button
                     size="sm"
                     className="rounded-lg h-7 text-xs gap-1.5 flex-1 bg-emerald-600 hover:bg-emerald-500"
                     disabled={sendingConfirm}
-                    onClick={handleSendConfirmation}
-                    title="Send the official booking confirmation to all families (BCC) and the band leader (CC). Goes to info@ as the To address. Only shows once the band is confirmed."
+                    onClick={() => setLockInConfirmOpen(true)}
+                    title="Send the official booking confirmation to all families (BCC) and the band leader (CC). Goes to info@ as the To address. Only shows after invites have been sent."
                   >
                     <CheckCircle2 className="h-3 w-3" />
                     {sendingConfirm ? "Sending…" : "Send Lock-In Email"}
                   </Button>
                 )}
+                <Dialog open={lockInConfirmOpen} onOpenChange={setLockInConfirmOpen}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Send Lock-In Email?</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <p>This will send the official booking confirmation for <span className="text-foreground font-medium">{displayName}</span> to:</p>
+                      <ul className="list-disc list-inside space-y-1 pl-1">
+                        <li>info@themusicspace.com (To)</li>
+                        <li>Band leader, if an email is on file (CC)</li>
+                        <li>All family contacts not marked Not Attending (BCC)</li>
+                      </ul>
+                      <p className="text-amber-400">Before sending, confirm that all members who need to be there are marked <strong>Confirmed</strong> in the attendance list — anyone marked Not Attending will be excluded from this and future emails.</p>
+                    </div>
+                    <DialogFooter className="gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setLockInConfirmOpen(false)}>Cancel</Button>
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-500"
+                        disabled={sendingConfirm}
+                        onClick={async () => { setLockInConfirmOpen(false); await handleSendConfirmation(); }}
+                      >
+                        {sendingConfirm ? "Sending…" : "Yes, Send Lock-In Email"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 {slot.confirmationSent && (
                   <>
                     <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shrink-0">
@@ -1394,6 +1422,7 @@ export function LineupSheet({ event, open, onClose }: {
   // ── Invite mutations ───────────────────────────────────────────────────────
   const [bulkInviting, setBulkInviting] = useState(false);
   const [bulkLockingIn, setBulkLockingIn] = useState(false);
+  const [bulkLockInConfirmOpen, setBulkLockInConfirmOpen] = useState(false);
 
   async function handleSendInvite(slotId: number, staffNote: string): Promise<void> {
     const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-invite`, {
@@ -1624,7 +1653,7 @@ export function LineupSheet({ event, open, onClose }: {
   const invitedCount = actSlots.filter(s => s.inviteStatus !== "not_sent").length;
   const confirmedCount = actSlots.filter(s => s.inviteStatus === "confirmed").length;
   const uninvitedCount = actSlots.filter(s => s.inviteStatus === "not_sent").length;
-  const unlockedConfirmedCount = actSlots.filter(s => (s.confirmed || s.inviteStatus === "confirmed") && !s.confirmationSent).length;
+  const unlockedConfirmedCount = actSlots.filter(s => s.inviteStatus !== "not_sent" && (s.confirmed || s.inviteStatus === "confirmed") && !s.confirmationSent).length;
 
   function submitAddSlot() {
     addSlot({
@@ -1689,16 +1718,45 @@ export function LineupSheet({ event, open, onClose }: {
                 </Button>
               )}
               {!isRecital && unlockedConfirmedCount > 0 && (
-                <Button
-                  size="sm"
-                  className="h-8 text-xs rounded-lg gap-1.5 bg-emerald-600 hover:bg-emerald-500"
-                  disabled={bulkLockingIn}
-                  onClick={handleBulkLockIn}
-                  title={`Send the official booking confirmation email to ${unlockedConfirmedCount} confirmed band(s) that haven't been locked in yet. Each email goes To: info@, CC: band leader, BCC: all non-declined family contacts. Bands that already have a lock-in email sent are skipped.`}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {bulkLockingIn ? "Sending…" : `Lock In All (${unlockedConfirmedCount})`}
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs rounded-lg gap-1.5 bg-emerald-600 hover:bg-emerald-500"
+                    disabled={bulkLockingIn}
+                    onClick={() => setBulkLockInConfirmOpen(true)}
+                    title={`Send the official booking confirmation email to ${unlockedConfirmedCount} confirmed band(s) that haven't been locked in yet. Each email goes To: info@, CC: band leader, BCC: all non-declined family contacts. Bands that already have a lock-in email sent are skipped.`}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {bulkLockingIn ? "Sending…" : `Lock In All (${unlockedConfirmedCount})`}
+                  </Button>
+                  <Dialog open={bulkLockInConfirmOpen} onOpenChange={setBulkLockInConfirmOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Lock In All Bands?</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 text-sm text-muted-foreground">
+                        <p>This will send lock-in emails for <span className="text-foreground font-medium">{unlockedConfirmedCount} band{unlockedConfirmedCount !== 1 ? "s" : ""}</span>. Each email goes to:</p>
+                        <ul className="list-disc list-inside space-y-1 pl-1">
+                          <li>info@themusicspace.com (To)</li>
+                          <li>Band leader, if an email is on file (CC)</li>
+                          <li>All family contacts not marked Not Attending (BCC)</li>
+                        </ul>
+                        <p className="text-amber-400">Make sure attendance has been reviewed for all bands — anyone marked Not Attending will be excluded. Bands that already have a lock-in sent are skipped automatically.</p>
+                      </div>
+                      <DialogFooter className="gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setBulkLockInConfirmOpen(false)}>Cancel</Button>
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-500"
+                          disabled={bulkLockingIn}
+                          onClick={async () => { setBulkLockInConfirmOpen(false); await handleBulkLockIn(); }}
+                        >
+                          {bulkLockingIn ? "Sending…" : `Yes, Lock In ${unlockedConfirmedCount} Band${unlockedConfirmedCount !== 1 ? "s" : ""}`}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </>
               )}
               {!isRecital && actSlots.length > 0 && (
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
