@@ -35,7 +35,7 @@ async function sendReminderEmail(
 
   const body = isReminder
     ? `Hi ${employeeName},\n\nThis is a reminder that you're scheduled for an upcoming event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nSee you there!\n\nThanks,\nThe Music Space`
-    : `Hi ${employeeName},\n\nYou've been assigned to the following event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nPlease log in to the TMS portal to view your full schedule.\n\nThanks,\nThe Music Space`;
+    : `Hi ${employeeName},\n\nYou've been assigned to the following event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nIf you have any questions, reply to this email or contact your manager.\n\nThanks,\nThe Music Space`;
 
   const auth = createAuthedClient(
     senderUser.googleAccessToken,
