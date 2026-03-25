@@ -101,6 +101,7 @@ router.get("/events/:eventId/lineup/:slotId/invites", async (req, res) => {
         contactName: eventBandInvitesTable.contactName,
         contactEmail: eventBandInvitesTable.contactEmail,
         status: eventBandInvitesTable.status,
+        attendanceStatus: eventBandInvitesTable.attendanceStatus,
         conflictNote: eventBandInvitesTable.conflictNote,
         token: eventBandInvitesTable.token,
         sentAt: eventBandInvitesTable.sentAt,
@@ -416,6 +417,24 @@ The Music Space${bulkAdmissionsLines}`;
   }
 });
 
+// ── Update attendance status for one or more invite records ───────────────────
+router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const { inviteIds, attendanceStatus } = req.body as { inviteIds: number[]; attendanceStatus: string };
+    const valid = ["invited", "confirmed", "not_attending"];
+    if (!valid.includes(attendanceStatus)) { res.status(400).json({ error: "Invalid attendanceStatus" }); return; }
+    if (!inviteIds?.length) { res.status(400).json({ error: "inviteIds required" }); return; }
+    await db.update(eventBandInvitesTable)
+      .set({ attendanceStatus, updatedAt: new Date() })
+      .where(inArray(eventBandInvitesTable.id, inviteIds));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("updateAttendance error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Send lock-in confirmation email ───────────────────────────────────────────
 router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res) => {
   if (!requireAuth(req, res)) return;
@@ -450,7 +469,7 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
     if (!allInvites.length) { res.status(400).json({ error: "No contacts found to send confirmation to." }); return; }
 
     const bccEmails = allInvites
-      .filter(i => i.status !== "declined" && i.contactEmail)
+      .filter(i => i.attendanceStatus !== "not_attending" && i.contactEmail)
       .map(i => i.contactEmail!)
       .filter((e, idx, arr) => arr.indexOf(e) === idx); // unique
 
@@ -551,7 +570,7 @@ router.post("/events/:eventId/lineup/:slotId/send-time-update", async (req, res)
 
     const allInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
     const bccEmails = allInvites
-      .filter(i => i.status !== "declined" && i.contactEmail)
+      .filter(i => i.attendanceStatus !== "not_attending" && i.contactEmail)
       .map(i => i.contactEmail!)
       .filter((e, idx, arr) => arr.indexOf(e) === idx);
 
@@ -673,7 +692,7 @@ router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) =
         if (!allInvites.length) continue;
 
         const bccEmails = allInvites
-          .filter(i => i.status !== "declined" && i.contactEmail)
+          .filter(i => i.attendanceStatus !== "not_attending" && i.contactEmail)
           .map(i => i.contactEmail!)
           .filter((e, idx, arr) => arr.indexOf(e) === idx);
 

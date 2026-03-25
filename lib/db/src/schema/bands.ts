@@ -122,6 +122,7 @@ export const eventBandInvitesTable = pgTable("event_band_invites", {
   contactEmail: text("contact_email").notNull(),
   token: text("token").notNull().unique(),
   status: text("status").notNull().default("pending"),  // pending | confirmed | declined
+  attendanceStatus: text("attendance_status").notNull().default("invited"), // invited | confirmed | not_attending
   staffNote: text("staff_note"),       // estimated slot note at time of sending
   conflictNote: text("conflict_note"), // band's day-of conflict note
   sentAt: timestamp("sent_at", { withTimezone: true }),

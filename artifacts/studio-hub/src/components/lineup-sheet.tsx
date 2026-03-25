@@ -47,7 +47,8 @@ interface BandContact {
 interface BandInvite {
   id: number; memberId?: number | null; memberName?: string | null;
   contactName: string | null; contactEmail: string;
-  status: string; conflictNote: string | null; sentAt: string | null; respondedAt: string | null;
+  status: string; attendanceStatus: string;
+  conflictNote: string | null; sentAt: string | null; respondedAt: string | null;
   token?: string | null;
 }
 
@@ -56,6 +57,8 @@ interface InviteGroup {
   label: string;
   contactLine: string;
   status: "confirmed" | "declined" | "pending";
+  attendanceStatus: string;
+  inviteIds: number[];
   conflictNote: string | null;
   token: string | null;
 }
@@ -71,6 +74,8 @@ function groupInvitesByMember(invites: BandInvite[]): InviteGroup[] {
     const anyConfirmed = group.some(i => i.status === "confirmed");
     const allDeclined = group.every(i => i.status === "declined");
     const aggStatus: "confirmed" | "declined" | "pending" = anyConfirmed ? "confirmed" : allDeclined ? "declined" : "pending";
+    // Attendance status: take from first record (they should all be the same for a member)
+    const attendanceStatus = group[0].attendanceStatus ?? "invited";
     const label = group[0].memberName ?? group[0].contactName ?? group[0].contactEmail;
     const contactLine = group.map(i => i.contactName ?? i.contactEmail).filter(Boolean).join(", ");
     // Use the first pending invite's token; fall back to first token in the group
@@ -78,7 +83,8 @@ function groupInvitesByMember(invites: BandInvite[]): InviteGroup[] {
     const anyWithToken = group.find(i => i.token);
     const token = (pendingWithToken ?? anyWithToken)?.token ?? null;
     const conflictNote = group.find(i => i.conflictNote)?.conflictNote ?? null;
-    return { key: group[0].memberId ? `m:${group[0].memberId}` : `c:${group[0].id}`, label, contactLine, status: aggStatus, conflictNote, token };
+    const inviteIds = group.map(i => i.id);
+    return { key: group[0].memberId ? `m:${group[0].memberId}` : `c:${group[0].id}`, label, contactLine, status: aggStatus, attendanceStatus, inviteIds, conflictNote, token };
   });
 }
 
@@ -187,7 +193,13 @@ const INVITE_STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 
 // ── Invite status row (one per student/member group) ───────────────────────────
-function InviteRow({ group }: { group: InviteGroup }) {
+const ATTENDANCE_OPTIONS: { value: string; label: string; cls: string }[] = [
+  { value: "invited",       label: "Invited",       cls: "text-muted-foreground border-border/40 bg-transparent" },
+  { value: "confirmed",     label: "Confirmed",     cls: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  { value: "not_attending", label: "Not Attending", cls: "text-red-400 border-red-500/30 bg-red-500/10" },
+];
+
+function InviteRow({ group, onUpdateAttendance }: { group: InviteGroup; onUpdateAttendance: (inviteIds: number[], status: string) => void }) {
   const [copied, setCopied] = useState(false);
   const confirmUrl = group.token ? `${window.location.origin}/band-confirm/${group.token}` : null;
 
@@ -198,37 +210,40 @@ function InviteRow({ group }: { group: InviteGroup }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const statusCls = group.status === "confirmed"
-    ? "text-emerald-400"
-    : group.status === "declined"
-    ? "text-red-400"
-    : "text-muted-foreground";
-  const statusIcon = group.status === "confirmed" ? "✅" : group.status === "declined" ? "❌" : "⏳";
-  const statusLabel = group.status.charAt(0).toUpperCase() + group.status.slice(1);
-
   return (
-    <div className="flex flex-col gap-0.5 py-1.5 border-b border-border/20 last:border-0">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium">{group.label}</span>
-        <span className={`text-[11px] font-medium flex items-center gap-1 ${statusCls}`}>
-          {statusIcon} {statusLabel}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground truncate">{group.contactLine}</span>
-        {confirmUrl && group.status !== "confirmed" && (
-          <button
-            onClick={copyLink}
-            title="Copy confirmation link to text families"
-            className={`shrink-0 flex items-center gap-0.5 text-[10px] transition-colors rounded px-1 py-0.5 ${copied ? "text-emerald-400 bg-emerald-500/10" : "text-primary/60 hover:text-primary hover:bg-primary/10"}`}
-          >
-            {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
-            {copied ? "Copied!" : "Copy link"}
-          </button>
-        )}
+    <div className="flex flex-col gap-1 py-2 border-b border-border/20 last:border-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-xs font-medium">{group.label}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground truncate">{group.contactLine}</span>
+            {confirmUrl && group.status !== "confirmed" && (
+              <button
+                onClick={copyLink}
+                title="Copy confirmation link to text families"
+                className={`shrink-0 flex items-center gap-0.5 text-[10px] transition-colors rounded px-1 py-0.5 ${copied ? "text-emerald-400 bg-emerald-500/10" : "text-primary/60 hover:text-primary hover:bg-primary/10"}`}
+              >
+                {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+            )}
+          </div>
+        </div>
+        {/* Attendance status toggle */}
+        <div className="flex items-center gap-1 shrink-0">
+          {ATTENDANCE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onUpdateAttendance(group.inviteIds, opt.value)}
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded border transition-colors ${group.attendanceStatus === opt.value ? opt.cls : "text-muted-foreground/40 border-transparent bg-transparent hover:border-border/30 hover:text-muted-foreground"}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
       {group.conflictNote && (
-        <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1.5">
+        <div className="mt-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1.5">
           <p className="text-[11px] text-amber-400 font-medium mb-0.5">Day-of note:</p>
           <p className="text-[11px] text-amber-300/80">{group.conflictNote}</p>
         </div>
@@ -323,7 +338,9 @@ function SlotRow({
   const inviteStatusMeta = INVITE_STATUS_META[slot.inviteStatus] ?? INVITE_STATUS_META.not_sent;
 
   const inviteGroups = groupInvitesByMember(invites);
-  const confirmedCount = inviteGroups.filter(g => g.status === "confirmed").length;
+  const confirmedCount = inviteGroups.filter(g => g.attendanceStatus === "confirmed").length;
+  const notAttendingCount = inviteGroups.filter(g => g.attendanceStatus === "not_attending").length;
+  const invitedCount = inviteGroups.filter(g => g.attendanceStatus === "invited").length;
   const declinedCount = inviteGroups.filter(g => g.status === "declined").length;
   const pendingCount = inviteGroups.filter(g => g.status === "pending").length;
 
@@ -376,6 +393,16 @@ function SlotRow({
     } finally {
       setSendingTimeUpdate(false);
     }
+  }
+
+  async function handleUpdateAttendance(inviteIds: number[], attendanceStatus: string) {
+    await fetch(`/api/events/${eventId}/lineup/${slot.id}/invites/attendance`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ inviteIds, attendanceStatus }),
+    });
+    refetchInvites();
   }
 
   // ── Group header rendering ────────────────────────────────────────────────
@@ -842,11 +869,11 @@ function SlotRow({
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Contact Responses</p>
                     <div className="flex items-center gap-2 text-[10px]">
                       {confirmedCount > 0 && <span className="text-emerald-400">✅ {confirmedCount} confirmed</span>}
-                      {pendingCount > 0 && <span className="text-muted-foreground">⏳ {pendingCount} pending</span>}
-                      {declinedCount > 0 && <span className="text-red-400">❌ {declinedCount} declined</span>}
+                      {invitedCount > 0 && <span className="text-muted-foreground">📨 {invitedCount} invited</span>}
+                      {notAttendingCount > 0 && <span className="text-red-400">❌ {notAttendingCount} not attending</span>}
                     </div>
                   </div>
-                  {inviteGroups.map(group => <InviteRow key={group.key} group={group} />)}
+                  {inviteGroups.map(group => <InviteRow key={group.key} group={group} onUpdateAttendance={handleUpdateAttendance} />)}
                 </div>
               )}
               {invites.length === 0 && slot.inviteStatus !== "not_sent" && (

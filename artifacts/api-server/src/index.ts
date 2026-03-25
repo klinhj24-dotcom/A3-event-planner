@@ -166,6 +166,7 @@ async function runMigrations() {
     `ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS week_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS day_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_skipped BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_band_invites ADD COLUMN IF NOT EXISTS attendance_status TEXT NOT NULL DEFAULT 'invited'`,
   ];
   for (const m of migrations) {
     try {
