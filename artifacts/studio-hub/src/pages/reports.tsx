@@ -41,7 +41,7 @@ export default function Reports() {
         const d = parseISO(e.startDate);
         return d >= start && d <= end;
       });
-      const revenue = monthEvents.reduce((sum, e) => sum + (e.revenue ? parseFloat(e.revenue) : 0), 0);
+      const revenue = monthEvents.reduce((sum, e) => sum + ((e as any).internalTicketTotal ?? (e.revenue ? parseFloat(e.revenue) : 0)), 0);
       const cost = monthEvents.reduce((sum, e) => sum + (e.cost ? parseFloat(e.cost) : 0), 0);
       const leads = monthEvents.filter(e => e.isLeadGenerating).length;
       const byType: Record<string, number> = {};
@@ -52,7 +52,7 @@ export default function Reports() {
 
   const totals = useMemo(() => {
     const past = (events as any[]).filter(e => e.startDate && parseISO(e.startDate) <= now);
-    const totalRevenue = past.reduce((sum, e) => sum + (e.revenue ? parseFloat(e.revenue) : 0), 0);
+    const totalRevenue = past.reduce((sum, e) => sum + ((e as any).internalTicketTotal ?? (e.revenue ? parseFloat(e.revenue) : 0)), 0);
     const totalCost = past.reduce((sum, e) => sum + (e.cost ? parseFloat(e.cost) : 0), 0);
     const leadEvents = past.filter(e => e.isLeadGenerating).length;
     const typeBreakdown: Record<string, number> = {};
@@ -74,9 +74,9 @@ export default function Reports() {
       e.location ?? "",
       e.isPaid ? "Yes" : "No",
       ...(canViewFinances ? [
-        e.revenue ?? "0",
+        ((e as any).internalTicketTotal ?? (e.revenue ? parseFloat(e.revenue) : 0)).toFixed(2),
         e.cost ?? "0",
-        ((parseFloat(e.revenue ?? 0)) - (parseFloat(e.cost ?? 0))).toFixed(2),
+        (((e as any).internalTicketTotal ?? (e.revenue ? parseFloat(e.revenue) : 0)) - (parseFloat(e.cost ?? "0"))).toFixed(2),
       ] : []),
       e.isLeadGenerating ? "Yes" : "No",
       e.hasDebrief ? "Yes" : "No",
@@ -171,7 +171,7 @@ export default function Reports() {
         {canViewFinances && (
           <div className="flex gap-2 items-start rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-amber-300 text-sm">
             <span className="shrink-0 font-bold mt-0.5">!</span>
-            <span>Revenue and cost figures come from the values manually entered on each event. They are not pulled automatically from ticket charges or payroll — keep those fields up to date for accurate reports.</span>
+            <span>Revenue is calculated automatically from charged ticket requests (quantity × ticket price). Cost is still entered manually on each event — keep that field up to date for accurate net figures.</span>
           </div>
         )}
 

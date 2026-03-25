@@ -423,7 +423,7 @@ export default function Manual() {
             <p>Reports provides financial and operational summaries across events — revenue, costs, net, event counts, lead generation, and event type breakdown over the last 6 months.</p>
           </SectionBlock>
           <SectionBlock title="Financial Data">
-            <p>Revenue and cost figures come from the <span className="text-foreground font-medium">Revenue</span> and <span className="text-foreground font-medium">Cost</span> fields you manually enter on each event. They are not pulled automatically from ticket charges or payroll — keep those fields up to date on every event for accurate numbers.</p>
+            <p><span className="text-foreground font-medium">Revenue</span> is calculated automatically from charged ticket requests — the system multiplies each confirmed ticket count by the ticket price set on the event. <span className="text-foreground font-medium">Cost</span> is still entered manually on the event — keep that field current for accurate net figures.</p>
           </SectionBlock>
           <SectionBlock title="Lead & Event Breakdown">
             <p>The monthly table shows event count, lead-generating events, and financials side by side. The event type breakdown at the bottom shows all-time counts by type — useful for spotting which formats you run most.</p>
@@ -431,7 +431,7 @@ export default function Manual() {
           <SectionBlock title="Exporting">
             <p>Use <span className="text-foreground font-medium">Export Events CSV</span> to download all events with their financial data, status, and debrief flags for use in a spreadsheet.</p>
           </SectionBlock>
-          <Warn>Revenue and cost are manually entered on each event — the numbers are only as accurate as what's been filled in.</Warn>
+          <Warn>Cost is entered manually on each event. Revenue pulls from charged tickets automatically — but only if the ticket price is set on the event.</Warn>
         </div>
       ),
     },
