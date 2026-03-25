@@ -378,6 +378,29 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
   }
 });
 
+router.post("/events/:id/staff-slots/:slotId/resend-notification", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const slotId = parseInt(req.params.slotId);
+    const [slot] = await db.select(SLOT_SELECT)
+      .from(eventStaffSlotsTable)
+      .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
+      .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
+      .where(eq(eventStaffSlotsTable.id, slotId));
+    if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
+    if (!slot.assignedEmployeeId) { res.status(400).json({ error: "No employee assigned to this slot" }); return; }
+    const userId = (req.user as any).id;
+    sendStaffNotificationEmail(
+      userId, slotId, slot.assignedEmployeeId, slot.eventId,
+      slot.roleTypeId, slot.startTime, slot.endTime,
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("resend staff notification error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.delete("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {

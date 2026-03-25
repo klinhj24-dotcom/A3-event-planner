@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Pencil, UserRound, Users2, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, UserRound, Users2, Check, X, Send, Loader2 } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface StaffRoleType {
@@ -127,15 +127,17 @@ function CategoryFilter({ value, onChange }: { value: EmpCategory; onChange: (v:
 
 // ── SlotCard ─────────────────────────────────────────────────────────────────
 function SlotCard({
-  slot, employees, isTwoDay, onUpdate, onDelete,
+  slot, employees, isTwoDay, onUpdate, onDelete, onResend,
 }: {
   slot: StaffSlot;
   employees: Employee[];
   isTwoDay?: boolean;
   onUpdate: (id: number, data: Record<string, unknown>) => void;
   onDelete: (id: number) => void;
+  onResend: (id: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [resending, setResending] = useState(false);
   const [editCategory, setEditCategory] = useState<EmpCategory>("all");
   const [form, setForm] = useState({
     assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned",
@@ -248,7 +250,17 @@ function SlotCard({
         <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1 }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
+        {filled && (
+          <button
+            title="Resend assignment email"
+            disabled={resending}
+            onClick={async () => { setResending(true); try { await onResend(slot.id); } finally { setResending(false); } }}
+            className="text-muted-foreground hover:text-primary p-1 transition-colors disabled:opacity-50"
+          >
+            {resending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+          </button>
+        )}
+        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "" }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
           <Pencil className="h-3 w-3" />
         </button>
         <button onClick={() => onDelete(slot.id)} className="text-muted-foreground hover:text-destructive p-1">
@@ -353,6 +365,15 @@ export function StaffSlotsSheet({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] }),
   });
 
+  async function resendNotification(slotId: number) {
+    const r = await fetch(`/api/events/${event!.id}/staff-slots/${slotId}/resend-notification`, { method: "POST", credentials: "include" });
+    if (r.ok) {
+      toast({ title: "Notification resent", description: "Assignment email has been resent." });
+    } else {
+      toast({ title: "Failed to resend", variant: "destructive" });
+    }
+  }
+
   // Group slots by roleTypeId
   const grouped = roleTypes
     .map(rt => ({
@@ -456,7 +477,7 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {dayUnroled.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
                             ))}
                           </div>
                         </div>
@@ -483,7 +504,7 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {roleSlots.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
                             ))}
                           </div>
                         </div>
