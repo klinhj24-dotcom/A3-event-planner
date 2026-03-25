@@ -421,13 +421,84 @@ The Music Space${bulkAdmissionsLines}`;
 router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
+    const slotId = Number(req.params.slotId);
     const { inviteIds, attendanceStatus } = req.body as { inviteIds: number[]; attendanceStatus: string };
     const valid = ["invited", "confirmed", "not_attending"];
     if (!valid.includes(attendanceStatus)) { res.status(400).json({ error: "Invalid attendanceStatus" }); return; }
     if (!inviteIds?.length) { res.status(400).json({ error: "inviteIds required" }); return; }
-    await db.update(eventBandInvitesTable)
-      .set({ attendanceStatus, updatedAt: new Date() })
-      .where(inArray(eventBandInvitesTable.id, inviteIds));
+
+    // Fetch current records before updating (to know which ones weren't already confirmed)
+    const existing = await db.select().from(eventBandInvitesTable).where(inArray(eventBandInvitesTable.id, inviteIds));
+    const notYetConfirmed = existing.filter(i => i.status !== "confirmed");
+
+    // Update attendanceStatus; if confirming, also mark status=confirmed + respondedAt so the system treats them as fully confirmed
+    if (attendanceStatus === "confirmed") {
+      await db.update(eventBandInvitesTable)
+        .set({ attendanceStatus: "confirmed", status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
+        .where(inArray(eventBandInvitesTable.id, inviteIds));
+
+      // Update slot inviteStatus
+      const allSlotInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
+      const anyConfirmed = allSlotInvites.some(i => i.status === "confirmed") || true;
+      const allDeclined = allSlotInvites.every(i => i.status === "declined");
+      const newSlotStatus = anyConfirmed ? "confirmed" : allDeclined ? "declined" : "sent";
+      await db.update(eventLineupTable).set({ inviteStatus: newSlotStatus, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
+
+      // Send confirmation email to contacts that weren't already confirmed
+      if (notYetConfirmed.length > 0) {
+        try {
+          const users = await db.select().from(usersTable);
+          const gmailUser = users.find(u => u.googleAccessToken && u.googleRefreshToken);
+          if (gmailUser) {
+            const [invite] = existing;
+            const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, invite.eventId));
+            const [slot] = await db
+              .select({ bandName: bandsTable.name, startTime: eventLineupTable.startTime, durationMinutes: eventLineupTable.durationMinutes, eventDay: eventLineupTable.eventDay })
+              .from(eventLineupTable)
+              .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+              .where(eq(eventLineupTable.id, slotId));
+
+            const fmt12 = (t: string) => {
+              const [h, m] = t.split(":").map(Number);
+              return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+            };
+            const performanceDay = event ? formatPerformanceDay(event, slot?.eventDay) : "TBD";
+            const bandName = slot?.bandName ?? "your band";
+            const auth = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
+            const gmail = google.gmail({ version: "v1", auth });
+
+            for (const inv of notYetConfirmed) {
+              if (!inv.contactEmail) continue;
+              const subject = `Booking Confirmed — ${bandName} at ${event?.title ?? "The Music Space"}`;
+              let body = `Hi ${inv.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
+              body += `EVENT DETAILS\n`;
+              body += `Event: ${event?.title ?? "TBD"}\n`;
+              body += `Performance Date: ${performanceDay}\n`;
+              if (event?.location) body += `Location: ${event.location}\n`;
+              if (slot?.startTime) {
+                body += `Est. Set Time: ${fmt12(slot.startTime)}`;
+                if (slot.durationMinutes) body += ` (${slot.durationMinutes} min)`;
+                body += ` — subject to change based on other students' availability\n`;
+              }
+              if (event?.ticketsUrl) {
+                body += `\nGeneral Admission Tickets\nShare this link with family and friends who want to attend:\n${event.ticketsUrl}\n`;
+              }
+              body += `\nIf anything changes or you have questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;
+              const html = buildHtmlEmail({ recipientName: inv.contactName ?? "there", body });
+              const raw = makeHtmlEmail({ to: inv.contactEmail, from: gmailUser.email || "", subject, html, cc: [TMS_CC] });
+              await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+            }
+          }
+        } catch (emailErr) {
+          console.error("Attendance confirm email failed (non-fatal):", emailErr);
+        }
+      }
+    } else {
+      await db.update(eventBandInvitesTable)
+        .set({ attendanceStatus, updatedAt: new Date() })
+        .where(inArray(eventBandInvitesTable.id, inviteIds));
+    }
+
     res.json({ ok: true });
   } catch (err) {
     console.error("updateAttendance error:", err);
