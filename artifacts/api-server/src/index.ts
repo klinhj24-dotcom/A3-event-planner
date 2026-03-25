@@ -192,6 +192,21 @@ async function runOneTimeFixes() {
     console.error("[fix] Silent charge fix failed (non-fatal):", err);
   }
 
+  // Fix: sync attendance_status for invites where family has already confirmed via invite link.
+  // When the attendanceStatus column was added it defaulted to 'invited'. Any contact whose
+  // status is 'confirmed' (clicked their link) should have attendanceStatus = 'confirmed' too.
+  try {
+    const result = await db.execute(sql.raw(
+      `UPDATE event_band_invites SET attendance_status = 'confirmed', updated_at = NOW()
+       WHERE status = 'confirmed' AND attendance_status = 'invited'`
+    ));
+    const count = (result as any).rowCount ?? 0;
+    if (count > 0) console.log(`[fix] Synced attendance_status to 'confirmed' for ${count} invite(s) where family had already confirmed.`);
+    else console.log("[fix] attendance_status already synced — no update needed.");
+  } catch (err) {
+    console.error("[fix] attendance_status sync fix failed (non-fatal):", err);
+  }
+
   // Fix: reset contacts incorrectly auto-confirmed by the slot-wide cascade bug (slot 30, Never Early Fest)
   // Only Sara Nett (42), Katlyn Talerico (43), Greer Callender (40), Marc Callender (41) —
   // contacts for students whose own family never clicked the invite link.
