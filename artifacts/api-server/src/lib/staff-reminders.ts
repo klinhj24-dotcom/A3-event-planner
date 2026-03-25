@@ -109,7 +109,7 @@ export async function runStaffReminders() {
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
-        await sendReminderEmail(sender, employee.email, employee.name, event.title, role.name, eventDate, shiftLine, slot.confirmationToken, true, 7);
+        await sendReminderEmail(sender, employee.email, employee.name, event.title, role.name, eventDate, shiftLine, slot.confirmed ? null : slot.confirmationToken, true, 7);
         await db.update(eventStaffSlotsTable).set({ weekReminderSent: true }).where(eq(eventStaffSlotsTable.id, slot.id));
         console.log(`[reminders] Sent 7-day reminder to ${employee.email} for "${event.title}"`);
       } catch (err) {
@@ -152,7 +152,7 @@ export async function runStaffReminders() {
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
-        await sendReminderEmail(sender, employee.email, employee.name, event.title, role.name, eventDate, shiftLine, slot.confirmationToken, true, 1);
+        await sendReminderEmail(sender, employee.email, employee.name, event.title, role.name, eventDate, shiftLine, slot.confirmed ? null : slot.confirmationToken, true, 1);
         await db.update(eventStaffSlotsTable).set({ dayReminderSent: true }).where(eq(eventStaffSlotsTable.id, slot.id));
         console.log(`[reminders] Sent 1-day reminder to ${employee.email} for "${event.title}"`);
       } catch (err) {
