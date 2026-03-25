@@ -53,6 +53,7 @@ export const eventsTable = pgTable("events", {
   openMicMonth: varchar("open_mic_month", { length: 20 }),
   openMicSaveTheDateSent: boolean("open_mic_save_the_date_sent").notNull().default(false),
   openMicPerformerListSent: boolean("open_mic_performer_list_sent").notNull().default(false),
+  openMicSkipped: boolean("open_mic_skipped").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -264,11 +264,14 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
   const upcoming = getUpcomingOccurrences(series.recurrenceType ?? "first_friday", count);
   const created = [];
   for (const ff of upcoming) {
-    const existing = await db.select({ id: eventsTable.id })
+    const existing = await db.select({ id: eventsTable.id, openMicSkipped: eventsTable.openMicSkipped })
       .from(eventsTable)
       .where(and(eq(eventsTable.openMicSeriesId, series.id), eq(eventsTable.openMicMonth, ff.monthKey)));
     const startDate = buildEventDate(ff.year, ff.month, ff.day, series.eventTime ?? "6:00 PM");
     const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000); // +3 hours
+
+    // If this month was intentionally deleted (skipped), never recreate it
+    if (existing.some(e => e.openMicSkipped)) continue;
 
     if (existing.length) {
       await db.update(eventsTable)

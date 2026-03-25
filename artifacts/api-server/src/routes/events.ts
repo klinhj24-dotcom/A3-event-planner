@@ -265,7 +265,7 @@ router.get("/events", async (req, res) => {
   }
   try {
     const { status, type, upcoming } = req.query;
-    const conditions = [];
+    const conditions = [eq(eventsTable.openMicSkipped, false)];
     if (status && typeof status === "string") conditions.push(eq(eventsTable.status, status));
     if (type && typeof type === "string") conditions.push(eq(eventsTable.type, type));
     if (upcoming === "true") conditions.push(gte(eventsTable.startDate, new Date()));
@@ -273,7 +273,7 @@ router.get("/events", async (req, res) => {
     const events = await db
       .select()
       .from(eventsTable)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(sql`${eventsTable.startDate} ASC NULLS LAST`);
 
     // Compute internal ticket sales totals per event (charged requests only)
@@ -594,7 +594,13 @@ router.delete("/events/:id", async (req, res) => {
       }
     })();
 
-    await db.delete(eventsTable).where(eq(eventsTable.id, id));
+    // For open mic series events, soft-delete so the cron won't auto-recreate them
+    const [evRow] = await db.select({ openMicSeriesId: eventsTable.openMicSeriesId }).from(eventsTable).where(eq(eventsTable.id, id));
+    if (evRow?.openMicSeriesId) {
+      await db.update(eventsTable).set({ openMicSkipped: true, status: "cancelled" }).where(eq(eventsTable.id, id));
+    } else {
+      await db.delete(eventsTable).where(eq(eventsTable.id, id));
+    }
     res.status(204).send();
   } catch (err) {
     console.error("deleteEvent error:", err);
