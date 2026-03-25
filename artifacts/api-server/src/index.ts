@@ -207,27 +207,6 @@ async function runOneTimeFixes() {
     console.error("[fix] attendance_status sync fix failed (non-fatal):", err);
   }
 
-  // Fix: reset contacts incorrectly auto-confirmed by the slot-wide cascade bug (slot 30, Never Early Fest)
-  // Only Sara Nett (42), Katlyn Talerico (43), Greer Callender (40), Marc Callender (41) —
-  // contacts for students whose own family never clicked the invite link.
-  try {
-    const bugIds = [40, 41, 42, 43];
-    const affected = await db
-      .select({ id: eventBandInvitesTable.id, status: eventBandInvitesTable.status })
-      .from(eventBandInvitesTable)
-      .where(inArray(eventBandInvitesTable.id, bugIds));
-    const toReset = affected.filter(r => r.status === "confirmed").map(r => r.id);
-    if (toReset.length > 0) {
-      await db.update(eventBandInvitesTable)
-        .set({ status: "pending", respondedAt: null, updatedAt: new Date() })
-        .where(inArray(eventBandInvitesTable.id, toReset));
-      console.log(`[fix] Reset ${toReset.length} incorrectly auto-confirmed contacts to pending:`, toReset);
-    } else {
-      console.log("[fix] Slot-30 contacts already correct — no reset needed.");
-    }
-  } catch (err) {
-    console.error("[fix] One-time fix failed (non-fatal):", err);
-  }
 }
 
 async function initDb() {
