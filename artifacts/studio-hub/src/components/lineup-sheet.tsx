@@ -667,8 +667,23 @@ function SlotRow({
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Set time (manual)</label>
-              <Input type="time" className="h-8 rounded-lg text-xs" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} />
-              {draft.startTime && <p className="text-[10px] text-muted-foreground">Overrides auto-calc</p>}
+              <div className="relative">
+                <Input type="time" className="h-8 rounded-lg text-xs pr-6" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} />
+                {draft.startTime && (
+                  <button
+                    type="button"
+                    title="Clear manual time — slot will use auto-calculated time"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setDraft(d => ({ ...d, startTime: "" }))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              {draft.startTime
+                ? <p className="text-[10px] text-amber-400">Overrides auto-calc — click × to clear</p>
+                : <p className="text-[10px] text-muted-foreground/50">Auto from slot above</p>
+              }
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Duration (min)</label>
