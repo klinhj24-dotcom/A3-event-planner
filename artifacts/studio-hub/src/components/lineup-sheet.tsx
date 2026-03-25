@@ -22,7 +22,7 @@ import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
   Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
   Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe, Loader2,
-  Copy, Check, TriangleAlert, ShieldCheck,
+  Copy, Check, TriangleAlert, ShieldCheck, Download,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1534,6 +1534,46 @@ export function LineupSheet({ event, open, onClose }: {
   const isRecital = event?.type === "Recital";
   const calcTimes = computeTimes(slots, showStartHHmm);
 
+  function exportLineupCSV() {
+    const isTwoDayEvent = !!event?.isTwoDay;
+    const headers = [
+      ...(isTwoDayEvent ? ["Day"] : []),
+      "#", "Type", "Act / Label", "Duration (min)", "Buffer (min)", "Set Time", "Status",
+    ];
+    const rows = slots
+      .filter(s => s.type !== "group-header")
+      .map((s, i) => {
+        const slotIdx = slots.indexOf(s);
+        const time = calcTimes[slotIdx] ? fmt12(calcTimes[slotIdx]) : s.startTime ? fmt12(s.startTime) : "";
+        const actName = s.type === "act"
+          ? (s.otherGroupName ?? s.bandName ?? s.label ?? "")
+          : (s.label ?? s.type);
+        const status = s.type === "act"
+          ? (s.confirmed ? "Confirmed" : s.inviteStatus === "invited" ? "Invited" : "Pending")
+          : "";
+        return [
+          ...(isTwoDayEvent ? [`Day ${s.eventDay}`] : []),
+          String(i + 1),
+          s.type.charAt(0).toUpperCase() + s.type.slice(1),
+          actName,
+          String(s.durationMinutes ?? ""),
+          String(s.bufferMinutes ?? "0"),
+          time,
+          status,
+        ];
+      });
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lineup-${(event?.title ?? "event").replace(/\s+/g, "-").toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const handleUpdate = useCallback(async (id: number, data: Partial<LineupSlot>) => { await updateSlot({ id, data }); }, [updateSlot]);
   const handleDelete = useCallback((id: number) => { deleteSlot(id); }, [deleteSlot]);
 
@@ -1586,6 +1626,11 @@ export function LineupSheet({ event, open, onClose }: {
               {isRecital && slots.length > 0 && (
                 <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5" onClick={() => printRecitalOrder(event?.title ?? "Recital", slots, calcTimes)}>
                   <Printer className="h-3.5 w-3.5" /> Print Order
+                </Button>
+              )}
+              {slots.filter(s => s.type !== "group-header").length > 0 && (
+                <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg gap-1.5" onClick={exportLineupCSV} title="Download lineup as CSV">
+                  <Download className="h-3.5 w-3.5" /> Export CSV
                 </Button>
               )}
               {!isRecital && actSlots.length > 0 && (

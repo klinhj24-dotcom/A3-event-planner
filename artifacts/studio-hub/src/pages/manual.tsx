@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, ChevronRight, Users, Calendar, LayoutDashboard, Music2, UserSquare2, DollarSign, CreditCard, BarChart2, Radio, CalendarDays, Settings, Shield, ClipboardList, ListChecks, Send, Star, ArrowLeft } from "lucide-react";
+import { BookOpen, ChevronRight, Users, Calendar, LayoutDashboard, Music2, UserSquare2, DollarSign, CreditCard, BarChart2, Radio, CalendarDays, Settings, Shield, ClipboardList, ListChecks, Send, Star, ArrowLeft, Package, Mic, Ticket, CalendarRange } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
@@ -205,8 +205,12 @@ export default function Manual() {
           <SectionBlock title="3-Day Reminder">
             <p>Three days before the event, every confirmed family contact automatically receives a reminder email. This fires on its own — no action needed. Families who are still pending (haven't confirmed) do not receive the reminder.</p>
           </SectionBlock>
+          <SectionBlock title="Resending Notifications">
+            <p>Each staff slot card has a small send icon in the top-right corner. Click it to re-send the assignment email to that staff member — useful if they missed it or need a refresher on event details.</p>
+            <Tip>Re-sending a notification never duplicates any confirmation link — if they've already confirmed, the link is omitted automatically.</Tip>
+          </SectionBlock>
           <Warn>If you change the set time before sending the lock-in email, save the slot first — the email uses whatever time is currently saved.</Warn>
-          <Tip>You can change the set time and re-lock-in if needed, as long as confirmation_sent hasn't already fired. Just update, save, and send.</Tip>
+          <Tip>You can change the set time and re-lock-in if needed, as long as the lock-in email hasn't already been sent. Just update, save, and send.</Tip>
         </div>
       ),
     },
@@ -258,8 +262,14 @@ export default function Manual() {
           <SectionBlock title="Overlapping Acts">
             <p>Toggle "Overlaps with previous act" on a slot if it runs simultaneously (e.g. a dance group performing while the next band sets up). It won't affect the timeline calculation for the next slot.</p>
           </SectionBlock>
+          <SectionBlock title="Other Groups">
+            <p>Non-student acts — dance troupes, guest performers, hired artists — are managed under <span className="text-foreground font-medium">Other Groups</span> in the Bands section. When adding a lineup slot, choose "Other Group" and select from the list, or type a custom name. These don't go through the invite flow — no emails are sent.</p>
+          </SectionBlock>
+          <SectionBlock title="Exporting the Lineup">
+            <p>Use the <span className="text-foreground font-medium">Export CSV</span> button in the lineup sheet header to download the full lineup — act order, set times, durations, and confirmation status — as a CSV you can open in Excel or share with the venue.</p>
+          </SectionBlock>
           <SectionBlock title="Staff Notes">
-            <p>The Estimated Slot Note field goes into the invite email sent to families — use it to give them an approximate window before exact times are set.</p>
+            <p>The Estimated Slot Note field goes into the invite email sent to families — use it to give them an approximate window before exact times are set. The booking confirmed email also includes a note that the set time is subject to change based on other students' availability.</p>
           </SectionBlock>
           <Tip>Drag and drop slots to reorder them. Set times update instantly.</Tip>
         </div>
@@ -410,15 +420,124 @@ export default function Manual() {
       content: (
         <div className="space-y-5">
           <SectionBlock title="Overview">
-            <p>Reports provides financial and operational summaries across events — revenue, costs, margins, lead generation, and trial signups from debriefs.</p>
+            <p>Reports provides financial and operational summaries across events — revenue, costs, net, event counts, lead generation, and event type breakdown over the last 6 months.</p>
           </SectionBlock>
-          <SectionBlock title="Financial Reports">
-            <p>See revenue vs. cost per event, broken out by ticket sales, venue fees, and revenue share. Margins are calculated automatically.</p>
+          <SectionBlock title="Financial Data">
+            <p>Revenue and cost figures come from the <span className="text-foreground font-medium">Revenue</span> and <span className="text-foreground font-medium">Cost</span> fields you manually enter on each event. They are not pulled automatically from ticket charges or payroll — keep those fields up to date on every event for accurate numbers.</p>
           </SectionBlock>
-          <SectionBlock title="Lead & Debrief Reports">
-            <p>Tracks leads collected and trial signups per event, pulled directly from submitted debriefs. Useful for evaluating which event types drive the most new business.</p>
+          <SectionBlock title="Lead & Event Breakdown">
+            <p>The monthly table shows event count, lead-generating events, and financials side by side. The event type breakdown at the bottom shows all-time counts by type — useful for spotting which formats you run most.</p>
           </SectionBlock>
-          <Warn>Financial data only appears for events marked as "Paid." Free or internal events won't show revenue figures.</Warn>
+          <SectionBlock title="Exporting">
+            <p>Use <span className="text-foreground font-medium">Export Events CSV</span> to download all events with their financial data, status, and debrief flags for use in a spreadsheet.</p>
+          </SectionBlock>
+          <Warn>Revenue and cost are manually entered on each event — the numbers are only as accurate as what's been filled in.</Warn>
+        </div>
+      ),
+    },
+    {
+      id: "packing-lists",
+      title: "Packing Lists",
+      icon: Package,
+      adminOnly: true,
+      content: (
+        <div className="space-y-5">
+          <SectionBlock title="Overview">
+            <p>The Packing List is a per-event checklist of everything that needs to go with you to the venue. It lives in the event's Overview tab and is managed through the Packing List panel.</p>
+          </SectionBlock>
+          <SectionBlock title="Adding Items">
+            <Step n={1}>Open an event and scroll to the Packing List card in the Overview tab.</Step>
+            <Step n={2}>Click the packing list button to open the sheet.</Step>
+            <Step n={3}>Use the item input to add things one at a time — equipment, signage, merchandise, anything you need on-site.</Step>
+            <Step n={4}>Items can be checked off as you pack them.</Step>
+          </SectionBlock>
+          <SectionBlock title="Checking Off Items">
+            <p>Check each item as you pack it before leaving. Checked items stay visible so you can review the full list at any point. You can uncheck them to start fresh for the next run.</p>
+          </SectionBlock>
+          <Tip>Build a standard packing list once for a recurring event type, then tweak it per event. Check items off on the day of — it acts as your pre-event checklist.</Tip>
+        </div>
+      ),
+    },
+    {
+      id: "staff-scheduling",
+      title: "Staff Scheduling",
+      icon: CalendarRange,
+      adminOnly: true,
+      content: (
+        <div className="space-y-5">
+          <SectionBlock title="Overview">
+            <p>Each event has a Staffing panel where you assign team members to specific roles, set their scheduled time, rate, and any bonus pay. Assigned staff see the event in their My Schedule view.</p>
+          </SectionBlock>
+          <SectionBlock title="Assigning Staff">
+            <Step n={1}>Open an event and click the Staffing button (or the staffing card in Overview).</Step>
+            <Step n={2}>Add a slot — choose the staff member, their role, start/end time, and rate.</Step>
+            <Step n={3}>Save. The staff member is immediately notified by email with the event details.</Step>
+          </SectionBlock>
+          <SectionBlock title="Resending Notifications">
+            <p>If a staff member missed their assignment email, hover their slot card and click the send icon to resend it. If they've already confirmed, the resent email omits the confirmation link automatically.</p>
+          </SectionBlock>
+          <SectionBlock title="Staff Confirmations">
+            <p>Each assignment email includes a confirmation link. When a staff member clicks it, their slot is marked as Confirmed and you'll see a green "Confirmed" badge on their card. This is optional — non-confirmed slots still appear on their schedule.</p>
+          </SectionBlock>
+          <SectionBlock title="Automatic Reminders">
+            <p>The system automatically sends two reminder emails to assigned staff: one 6–8 days before the event and one 12–36 hours before. These fire on their own — no action required. If a staff member has already confirmed, their reminder omits the confirmation link.</p>
+          </SectionBlock>
+          <Tip>Staff who aren't admins can't log into the portal — they only receive emails. The confirmation link in their email is their only interaction point.</Tip>
+        </div>
+      ),
+    },
+    {
+      id: "tickets-signups",
+      title: "Tickets & Signups",
+      icon: Ticket,
+      adminOnly: true,
+      content: (
+        <div className="space-y-5">
+          <SectionBlock title="Overview">
+            <p>Events can have public-facing ticket request forms and signup forms. Tickets are for paid admission; signups are for free RSVPs or interest forms. Both are managed from the event's Overview tab.</p>
+          </SectionBlock>
+          <SectionBlock title="Ticket Requests">
+            <p>Enable ticket requests on an event to give the public a form where they can submit how many tickets they want. Requests come in as pending — you review and approve or decline them from the Tickets panel on the event.</p>
+            <Tip>For Recital events, the ticket request form does not show the "Additional Tickets" section — only the standard form fields appear.</Tip>
+          </SectionBlock>
+          <SectionBlock title="Signups">
+            <p>Signup forms let people register interest or RSVP to a free event. Responses appear in the Signups panel. You can see the name, email, and any custom responses submitted.</p>
+          </SectionBlock>
+          <SectionBlock title="Automatic Reminders">
+            <p>The system automatically sends two reminders to ticket requesters and signups: one 6–8 days before the event and one 12–36 hours before. These fire on their own — no action needed. Each person only receives each reminder once.</p>
+          </SectionBlock>
+          <SectionBlock title="Guest List Connection">
+            <p>Ticket requests feed into the Guest List. Once a ticket request is approved and marked as charged, it shows as a confirmed entry on the event's guest list at the door.</p>
+          </SectionBlock>
+        </div>
+      ),
+    },
+    {
+      id: "open-mic",
+      title: "Open Mic Series",
+      icon: Mic,
+      adminOnly: true,
+      content: (
+        <div className="space-y-5">
+          <SectionBlock title="Overview">
+            <p>The Open Mic Series page manages recurring open mic events — performer signups, slot scheduling, and automated confirmation emails. It's separate from the main Events section.</p>
+          </SectionBlock>
+          <SectionBlock title="Creating an Open Mic Event">
+            <Step n={1}>Go to Open Mic Series in the sidebar.</Step>
+            <Step n={2}>Click "New Open Mic" and fill in the date, time, and venue details.</Step>
+            <Step n={3}>Set the number of performer slots and any per-slot duration.</Step>
+            <Step n={4}>Save. The event is immediately live for performers to sign up.</Step>
+          </SectionBlock>
+          <SectionBlock title="Performer Signups">
+            <p>Performers sign up via the public Open Mic signup link. Each submission captures their name, contact info, and what they plan to perform. Signups appear in the event's slot list where you can approve, reject, or reorder them.</p>
+          </SectionBlock>
+          <SectionBlock title="Automated Emails">
+            <p>Performers receive a confirmation email when their signup is accepted. The system also sends automatic reminder emails before each open mic — no manual action needed.</p>
+          </SectionBlock>
+          <SectionBlock title="Slot Management">
+            <p>Drag and drop performers to set the run order. You can set individual slot times or let the system calculate them from the show start time and slot duration.</p>
+          </SectionBlock>
+          <Tip>Use the Open Mic Series for recurring community events. For one-off showcases or ticketed performances, use the main Events section instead.</Tip>
         </div>
       ),
     },

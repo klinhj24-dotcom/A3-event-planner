@@ -167,6 +167,14 @@ export default function Reports() {
           </CardContent>
         </Card>
 
+        {/* Revenue note */}
+        {canViewFinances && (
+          <div className="flex gap-2 items-start rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-amber-300 text-sm">
+            <span className="shrink-0 font-bold mt-0.5">!</span>
+            <span>Revenue and cost figures come from the values manually entered on each event. They are not pulled automatically from ticket charges or payroll — keep those fields up to date for accurate reports.</span>
+          </div>
+        )}
+
         {/* Revenue chart — gated */}
         {canViewFinances && (
           <Card className="rounded-2xl border-border/50 bg-card shadow-sm">
