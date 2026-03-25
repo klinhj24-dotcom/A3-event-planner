@@ -29,13 +29,14 @@ export default function Reports() {
   const { data: events = [] } = useListEvents();
 
   const now = new Date();
-  const last6Months = Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(now, 5 - i);
+  // Show 2 months back through 3 months ahead so upcoming events are visible
+  const rollingMonths = Array.from({ length: 6 }, (_, i) => {
+    const d = subMonths(now, 2 - i);
     return { label: format(d, "MMM yyyy"), start: startOfMonth(d), end: endOfMonth(d) };
   });
 
   const monthlyStats = useMemo(() => {
-    return last6Months.map(({ label, start, end }) => {
+    return rollingMonths.map(({ label, start, end }) => {
       const monthEvents = (events as any[]).filter(e => {
         if (!e.startDate) return false;
         const d = parseISO(e.startDate);
@@ -48,16 +49,16 @@ export default function Reports() {
       monthEvents.forEach(e => { byType[e.type] = (byType[e.type] ?? 0) + 1; });
       return { label, count: monthEvents.length, revenue, cost, net: revenue - cost, leads, byType };
     });
-  }, [events, last6Months]);
+  }, [events, rollingMonths]);
 
   const totals = useMemo(() => {
-    const past = (events as any[]).filter(e => e.startDate && parseISO(e.startDate) <= now);
-    const totalRevenue = past.reduce((sum, e) => sum + ((e as any).internalTicketTotal ?? (e.revenue ? parseFloat(e.revenue) : 0)), 0);
-    const totalCost = past.reduce((sum, e) => sum + (e.cost ? parseFloat(e.cost) : 0), 0);
-    const leadEvents = past.filter(e => e.isLeadGenerating).length;
+    const all = events as any[];
+    const totalRevenue = all.reduce((sum, e) => sum + ((e as any).internalTicketTotal ?? (e.revenue ? parseFloat(e.revenue) : 0)), 0);
+    const totalCost = all.reduce((sum, e) => sum + (e.cost ? parseFloat(e.cost) : 0), 0);
+    const leadEvents = all.filter(e => e.isLeadGenerating).length;
     const typeBreakdown: Record<string, number> = {};
-    past.forEach(e => { typeBreakdown[e.type] = (typeBreakdown[e.type] ?? 0) + 1; });
-    return { totalEvents: past.length, totalRevenue, totalCost, net: totalRevenue - totalCost, leadEvents, typeBreakdown };
+    all.forEach(e => { typeBreakdown[e.type] = (typeBreakdown[e.type] ?? 0) + 1; });
+    return { totalEvents: all.length, totalRevenue, totalCost, net: totalRevenue - totalCost, leadEvents, typeBreakdown };
   }, [events]);
 
   const maxCount = Math.max(...monthlyStats.map(m => m.count), 1);
