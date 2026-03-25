@@ -879,9 +879,9 @@ router.post("/band-confirm/:token", async (req, res) => {
           body += `Performance Date: ${performanceDay}\n`;
           if (event?.location) body += `Location: ${event.location}\n`;
           if (slot?.startTime) {
-            body += `Set Time: ${fmt12(slot.startTime)}`;
+            body += `Est. Set Time: ${fmt12(slot.startTime)}`;
             if (slot.durationMinutes) body += ` (${slot.durationMinutes} min)`;
-            body += `\n`;
+            body += ` — subject to change based on other students' availability\n`;
           }
           if (conflictNote?.trim()) body += `\nYour note: ${conflictNote.trim()}\n`;
 
