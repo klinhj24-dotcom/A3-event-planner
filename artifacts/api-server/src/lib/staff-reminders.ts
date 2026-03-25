@@ -90,6 +90,7 @@ export async function runStaffReminders() {
         and(
           isNotNull(eventStaffSlotsTable.assignedEmployeeId),
           eq(eventStaffSlotsTable.weekReminderSent, false),
+          eq(eventsTable.status, "confirmed"),
           gte(eventsTable.startDate, sixDays),
           lte(eventsTable.startDate, eightDays),
         )
@@ -133,6 +134,7 @@ export async function runStaffReminders() {
         and(
           isNotNull(eventStaffSlotsTable.assignedEmployeeId),
           eq(eventStaffSlotsTable.dayReminderSent, false),
+          eq(eventsTable.status, "confirmed"),
           gte(eventsTable.startDate, halfDay),
           lte(eventsTable.startDate, twodays),
         )
