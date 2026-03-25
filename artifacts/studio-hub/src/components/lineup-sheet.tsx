@@ -61,6 +61,7 @@ interface InviteGroup {
   inviteIds: number[];
   conflictNote: string | null;
   token: string | null;
+  members: BandInvite[];
 }
 
 function groupInvitesByMember(invites: BandInvite[]): InviteGroup[] {
@@ -87,7 +88,7 @@ function groupInvitesByMember(invites: BandInvite[]): InviteGroup[] {
     const token = (pendingWithToken ?? anyWithToken)?.token ?? null;
     const conflictNote = group.find(i => i.conflictNote)?.conflictNote ?? null;
     const inviteIds = group.map(i => i.id);
-    return { key: group[0].memberId ? `m:${group[0].memberId}` : `c:${group[0].id}`, label, contactLine, status: aggStatus, attendanceStatus, inviteIds, conflictNote, token };
+    return { key: group[0].memberId ? `m:${group[0].memberId}` : `c:${group[0].id}`, label, contactLine, status: aggStatus, attendanceStatus, inviteIds, conflictNote, token, members: group };
   });
 }
 
@@ -202,35 +203,61 @@ const ATTENDANCE_OPTIONS: { value: string; label: string; cls: string }[] = [
   { value: "not_attending", label: "Not Attending", cls: "text-red-400 border-red-500/30 bg-red-500/10" },
 ];
 
-function InviteRow({ group, onUpdateAttendance }: { group: InviteGroup; onUpdateAttendance: (inviteIds: number[], status: string) => void }) {
+function ContactCopyLink({ invite }: { invite: BandInvite }) {
   const [copied, setCopied] = useState(false);
-  const confirmUrl = group.token ? `${window.location.origin}/band-confirm/${group.token}` : null;
-
-  function copyLink() {
-    if (!confirmUrl) return;
-    navigator.clipboard.writeText(confirmUrl);
+  const url = invite.token ? `${window.location.origin}/band-confirm/${invite.token}` : null;
+  if (!url || invite.status === "confirmed") return null;
+  function copy() {
+    navigator.clipboard.writeText(url!);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+  return (
+    <button
+      onClick={copy}
+      title="Copy this contact's confirmation link"
+      className={`shrink-0 flex items-center gap-0.5 text-[10px] transition-colors rounded px-1 py-0.5 ${copied ? "text-emerald-400 bg-emerald-500/10" : "text-primary/60 hover:text-primary hover:bg-primary/10"}`}
+    >
+      {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+      {copied ? "Copied!" : "Copy link"}
+    </button>
+  );
+}
+
+function InviteRow({ group, onUpdateAttendance }: { group: InviteGroup; onUpdateAttendance: (inviteIds: number[], status: string) => void }) {
+  const isConfirmed = group.attendanceStatus === "confirmed";
+  // The contact who actually confirmed (for collapsed confirmed view)
+  const confirmedContact = group.members.find(i => i.attendanceStatus === "confirmed" || i.status === "confirmed");
 
   return (
     <div className="flex flex-col gap-1 py-2 border-b border-border/20 last:border-0">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-xs font-medium">{group.label}</span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-muted-foreground truncate">{group.contactLine}</span>
-            {confirmUrl && group.status !== "confirmed" && (
-              <button
-                onClick={copyLink}
-                title="Copy confirmation link to text families"
-                className={`shrink-0 flex items-center gap-0.5 text-[10px] transition-colors rounded px-1 py-0.5 ${copied ? "text-emerald-400 bg-emerald-500/10" : "text-primary/60 hover:text-primary hover:bg-primary/10"}`}
-              >
-                {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
-                {copied ? "Copied!" : "Copy link"}
-              </button>
-            )}
-          </div>
+          {isConfirmed ? (
+            // Confirmed: show only the contact who confirmed
+            <span className="text-[10px] text-muted-foreground truncate">
+              {confirmedContact ? (confirmedContact.contactName ?? confirmedContact.contactEmail) : group.contactLine}
+            </span>
+          ) : group.members.length > 1 ? (
+            // Multiple contacts, not yet confirmed: each gets their own link
+            <div className="flex flex-col gap-0.5 mt-0.5">
+              {group.members.map(m => (
+                <div key={m.id} className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground truncate">{m.contactName ?? m.contactEmail}</span>
+                  <ContactCopyLink invite={m} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            // Single contact: name + copy link inline
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground truncate">
+                {group.members[0]?.contactName ?? group.members[0]?.contactEmail}
+              </span>
+              {group.members[0] && <ContactCopyLink invite={group.members[0]} />}
+            </div>
+          )}
         </div>
         {/* Attendance status toggle */}
         <div className="flex items-center gap-1 shrink-0">
