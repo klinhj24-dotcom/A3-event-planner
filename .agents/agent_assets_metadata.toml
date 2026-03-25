@@ -6,3 +6,9 @@ id = "ZmFD-AvCTpdYHxUrjj7gP"
 uri = "file://TMS_Admin_User_Manual.md"
 type = "text"
 title = "TMS Admin User Manual"
+
+[[outputs]]
+id = "R1y4G_GfCjOmQ60WSpwUI"
+uri = "file://tms-emails.pdf"
+type = "pdf"
+title = "TMS Events Portal — Complete Email Reference"
