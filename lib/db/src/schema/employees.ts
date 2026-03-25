@@ -42,6 +42,8 @@ export const eventSignupsTable = pgTable("event_signups", {
   notes: text("notes"),
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  weekReminderSent: boolean("week_reminder_sent").notNull().default(false),
+  dayReminderSent: boolean("day_reminder_sent").notNull().default(false),
 });
 
 export const employeeHoursTable = pgTable("employee_hours", {

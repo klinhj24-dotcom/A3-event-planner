@@ -97,6 +97,8 @@ export const eventTicketRequestsTable = pgTable("event_ticket_requests", {
   charged: boolean("charged").notNull().default(false),
   chargedAt: timestamp("charged_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  weekReminderSent: boolean("week_reminder_sent").notNull().default(false),
+  dayReminderSent: boolean("day_reminder_sent").notNull().default(false),
 });
 
 export type EventTicketRequest = typeof eventTicketRequestsTable.$inferSelect;

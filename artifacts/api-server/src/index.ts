@@ -9,6 +9,7 @@ import { startStaffReminderCron } from "./lib/staff-reminders";
 import { startBandReminderCron } from "./lib/band-reminders";
 import { startDebriefReminderCron } from "./lib/debrief-reminders";
 import { startOpenMicCron } from "./lib/open-mic-cron";
+import { startEventReminderCron } from "./lib/event-reminders";
 
 const rawPort = process.env["PORT"];
 
@@ -159,6 +160,11 @@ async function runMigrations() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS other_group_id INTEGER REFERENCES other_groups(id) ON DELETE SET NULL`,
+    // Auto-reminders for ticket requests and signups
+    `ALTER TABLE event_ticket_requests ADD COLUMN IF NOT EXISTS week_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_ticket_requests ADD COLUMN IF NOT EXISTS day_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS week_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS day_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
   ];
   for (const m of migrations) {
     try {
@@ -243,5 +249,6 @@ runMigrations().then(() => runOneTimeFixes()).then(() => initDb()).then(async ()
     startBandReminderCron();
     startDebriefReminderCron();
     startOpenMicCron();
+    startEventReminderCron();
   });
 });
