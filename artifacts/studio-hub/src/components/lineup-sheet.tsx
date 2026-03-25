@@ -74,8 +74,11 @@ function groupInvitesByMember(invites: BandInvite[]): InviteGroup[] {
     const anyConfirmed = group.some(i => i.status === "confirmed");
     const allDeclined = group.every(i => i.status === "declined");
     const aggStatus: "confirmed" | "declined" | "pending" = anyConfirmed ? "confirmed" : allDeclined ? "declined" : "pending";
-    // Attendance status: take from first record (they should all be the same for a member)
-    const attendanceStatus = group[0].attendanceStatus ?? "invited";
+    // Attendance status: if ANY contact is confirmed, the student is confirmed.
+    // Only show not_attending if ALL contacts are marked not_attending.
+    const anyAttendanceConfirmed = group.some(i => i.attendanceStatus === "confirmed");
+    const allNotAttending = group.every(i => i.attendanceStatus === "not_attending");
+    const attendanceStatus = anyAttendanceConfirmed ? "confirmed" : allNotAttending ? "not_attending" : "invited";
     const label = group[0].memberName ?? group[0].contactName ?? group[0].contactEmail;
     const contactLine = group.map(i => i.contactName ?? i.contactEmail).filter(Boolean).join(", ");
     // Use the first pending invite's token; fall back to first token in the group
