@@ -24,23 +24,17 @@ async function sendReminderEmail(
   isReminder: boolean,
   daysOut: number,
 ) {
-  const confirmLink = confirmationToken ? `${BASE_URL}/api/staff-confirm/${confirmationToken}` : null;
   const subject = isReminder
     ? `[TMS Reminder] ${daysOut === 1 ? "Tomorrow" : "1 Week Away"}: ${roleName} — ${eventTitle}`
-    : `[TMS] You've been scheduled: ${roleName} — ${eventTitle}`;
-
-  const confirmSection = confirmLink
-    ? `\nPlease confirm your participation using the button below.\n`
-    : "";
+    : `[TMS] You're scheduled: ${roleName} — ${eventTitle}`;
 
   const emailBody = isReminder
-    ? `Hi ${employeeName},\n\nThis is a reminder that you're scheduled for an upcoming event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nSee you there!\n\nThanks,\nThe Music Space`
-    : `Hi ${employeeName},\n\nYou've been assigned to the following event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nIf you have any questions, reply to this email or contact your manager.\n\nThanks,\nThe Music Space`;
+    ? `Hi ${employeeName},\n\nThis is a reminder that you're scheduled for an upcoming event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}\nSee you there!\n\nThanks,\nThe Music Space`
+    : `Hi ${employeeName},\n\nYou've been scheduled for the following event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}\nIf you have any questions, reply to this email or contact your manager.\n\nThanks,\nThe Music Space`;
 
   const html = buildHtmlEmail({
     recipientName: employeeName,
     body: emailBody,
-    ...(confirmLink ? { ctaLabel: isReminder ? "Confirm Attendance" : "Confirm Participation", ctaUrl: confirmLink } : {}),
   });
 
   const auth = createAuthedClient(

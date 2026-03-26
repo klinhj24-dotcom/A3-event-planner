@@ -1,17 +1,9 @@
 import { Router } from "express";
-import { randomUUID } from "crypto";
-import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable, usersTable } from "@workspace/db";
+import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
-import { google } from "googleapis";
-import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
 
 const router = Router();
-
-const BASE_URL = process.env.PUBLIC_BASE_URL
-  || (process.env.REPLIT_DOMAINS?.split(",")[0]
-    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-    : "https://event-mgmt.replit.app");
 
 function requireAuth(req: any, res: any): boolean {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return false; }
@@ -27,9 +19,8 @@ const DEFAULT_ROLES = [
   { name: "Photographer",   color: "#3b82f6", sortOrder: 4 },
 ];
 
-// ── Email + calendar helper ───────────────────────────────────────────────────
-async function sendStaffNotificationEmail(
-  senderUserId: number,
+// ── Calendar push helper (no emails — staff are auto-confirmed on assignment) ──
+async function pushStaffCalendarEvent(
   slotId: number,
   employeeId: number,
   eventId: number,
@@ -39,75 +30,19 @@ async function sendStaffNotificationEmail(
   existingCalEventId?: string | null,
 ) {
   try {
-    const [senderUser] = await db.select().from(usersTable).where(eq(usersTable.id, senderUserId));
-    if (!senderUser?.googleAccessToken || !senderUser?.googleRefreshToken) return;
-
     const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
-    const recipientEmail = employee?.email;
-    if (!recipientEmail) return;
-
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
-    if (!event || event.status !== "confirmed") {
-      console.log(`[staffing] Skipping assignment email for slot ${slotId} — event is not confirmed (status: ${event?.status ?? "unknown"})`);
-      return;
-    }
     const [roleType] = roleTypeId
       ? await db.select().from(staffRoleTypesTable).where(eq(staffRoleTypesTable.id, roleTypeId))
       : [undefined];
 
-    // Generate confirmation token
-    const token = randomUUID();
-    await db.update(eventStaffSlotsTable)
-      .set({ confirmationToken: token, confirmed: false })
-      .where(eq(eventStaffSlotsTable.id, slotId));
+    if (!employee || !event) return;
 
-    const confirmLink = `${BASE_URL}/api/staff-confirm/${token}`;
-    const eventDate = event?.startDate
-      ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-      : "";
-    const shiftStart = startTime
-      ? new Date(startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-      : null;
-    const shiftEnd = endTime
-      ? new Date(endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })
-      : null;
-    const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
-
-    const from = senderUser.googleEmail ?? senderUser.email ?? "";
-    const rolePart = roleType?.name ? `${roleType.name} — ` : "";
-    const subject = `[TMS] You've been scheduled: ${rolePart}${event?.title ?? ""}`;
-    const emailBody =
-      `Hi ${employee.name},\n\n` +
-      `You've been assigned to the following event:\n\n` +
-      `  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n` +
-      (roleType?.name ? `  Role:  ${roleType.name}\n` : "") +
-      `${shiftLine}\n` +
-      `Please confirm your participation using the button below.\n\n` +
-      `If you have any questions, reply to this email or contact your manager.\n\n` +
-      `Thanks,\nThe Music Space`;
-    const html = buildHtmlEmail({ recipientName: employee.name, body: emailBody, ctaLabel: "Confirm Participation", ctaUrl: confirmLink });
-
-    const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
-    auth.on("tokens", async (tokens) => {
-      if (tokens.access_token) {
-        await db.update(usersTable).set({
-          googleAccessToken: tokens.access_token,
-          googleRefreshToken: tokens.refresh_token ?? senderUser.googleRefreshToken,
-          googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        }).where(eq(usersTable.id, senderUserId));
-      }
-    });
-    const gmail = google.gmail({ version: "v1", auth });
-    const raw = makeHtmlEmail({ to: recipientEmail, from, subject, html });
-    await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-    console.log(`[staffing] Sent assignment notification to ${recipientEmail}`);
-
-    // Push to employee calendar (interns → intern calendar, everyone else → staff calendar)
     const calEventId = await pushToEmployeeCalendar({
-      eventTitle: event?.title ?? "Event",
-      eventLocation: event?.location,
-      eventStartDate: event?.startDate,
-      eventEndDate: event?.endDate,
+      eventTitle: event.title ?? "Event",
+      eventLocation: event.location,
+      eventStartDate: event.startDate,
+      eventEndDate: event.endDate,
       employeeName: employee.name,
       employeeRole: employee.role,
       role: roleType?.name,
@@ -122,7 +57,7 @@ async function sendStaffNotificationEmail(
       console.log(`[staffing] Pushed to employee calendar: ${calEventId}`);
     }
   } catch (err) {
-    console.error("Staff slot assignment notification failed:", err);
+    console.error("Staff slot calendar push failed:", err);
   }
 }
 
@@ -298,6 +233,8 @@ router.post("/events/:id/staff-slots", async (req, res) => {
         eventDay: eventDay ? Number(eventDay) : 1,
         isAutoCreated: isAutoCreated ?? false,
         bonusPay: bonusPay != null ? bonusPay.toString() : null,
+        // Auto-confirm immediately — no email invite needed
+        confirmed: assignedEmployeeId ? true : false,
       })
       .returning();
 
@@ -307,11 +244,10 @@ router.post("/events/:id/staff-slots", async (req, res) => {
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
       .where(eq(eventStaffSlotsTable.id, slot.id));
 
-    // Fire-and-forget notification if assigned on creation
+    // Push to calendar (no email)
     if (assignedEmployeeId) {
-      const userId = (req.user as any).id;
-      sendStaffNotificationEmail(
-        userId, slot.id, Number(assignedEmployeeId), eventId,
+      pushStaffCalendarEvent(
+        slot.id, Number(assignedEmployeeId), eventId,
         roleTypeId ? Number(roleTypeId) : null,
         slot.startTime, slot.endTime,
       );
@@ -349,7 +285,8 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         ...(notes !== undefined ? { notes: notes || null } : {}),
         ...(eventDay !== undefined ? { eventDay: Number(eventDay) } : {}),
         ...(bonusPay !== undefined ? { bonusPay: bonusPay != null ? bonusPay.toString() : null } : {}),
-        ...(assigneeChanged ? { confirmed: false, confirmationToken: null, weekReminderSent: false, dayReminderSent: false } : {}),
+        // Auto-confirm on assignment; clear reminder flags if assignee changes
+        ...(assigneeChanged ? { confirmed: newAssigneeId != null ? true : false, confirmationToken: null, weekReminderSent: false, dayReminderSent: false } : {}),
         updatedAt: new Date(),
       })
       .where(eq(eventStaffSlotsTable.id, slotId));
@@ -360,14 +297,13 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
       .where(eq(eventStaffSlotsTable.id, slotId));
 
-    // Fire-and-forget notification when a new employee is assigned
+    // Push to calendar when a new employee is assigned (no email)
     if (assigneeChanged && newAssigneeId != null) {
-      const userId = (req.user as any).id;
-      sendStaffNotificationEmail(
-        userId, slotId, newAssigneeId, prev.eventId,
+      pushStaffCalendarEvent(
+        slotId, newAssigneeId, prev.eventId,
         roleTypeId !== undefined ? (roleTypeId ? Number(roleTypeId) : null) : prev.roleTypeId,
         full.startTime, full.endTime,
-        null, // new assignee — start fresh calendar event
+        null,
       );
     }
     // If employee was removed, clean up calendar event
@@ -393,11 +329,8 @@ router.post("/events/:id/staff-slots/:slotId/resend-notification", async (req, r
       .where(eq(eventStaffSlotsTable.id, slotId));
     if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
     if (!slot.assignedEmployeeId) { res.status(400).json({ error: "No employee assigned to this slot" }); return; }
-    const userId = (req.user as any).id;
-    sendStaffNotificationEmail(
-      userId, slotId, slot.assignedEmployeeId, slot.eventId,
-      slot.roleTypeId, slot.startTime, slot.endTime,
-    );
+    // Re-push calendar event only (no email)
+    pushStaffCalendarEvent(slotId, slot.assignedEmployeeId, slot.eventId, slot.roleTypeId, slot.startTime, slot.endTime);
     res.json({ ok: true });
   } catch (err) {
     console.error("resend staff notification error:", err);
