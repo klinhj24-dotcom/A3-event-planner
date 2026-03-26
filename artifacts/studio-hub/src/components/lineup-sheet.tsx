@@ -537,11 +537,11 @@ function SlotRow({
             {slot.otherGroupId && !slot.bandId && (
               <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">Other Group</span>
             )}
-            {slot.type === "act" && slot.bandId && !slot.confirmed && (
-              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border ${inviteStatusMeta.cls}`}>{inviteStatusMeta.label}</span>
-            )}
             {slot.durationMinutes && (
               <span className="text-[9px] text-muted-foreground">{slot.durationMinutes}m</span>
+            )}
+            {slot.type === "act" && slot.bandId && !slot.confirmed && slot.inviteStatus !== "not_sent" && (
+              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border ${inviteStatusMeta.cls}`}>{inviteStatusMeta.label}</span>
             )}
           </div>
         </div>
@@ -550,13 +550,6 @@ function SlotRow({
         {isTwoDay && (
           <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] shrink-0 rounded-full px-2 font-semibold ${slot.eventDay === 2 ? "bg-orange-500/15 text-orange-400 border-orange-500/20" : "bg-sky-500/15 text-sky-400 border-sky-500/20"}`}>
             Day {slot.eventDay ?? 1}
-          </Badge>
-        )}
-
-        {/* Invite status badge — desktop only, hidden when slot is fully confirmed */}
-        {slot.type === "act" && slot.bandId && !slot.confirmed && (
-          <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] shrink-0 rounded-full px-2 ${inviteStatusMeta.cls}`}>
-            {inviteStatusMeta.label}
           </Badge>
         )}
 
@@ -571,10 +564,17 @@ function SlotRow({
           </Badge>
         )}
 
-        {slot.type === "act" && slot.confirmed && (
-          <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shrink-0 gap-1">
-            <CheckCircle2 className="h-2.5 w-2.5" />Confirmed
-          </Badge>
+        {/* Status badge — Confirmed or Responding, always in the same position after duration/buffer */}
+        {slot.type === "act" && slot.bandId && (
+          slot.confirmed ? (
+            <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shrink-0 gap-1">
+              <CheckCircle2 className="h-2.5 w-2.5" />Confirmed
+            </Badge>
+          ) : slot.inviteStatus !== "not_sent" ? (
+            <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] shrink-0 rounded-full px-2 ${inviteStatusMeta.cls}`}>
+              {inviteStatusMeta.label}
+            </Badge>
+          ) : null
         )}
 
         <button onClick={() => setExpanded(e => !e)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
