@@ -192,7 +192,7 @@ const SLOT_TYPE_META: Record<string, { label: string; icon: React.ReactNode; col
 const INVITE_STATUS_META: Record<string, { label: string; cls: string }> = {
   not_sent:  { label: "Not Invited", cls: "bg-muted/40 text-muted-foreground" },
   sent:      { label: "Invite Sent", cls: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
-  confirmed: { label: "Confirmed",   cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  confirmed: { label: "Responding",  cls: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
   declined:  { label: "Declined",    cls: "bg-red-500/15 text-red-400 border-red-500/20" },
 };
 
@@ -857,7 +857,7 @@ function SlotRow({
                   <Send className="h-3 w-3" />
                   {sendingInvite ? "Sending…" : slot.inviteStatus === "not_sent" ? "Send Invite" : "Re-invite New Contacts"}
                 </Button>
-                {slot.inviteStatus !== "not_sent" && (slot.confirmed || slot.inviteStatus === "confirmed") && !slot.confirmationSent && (
+                {slot.inviteStatus !== "not_sent" && slot.confirmed && !slot.confirmationSent && (
                   <Button
                     size="sm"
                     className="rounded-lg h-7 text-xs gap-1.5 flex-1 bg-emerald-600 hover:bg-emerald-500"
