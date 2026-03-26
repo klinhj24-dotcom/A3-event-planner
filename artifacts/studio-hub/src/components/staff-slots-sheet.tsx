@@ -427,30 +427,30 @@ export function StaffSlotsSheet({
     <>
       <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
         <SheetContent side="right" className="w-full sm:w-full sm:max-w-2xl p-0 flex flex-col overflow-hidden">
-          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/30 shrink-0">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <SheetTitle className="font-display text-xl">
-                  Staff Schedule — <span className="text-muted-foreground font-normal">{event.title}</span>
-                </SheetTitle>
-                {event.startDate && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {format(new Date(event.startDate), "EEE, MMM d")}
-                    {event.endDate && !sameDay(event.startDate, event.endDate)
-                      ? ` – ${format(new Date(event.endDate), "EEE, MMM d")}`
-                      : ""}
-                    {event.location ? ` · ${event.location}` : ""}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="outline" className="text-xs rounded-lg">
-                  {filledSlots}/{totalSlots} filled
-                </Badge>
-                <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => openAddDialog()}>
-                  <Plus className="h-3.5 w-3.5" /> Add Slot
-                </Button>
-              </div>
+          <SheetHeader className="px-6 pt-5 pb-4 border-b border-border/30 shrink-0">
+            {/* Title row — pr-12 keeps clear of the absolute X button */}
+            <div className="pr-12">
+              <SheetTitle className="font-display text-xl leading-tight">
+                Staff Schedule — <span className="text-muted-foreground font-normal">{event.title}</span>
+              </SheetTitle>
+              {event.startDate && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {format(new Date(event.startDate), "EEE, MMM d")}
+                  {event.endDate && !sameDay(event.startDate, event.endDate)
+                    ? ` – ${format(new Date(event.endDate), "EEE, MMM d")}`
+                    : ""}
+                  {event.location ? ` · ${event.location}` : ""}
+                </p>
+              )}
+            </div>
+            {/* Controls row — sits below the title, no collision with X */}
+            <div className="flex items-center gap-2 mt-3">
+              <Badge variant="outline" className="text-xs rounded-lg">
+                {filledSlots}/{totalSlots} filled
+              </Badge>
+              <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => openAddDialog()}>
+                <Plus className="h-3.5 w-3.5" /> Add Slot
+              </Button>
             </div>
           </SheetHeader>
 
