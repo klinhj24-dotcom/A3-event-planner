@@ -437,12 +437,24 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
         .set({ attendanceStatus: "confirmed", status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
         .where(inArray(eventBandInvitesTable.id, inviteIds));
 
-      // Update slot inviteStatus
+      // Update slot inviteStatus and auto-confirm slot if all members are now confirmed/not_attending
       const allSlotInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
-      const anyConfirmed = allSlotInvites.some(i => i.status === "confirmed") || true;
+      const anyInviteConfirmed = allSlotInvites.some(i => i.status === "confirmed");
       const allDeclined = allSlotInvites.every(i => i.status === "declined");
-      const newSlotStatus = anyConfirmed ? "confirmed" : allDeclined ? "declined" : "sent";
-      await db.update(eventLineupTable).set({ inviteStatus: newSlotStatus, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
+      const newSlotStatus = anyInviteConfirmed ? "confirmed" : allDeclined ? "declined" : "sent";
+      // Group invites by member and check if all members are resolved (confirmed or not_attending)
+      const memberMap = new Map<string, typeof allSlotInvites>();
+      for (const inv of allSlotInvites) {
+        const key = inv.memberId ? `m:${inv.memberId}` : `c:${inv.id}`;
+        if (!memberMap.has(key)) memberMap.set(key, []);
+        memberMap.get(key)!.push(inv);
+      }
+      const allMembersResolved = Array.from(memberMap.values()).every(group =>
+        group.some(i => i.attendanceStatus === "confirmed") || group.every(i => i.attendanceStatus === "not_attending")
+      );
+      await db.update(eventLineupTable)
+        .set({ inviteStatus: newSlotStatus, confirmed: allMembersResolved, updatedAt: new Date() })
+        .where(eq(eventLineupTable.id, slotId));
 
       // Send confirmation email to contacts that weren't already confirmed
       if (notYetConfirmed.length > 0) {
@@ -497,6 +509,21 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
       await db.update(eventBandInvitesTable)
         .set({ attendanceStatus, updatedAt: new Date() })
         .where(inArray(eventBandInvitesTable.id, inviteIds));
+
+      // Also recalculate slot.confirmed after any attendance change
+      const allSlotInvites2 = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
+      const memberMap2 = new Map<string, typeof allSlotInvites2>();
+      for (const inv of allSlotInvites2) {
+        const key = inv.memberId ? `m:${inv.memberId}` : `c:${inv.id}`;
+        if (!memberMap2.has(key)) memberMap2.set(key, []);
+        memberMap2.get(key)!.push(inv);
+      }
+      const allMembersResolved2 = Array.from(memberMap2.values()).every(group =>
+        group.some(i => i.attendanceStatus === "confirmed") || group.every(i => i.attendanceStatus === "not_attending")
+      );
+      await db.update(eventLineupTable)
+        .set({ confirmed: allMembersResolved2, updatedAt: new Date() })
+        .where(eq(eventLineupTable.id, slotId));
     }
 
     res.json({ ok: true });

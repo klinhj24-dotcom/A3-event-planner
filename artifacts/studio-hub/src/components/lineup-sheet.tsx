@@ -571,14 +571,10 @@ function SlotRow({
           </Badge>
         )}
 
-        {slot.type === "act" && (
-          <button
-            title={slot.confirmed ? "Confirmed — click to unmark" : "Mark as confirmed"}
-            onClick={() => onUpdate(slot.id, { confirmed: !slot.confirmed })}
-            className={`shrink-0 transition-colors p-0.5 ${slot.confirmed ? "text-emerald-500 hover:text-emerald-400" : "text-muted-foreground/40 hover:text-emerald-500"}`}
-          >
-            {slot.confirmed ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-          </button>
+        {slot.type === "act" && slot.confirmed && (
+          <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shrink-0 gap-1">
+            <CheckCircle2 className="h-2.5 w-2.5" />Confirmed
+          </Badge>
         )}
 
         <button onClick={() => setExpanded(e => !e)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
