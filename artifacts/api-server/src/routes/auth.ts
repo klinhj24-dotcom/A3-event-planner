@@ -27,11 +27,32 @@ function setSessionCookie(res: Response, sid: string) {
 }
 
 // ── GET /api/auth/user ────────────────────────────────────────────────────────
-router.get("/auth/user", (req: Request, res: Response) => {
+router.get("/auth/user", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.json(GetCurrentAuthUserResponse.parse({ isAuthenticated: false, user: null }));
+    return;
+  }
+  // Always do a fresh DB read so canViewFinances (and other flags) are
+  // up-to-date even for sessions that were created before the field existed.
+  const [fresh] = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      username: usersTable.username,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      profileImageUrl: usersTable.profileImageUrl,
+      role: usersTable.role,
+      canViewFinances: usersTable.canViewFinances,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, (req.user as any).id));
+
+  const user = fresh ?? (req.user as any);
   res.json(
     GetCurrentAuthUserResponse.parse({
-      isAuthenticated: req.isAuthenticated(),
-      user: req.isAuthenticated() ? req.user : null,
+      isAuthenticated: true,
+      user: { ...user, canViewFinances: user.canViewFinances ?? false },
     }),
   );
 });
@@ -69,6 +90,7 @@ router.post("/login", async (req: Request, res: Response) => {
       lastName: user.lastName,
       profileImageUrl: user.profileImageUrl,
       role: user.role,
+      canViewFinances: user.canViewFinances ?? false,
     },
   };
 

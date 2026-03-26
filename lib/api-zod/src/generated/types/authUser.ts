@@ -19,4 +19,5 @@ export interface AuthUser {
   /** @nullable */
   profileImageUrl?: string | null;
   role?: string | null;
+  canViewFinances?: boolean | null;
 }
