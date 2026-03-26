@@ -249,12 +249,15 @@ function SlotCard({
     );
   }
 
+  const openEdit = () => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "", minutesBefore: slot.minutesBefore ?? null, minutesAfter: slot.minutesAfter ?? null }); setEditing(true); };
+
   return (
     <div className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${filled ? "border-border/30 bg-muted/20" : "border-dashed border-border/50 bg-transparent"}`}>
       <div className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-full ${filled ? "bg-primary/10 text-primary" : "bg-muted/40 text-muted-foreground/40"}`}>
         <UserRound className="h-3.5 w-3.5" />
       </div>
-      <div className="flex-1 min-w-0">
+      {/* Tappable body — opens edit on mobile tap */}
+      <button className="flex-1 min-w-0 text-left" onClick={openEdit}>
         <div className="flex items-center gap-1.5">
           <p className={`text-sm font-medium truncate ${filled ? "text-foreground" : "text-muted-foreground/50 italic"}`}>
             {filled ? slot.assignedEmployeeName : "Unassigned"}
@@ -274,23 +277,24 @@ function SlotCard({
             {[slot.minutesBefore != null && `${slot.minutesBefore} min early`, slot.minutesAfter != null && `stay ${slot.minutesAfter} min`].filter(Boolean).join(" · ")}
           </p>
         )}
-      </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      </button>
+      {/* Action buttons: always visible on mobile, hover-only on desktop */}
+      <div className="flex items-center gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
         {filled && (
           <button
             title="Resend assignment email"
             disabled={resending}
-            onClick={async () => { setResending(true); try { await onResend(slot.id); } finally { setResending(false); } }}
-            className="text-muted-foreground hover:text-primary p-1 transition-colors disabled:opacity-50"
+            onClick={async (e) => { e.stopPropagation(); setResending(true); try { await onResend(slot.id); } finally { setResending(false); } }}
+            className="text-muted-foreground hover:text-primary p-2 transition-colors disabled:opacity-50"
           >
-            {resending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+            {resending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           </button>
         )}
-        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "", minutesBefore: slot.minutesBefore ?? null, minutesAfter: slot.minutesAfter ?? null }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
-          <Pencil className="h-3 w-3" />
+        <button onClick={(e) => { e.stopPropagation(); openEdit(); }} className="text-muted-foreground hover:text-foreground p-2">
+          <Pencil className="h-3.5 w-3.5" />
         </button>
-        <button onClick={() => onDelete(slot.id)} className="text-muted-foreground hover:text-destructive p-1">
-          <Trash2 className="h-3 w-3" />
+        <button onClick={(e) => { e.stopPropagation(); onDelete(slot.id); }} className="text-muted-foreground hover:text-destructive p-2">
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
