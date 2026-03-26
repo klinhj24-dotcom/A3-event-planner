@@ -738,6 +738,8 @@ async function sendEmployeeAssignmentEmail(
 ) {
   try {
     if (!emp.email) return;
+    // Only notify staff if the event is confirmed — same rule as the slot-based path
+    if (event.status !== "confirmed") return;
 
     // Get sender with Google tokens
     const users = await db.select().from(usersTable);
