@@ -1,7 +1,7 @@
 import { db, eventStaffSlotsTable, employeesTable, eventsTable, staffRoleTypesTable, usersTable } from "@workspace/db";
 import { and, eq, isNotNull, lte, gte, sql } from "drizzle-orm";
 import { google } from "googleapis";
-import { createAuthedClient, makeRawEmail } from "./google";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
 
 const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
   ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
@@ -30,12 +30,18 @@ async function sendReminderEmail(
     : `[TMS] You've been scheduled: ${roleName} — ${eventTitle}`;
 
   const confirmSection = confirmLink
-    ? `\nPlease confirm your participation:\n  ${confirmLink}\n`
+    ? `\nPlease confirm your participation using the button below.\n`
     : "";
 
-  const body = isReminder
+  const emailBody = isReminder
     ? `Hi ${employeeName},\n\nThis is a reminder that you're scheduled for an upcoming event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nSee you there!\n\nThanks,\nThe Music Space`
     : `Hi ${employeeName},\n\nYou've been assigned to the following event:\n\n  Event: ${eventTitle}\n  Role: ${roleName}\n  Date: ${eventDate}\n${shiftLine}${confirmSection}\nIf you have any questions, reply to this email or contact your manager.\n\nThanks,\nThe Music Space`;
+
+  const html = buildHtmlEmail({
+    recipientName: employeeName,
+    body: emailBody,
+    ...(confirmLink ? { ctaLabel: isReminder ? "Confirm Attendance" : "Confirm Participation", ctaUrl: confirmLink } : {}),
+  });
 
   const auth = createAuthedClient(
     senderUser.googleAccessToken,
@@ -56,7 +62,7 @@ async function sendReminderEmail(
 
   const gmail = google.gmail({ version: "v1", auth });
   const from = senderUser.googleEmail ?? senderUser.email ?? "";
-  const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
+  const raw = makeHtmlEmail({ to: recipientEmail, from, subject, html });
   await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
 }
 

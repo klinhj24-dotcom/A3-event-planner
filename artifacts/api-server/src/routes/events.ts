@@ -751,7 +751,7 @@ async function sendEmployeeAssignmentEmail(
       : "";
     const from = sender.googleEmail ?? sender.email ?? "";
     const subject = `[TMS] You've been scheduled: ${event.title}${eventDate ? ` — ${eventDate}` : ""}`;
-    const body =
+    const emailBody =
       `Hi ${emp.name},\n\n` +
       `You've been assigned to the following event:\n\n` +
       `  Event: ${event.title}${eventDate ? ` — ${eventDate}` : ""}\n` +
@@ -760,9 +760,10 @@ async function sendEmployeeAssignmentEmail(
       `\nYou can view your schedule in the TMS portal at any time.\n\n` +
       `If you have any questions, reply to this email or contact your manager.\n\n` +
       `Thanks,\nThe Music Space`;
+    const html = buildHtmlEmail({ recipientName: emp.name, body: emailBody });
 
     const gmail = google.gmail({ version: "v1", auth });
-    const raw = makeRawEmail({ to: emp.email, from, subject, body });
+    const raw = makeHtmlEmail({ to: emp.email, from, subject, html });
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
     console.log(`[employee-assign] Sent notification to ${emp.email}`);
 

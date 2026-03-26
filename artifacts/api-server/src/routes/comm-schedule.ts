@@ -5,7 +5,7 @@ import { commScheduleRulesTable, commTasksTable, eventsTable, usersTable, employ
 import { eq, desc, and, lt, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { addDays, subDays } from "date-fns";
-import { createAuthedClient, makeRawEmail, encodeSubject } from "../lib/google";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail, encodeSubject } from "../lib/google";
 
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
@@ -608,7 +608,8 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
           const eventDate = event?.startDate ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
           const from = senderUser.googleEmail ?? senderUser.email ?? "";
           const subject = `[TMS] Comm task assigned to you: ${taskName}`;
-          const body = `Hi ${employee.name},\n\nYou've been assigned a communications task in the TMS portal:\n\n  Task: ${taskName}${task.channel ? ` (${task.channel})` : ""}\n  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n  Due: ${dueDateStr}\n\nPlease log in to the TMS portal to view your full task list.\n\nThanks,\nThe Music Space`;
+          const emailBody = `Hi ${employee.name},\n\nYou've been assigned a communications task in the TMS portal:\n\n  Task: ${taskName}${task.channel ? ` (${task.channel})` : ""}\n  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n  Due: ${dueDateStr}\n\nPlease log in to the TMS portal to view your full task list.\n\nThanks,\nThe Music Space`;
+          const html = buildHtmlEmail({ recipientName: employee.name, body: emailBody });
           const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
           auth.on("tokens", async (tokens) => {
             if (tokens.access_token) {
@@ -616,7 +617,7 @@ router.patch("/comm-schedule/tasks/:id", async (req, res) => {
             }
           });
           const gmail = google.gmail({ version: "v1", auth });
-          const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
+          const raw = makeHtmlEmail({ to: recipientEmail, from, subject, html });
           await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
         } catch (notifErr) {
           console.error("Task assignment notification failed:", notifErr);
@@ -662,7 +663,8 @@ router.post("/comm-schedule/tasks/bulk-assign", async (req, res) => {
           const eventDate = event?.startDate ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
           const from = senderUser.googleEmail ?? senderUser.email ?? "";
           const subject = `[TMS] ${updated.length} comm tasks assigned to you`;
-          const body = `Hi ${employee.name},\n\nYou've been assigned ${updated.length} communications task${updated.length !== 1 ? "s" : ""} in the TMS portal:\n\n  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n  Tasks: ${updated.length}\n\nPlease log in to the TMS portal to view and complete them.\n\nThanks,\nThe Music Space`;
+          const emailBody = `Hi ${employee.name},\n\nYou've been assigned ${updated.length} communications task${updated.length !== 1 ? "s" : ""} in the TMS portal:\n\n  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n  Tasks: ${updated.length}\n\nPlease log in to the TMS portal to view and complete them.\n\nThanks,\nThe Music Space`;
+          const html = buildHtmlEmail({ recipientName: employee.name, body: emailBody });
           const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
           auth.on("tokens", async (tokens) => {
             if (tokens.access_token) {
@@ -670,7 +672,7 @@ router.post("/comm-schedule/tasks/bulk-assign", async (req, res) => {
             }
           });
           const gmail = google.gmail({ version: "v1", auth });
-          const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
+          const raw = makeHtmlEmail({ to: recipientEmail, from, subject, html });
           await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
         } catch (notifErr) {
           console.error("Bulk assign notification failed:", notifErr);

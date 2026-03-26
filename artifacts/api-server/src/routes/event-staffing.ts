@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable, usersTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
 import { google } from "googleapis";
-import { createAuthedClient, makeRawEmail } from "../lib/google";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
 
 const router = Router();
@@ -76,16 +76,16 @@ async function sendStaffNotificationEmail(
     const from = senderUser.googleEmail ?? senderUser.email ?? "";
     const rolePart = roleType?.name ? `${roleType.name} — ` : "";
     const subject = `[TMS] You've been scheduled: ${rolePart}${event?.title ?? ""}`;
-    const body =
+    const emailBody =
       `Hi ${employee.name},\n\n` +
       `You've been assigned to the following event:\n\n` +
       `  Event: ${event?.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n` +
       (roleType?.name ? `  Role:  ${roleType.name}\n` : "") +
       `${shiftLine}\n` +
-      `Please confirm your participation by clicking the link below:\n` +
-      `  ${confirmLink}\n\n` +
+      `Please confirm your participation using the button below.\n\n` +
       `If you have any questions, reply to this email or contact your manager.\n\n` +
       `Thanks,\nThe Music Space`;
+    const html = buildHtmlEmail({ recipientName: employee.name, body: emailBody, ctaLabel: "Confirm Participation", ctaUrl: confirmLink });
 
     const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
     auth.on("tokens", async (tokens) => {
@@ -98,7 +98,7 @@ async function sendStaffNotificationEmail(
       }
     });
     const gmail = google.gmail({ version: "v1", auth });
-    const raw = makeRawEmail({ to: recipientEmail, from, subject, body });
+    const raw = makeHtmlEmail({ to: recipientEmail, from, subject, html });
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
     console.log(`[staffing] Sent assignment notification to ${recipientEmail}`);
 

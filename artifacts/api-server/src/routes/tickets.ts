@@ -553,7 +553,7 @@ router.put("/events/:id/ticket-requests/:requestId", async (req, res) => {
           const gmail = google.gmail({ version: "v1", auth });
           const studentName = [updated.studentFirstName, updated.studentLastName].filter(Boolean).join(" ") || "your student";
           const subject = `[TMS] Recital song update — ${studentName}`;
-          const body =
+          const emailBody =
             `Hi ${updated.contactFirstName},\n\n` +
             `We've updated the recital song for ${studentName}.\n\n` +
             `  Recital Song: ${recitalSong}\n` +
@@ -561,7 +561,8 @@ router.put("/events/:id/ticket-requests/:requestId", async (req, res) => {
             `  Event: the ${event.title}\n\n` +
             `If you have any questions, please reply to this email.\n\n` +
             `Thanks,\nThe Music Space`;
-          const raw = makeRawEmail({ to: updated.contactEmail, from: sender.googleEmail ?? sender.email ?? "", subject, body });
+          const html = buildHtmlEmail({ recipientName: updated.contactFirstName ?? undefined, body: emailBody });
+          const raw = makeHtmlEmail({ to: updated.contactEmail, from: sender.googleEmail ?? sender.email ?? "", subject, html });
           await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
           console.log(`[tickets] Sent recital song update email to ${updated.contactEmail}`);
         } catch (err) {
