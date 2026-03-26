@@ -1679,7 +1679,7 @@ export function LineupSheet({ event, open, onClose }: {
   const invitedCount = actSlots.filter(s => s.inviteStatus !== "not_sent").length;
   const confirmedCount = actSlots.filter(s => s.inviteStatus === "confirmed").length;
   const uninvitedCount = actSlots.filter(s => s.inviteStatus === "not_sent").length;
-  const unlockedConfirmedCount = actSlots.filter(s => s.inviteStatus !== "not_sent" && (s.confirmed || s.inviteStatus === "confirmed") && !s.confirmationSent).length;
+  const unlockedConfirmedCount = actSlots.filter(s => s.confirmed && !s.confirmationSent).length;
 
   function submitAddSlot() {
     addSlot({
