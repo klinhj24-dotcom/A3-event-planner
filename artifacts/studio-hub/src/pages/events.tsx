@@ -2476,21 +2476,6 @@ export default function Events() {
                         </FormItem>
                       )} />
                     </div>}
-                    {/* Revenue split */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <FormField control={form.control} name="revenueSharePercent" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">% of ticket revenue kept <span className="font-normal text-muted-foreground">100 = keep all</span></FormLabel>
-                          <FormControl><Input type="number" min="0" max="100" placeholder="100" className="rounded-xl h-9" {...field} value={field.value ?? 100} onChange={e => field.onChange(e.target.value === "" ? 100 : Number(e.target.value))} /></FormControl>
-                        </FormItem>
-                      )} />
-                      <FormField control={form.control} name="perTicketVenueFee" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Per-ticket venue fee ($) <span className="font-normal text-muted-foreground">owed to venue</span></FormLabel>
-                          <FormControl><Input type="number" min="0" placeholder="0.00" className="rounded-xl h-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.value)} /></FormControl>
-                        </FormItem>
-                      )} />
-                    </div>
                     <FormField control={form.control} name="calendarTag" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center"><Tag className="h-3 w-3 mr-1" /> Website Calendar Tag</FormLabel>
@@ -2571,18 +2556,41 @@ export default function Events() {
 
                     {/* Ticketing section */}
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
-                      <h4 className="font-semibold text-sm flex items-center gap-1.5">
-                        <Ticket className="h-4 w-4 text-primary" /> Ticketing
-                      </h4>
-                      {/* Source toggle */}
-                      <div className="grid grid-cols-3 gap-1.5 p-1 bg-background rounded-xl border border-border/50">
-                        {([["none","No Tickets"],["external","External Link"],["internal","Registration Form"]] as const).map(([val, label]) => (
+                      {/* Header with on/off toggle */}
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                          <Ticket className="h-4 w-4 text-primary" /> Ticketing
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (createTicketSource === "none") {
+                              setCreateTicketSource("external");
+                              form.setValue("ctaLabel", "TICKETS");
+                              form.setValue("ticketFormType", "none");
+                            } else {
+                              setCreateTicketSource("none");
+                              form.setValue("ticketFormType", "none");
+                              form.setValue("ctaLabel", "none");
+                              form.setValue("ticketsUrl", "");
+                              form.setValue("revenueSharePercent", 100);
+                            }
+                          }}
+                          className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${createTicketSource !== "none" ? "bg-primary" : "bg-input"}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${createTicketSource !== "none" ? "translate-x-4" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {createTicketSource !== "none" && (<>
+                      {/* Source sub-picker: External Link vs Registration Form */}
+                      <div className="grid grid-cols-2 gap-1.5 p-1 bg-background rounded-xl border border-border/50">
+                        {([["external","External Link"],["internal","Registration Form"]] as const).map(([val, label]) => (
                           <button key={val} type="button"
                             onClick={() => {
                               setCreateTicketSource(val);
                               if (val === "internal") { form.setValue("ticketFormType", "general"); form.setValue("ctaLabel", "REGISTER"); form.setValue("ticketsUrl", ""); }
-                              if (val === "external") { form.setValue("ticketFormType", "none"); }
-                              if (val === "none") { form.setValue("ticketFormType", "none"); form.setValue("ctaLabel", "none"); form.setValue("ticketsUrl", ""); }
+                              if (val === "external") { form.setValue("ticketFormType", "none"); form.setValue("ctaLabel", "TICKETS"); }
                             }}
                             className={`py-1.5 rounded-lg text-xs font-medium transition-all ${createTicketSource === val ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                           >{label}</button>
@@ -2675,44 +2683,56 @@ export default function Events() {
                         </div>
                       )}
 
-                      {/* Guest list — only for ticketed events */}
-                      {createTicketSource !== "none" && (
-                        <div className="pt-1 border-t border-border/30 space-y-3">
-                          <FormField control={form.control} name="allowGuestList" render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center gap-2.5">
-                                <button
-                                  type="button"
-                                  onClick={() => field.onChange(!field.value)}
-                                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${field.value ? "bg-primary" : "bg-input"}`}
-                                >
-                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${field.value ? "translate-x-4" : "translate-x-0"}`} />
-                                </button>
-                                <FormLabel className="text-xs font-medium cursor-pointer" onClick={() => field.onChange(!field.value)}>
-                                  Allow performer guest list
-                                </FormLabel>
-                              </div>
-                              <p className="text-[10px] text-muted-foreground ml-11">Performers register their guests via a unique link. Each student gets free admission.</p>
+                      {/* Ticket sale % */}
+                      <FormField control={form.control} name="revenueSharePercent" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Ticket sale % we keep <span className="font-normal text-muted-foreground">100 = keep all</span></FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input type="number" min="0" max="100" placeholder="100" className="rounded-xl h-9 pr-7" {...field} value={field.value ?? 100} onChange={e => field.onChange(e.target.value === "" ? 100 : Number(e.target.value))} />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">%</span>
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )} />
+
+                      {/* Guest list */}
+                      <div className="pt-1 border-t border-border/30 space-y-3">
+                        <FormField control={form.control} name="allowGuestList" render={({ field }) => (
+                          <FormItem>
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => field.onChange(!field.value)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${field.value ? "bg-primary" : "bg-input"}`}
+                              >
+                                <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${field.value ? "translate-x-4" : "translate-x-0"}`} />
+                              </button>
+                              <FormLabel className="text-xs font-medium cursor-pointer" onClick={() => field.onChange(!field.value)}>
+                                Allow performer guest list
+                              </FormLabel>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground ml-11">Performers register their guests via a unique link. Each student gets free admission.</p>
+                          </FormItem>
+                        )} />
+
+                        {form.watch("allowGuestList") && (
+                          <FormField control={form.control} name="guestListPolicy" render={({ field }) => (
+                            <FormItem className="ml-11">
+                              <FormLabel className="text-xs">Guest policy</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value ?? "students_only"}>
+                                <FormControl><SelectTrigger className="rounded-xl h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  <SelectItem value="students_only">Students only (no plus-ones)</SelectItem>
+                                  <SelectItem value="plus_one">Students + optional +1</SelectItem>
+                                  <SelectItem value="plus_two">Students + optional +2</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </FormItem>
                           )} />
-
-                          {form.watch("allowGuestList") && (
-                            <FormField control={form.control} name="guestListPolicy" render={({ field }) => (
-                              <FormItem className="ml-11">
-                                <FormLabel className="text-xs">Guest policy</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value ?? "students_only"}>
-                                  <FormControl><SelectTrigger className="rounded-xl h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="students_only">Students only (no plus-ones)</SelectItem>
-                                    <SelectItem value="plus_one">Students + optional +1</SelectItem>
-                                    <SelectItem value="plus_two">Students + optional +2</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )} />
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      </>)}
 
                       {/* Flyer URL always visible */}
                       <div className="pt-1 border-t border-border/30">
