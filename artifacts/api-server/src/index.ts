@@ -192,6 +192,26 @@ async function runOneTimeFixes() {
     console.error("[fix] Silent charge fix failed (non-fatal):", err);
   }
 
+  // Fix: recalculate slot.confirmed for all act slots based on actual attendance status.
+  // A slot is confirmed only when every invite is attendance_status='confirmed' or 'not_attending'
+  // and there is at least one invite. Corrects any slots manually confirmed via the old circle button.
+  try {
+    const result = await db.execute(sql.raw(`
+      UPDATE event_lineup el
+      SET confirmed = (
+        EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id)
+        AND NOT EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id AND attendance_status = 'invited')
+      ),
+      updated_at = NOW()
+      WHERE el.type = 'act' AND el.band_id IS NOT NULL
+    `));
+    const count = (result as any).rowCount ?? 0;
+    if (count > 0) console.log(`[fix] Recalculated confirmed status for ${count} act slot(s) based on attendance.`);
+    else console.log("[fix] No act slots to recalculate.");
+  } catch (err) {
+    console.error("[fix] Slot confirmed recalculation failed (non-fatal):", err);
+  }
+
   // Fix: sync attendance_status for invites where family has already confirmed via invite link.
   // When the attendanceStatus column was added it defaulted to 'invited'. Any contact whose
   // status is 'confirmed' (clicked their link) should have attendanceStatus = 'confirmed' too.
