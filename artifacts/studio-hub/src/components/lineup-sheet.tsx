@@ -537,7 +537,7 @@ function SlotRow({
             {slot.otherGroupId && !slot.bandId && (
               <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">Other Group</span>
             )}
-            {slot.type === "act" && slot.bandId && (
+            {slot.type === "act" && slot.bandId && !slot.confirmed && (
               <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border ${inviteStatusMeta.cls}`}>{inviteStatusMeta.label}</span>
             )}
             {slot.durationMinutes && (
@@ -553,8 +553,8 @@ function SlotRow({
           </Badge>
         )}
 
-        {/* Invite status badge — desktop only */}
-        {slot.type === "act" && slot.bandId && (
+        {/* Invite status badge — desktop only, hidden when slot is fully confirmed */}
+        {slot.type === "act" && slot.bandId && !slot.confirmed && (
           <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] shrink-0 rounded-full px-2 ${inviteStatusMeta.cls}`}>
             {inviteStatusMeta.label}
           </Badge>
