@@ -236,10 +236,8 @@ function SlotCard({
           <p className={`text-sm font-medium truncate ${filled ? "text-foreground" : "text-muted-foreground/50 italic"}`}>
             {filled ? slot.assignedEmployeeName : "Unassigned"}
           </p>
-          {filled && (
-            slot.confirmed
-              ? <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"><Check className="h-2.5 w-2.5" />Confirmed</span>
-              : <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Pending</span>
+          {filled && slot.confirmed && (
+            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"><Check className="h-2.5 w-2.5" />Confirmed</span>
           )}
           {isTwoDay && (
             <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${(slot.eventDay ?? 1) === 2 ? "bg-orange-500/15 text-orange-400" : "bg-sky-500/15 text-sky-400"}`}>

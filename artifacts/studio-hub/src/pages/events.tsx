@@ -417,6 +417,10 @@ function CallSheet({
   open: boolean;
   onClose: () => void;
 }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [addStaffId, setAddStaffId] = useState("");
+
   const { data: staff = [], isLoading: loadingStaff } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/employees`],
     queryFn: async () => {
@@ -435,6 +439,44 @@ function CallSheet({
       return res.json();
     },
     enabled: !!event,
+  });
+
+  const { data: allEmployees = [] } = useQuery<any[]>({
+    queryKey: ["/api/employees"],
+    queryFn: async () => {
+      const res = await fetch("/api/employees", { credentials: "include" });
+      return res.json();
+    },
+  });
+
+  const { mutate: addStaff, isPending: addingStaff } = useMutation({
+    mutationFn: async (employeeId: number) => {
+      const res = await fetch(`/api/events/${event!.id}/employees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ employeeId }),
+      });
+      if (!res.ok) throw new Error("Failed to add staff");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/employees`] });
+      setAddStaffId("");
+    },
+    onError: () => toast({ title: "Failed to add staff member", variant: "destructive" }),
+  });
+
+  const { mutate: removeStaff } = useMutation({
+    mutationFn: async (assignmentId: number) => {
+      const res = await fetch(`/api/events/${event!.id}/employees/${assignmentId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to remove staff");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/employees`] }),
+    onError: () => toast({ title: "Failed to remove staff member", variant: "destructive" }),
   });
 
   if (!event) return null;
@@ -460,13 +502,8 @@ function CallSheet({
   const isLoading = loadingStaff || loadingSlots;
   const hasContent = staff.length > 0 || staffSlots.length > 0;
 
-  // Group slots by role name for the call sheet
-  const slotsByRole = staffSlots.reduce((acc: Record<string, any[]>, s: any) => {
-    const key = s.roleName ?? "Other";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(s);
-    return acc;
-  }, {});
+  const assignedEmployeeIds = new Set(staff.map((s: any) => s.employeeId));
+  const availableToAdd = allEmployees.filter((e: any) => !assignedEmployeeIds.has(e.id));
 
   return (
     <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -500,12 +537,6 @@ function CallSheet({
           {isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : !hasContent ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users2 className="h-10 w-10 mx-auto opacity-20 mb-3" />
-              <p className="text-sm">No staff assigned to this event yet.</p>
-              <p className="text-xs mt-1">Use the Staff Schedule to add role-based slots.</p>
             </div>
           ) : (
             <>
@@ -555,44 +586,79 @@ function CallSheet({
                 </div>
               )}
 
-              {/* Legacy event_employees (general assignment) */}
-              {staff.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">General Staff</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-border/50">
-                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
-                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Role</th>
-                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Arrive By</th>
-                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Depart By</th>
-                          <th className="text-left pb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {staff.map((s: any) => {
-                          const arriveTime = getArrivalTime(event.startDate, s.minutesBefore);
-                          const departTime = getDepartureTime(event.endDate, s.minutesAfter);
-                          return (
-                            <tr key={s.id} className="border-b border-border/30 hover:bg-muted/20">
-                              <td className="py-3.5 pr-4 font-semibold text-foreground">{s.employeeName}</td>
-                              <td className="py-3.5 pr-4 text-muted-foreground capitalize text-xs">{s.role || s.employeeRole || "—"}</td>
-                              <td className="py-3.5 pr-4">
-                                <span className="text-foreground font-medium">{arriveTime}</span>
-                                {s.minutesBefore ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesBefore} min early</span> : null}
-                              </td>
-                              <td className="py-3.5 pr-4">
-                                <span className="text-foreground font-medium">{departTime}</span>
-                                {s.minutesAfter ? <span className="text-muted-foreground text-[11px] ml-1.5 block">{s.minutesAfter} min after</span> : null}
-                              </td>
-                              <td className="py-3.5 text-xs text-muted-foreground">{s.notes || "—"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+              {/* General staff (event_employees) — editable */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">General Staff</h3>
+
+                {/* Add staff row */}
+                <div className="flex items-center gap-2 mb-4 print:hidden">
+                  <select
+                    className="flex-1 h-8 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={addStaffId}
+                    onChange={e => setAddStaffId(e.target.value)}
+                  >
+                    <option value="">Add a staff member…</option>
+                    {availableToAdd.map((e: any) => (
+                      <option key={e.id} value={String(e.id)}>{e.name}{e.role ? ` — ${e.role}` : ""}</option>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    className="h-8 rounded-lg gap-1.5 shrink-0"
+                    disabled={!addStaffId || addingStaff}
+                    onClick={() => addStaffId && addStaff(parseInt(addStaffId))}
+                  >
+                    {addingStaff ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    Add
+                  </Button>
+                </div>
+
+                {staff.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 rounded-xl border border-dashed border-border/50 text-center text-muted-foreground">
+                    <Users2 className="h-8 w-8 opacity-20 mb-2" />
+                    <p className="text-sm">No general staff assigned yet</p>
                   </div>
+                ) : (
+                  <div className="space-y-1">
+                    {staff.map((s: any) => {
+                      const arriveTime = getArrivalTime(event.startDate, s.minutesBefore);
+                      const departTime = getDepartureTime(event.endDate, s.minutesAfter);
+                      return (
+                        <div key={s.id} className="group flex items-center gap-3 rounded-xl border border-border/30 bg-muted/20 px-3 py-2.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-foreground truncate">{s.employeeName}</p>
+                              {(s.role || s.employeeRole) && (
+                                <span className="text-[10px] font-medium text-muted-foreground capitalize bg-muted/60 px-1.5 py-0.5 rounded-full shrink-0">
+                                  {s.role || s.employeeRole}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              Arrive {arriveTime}
+                              {s.minutesBefore ? ` (${s.minutesBefore} min early)` : ""}
+                              {event.endDate ? ` · Depart ${departTime}` : ""}
+                              {s.minutesAfter ? ` (${s.minutesAfter} min after)` : ""}
+                            </p>
+                          </div>
+                          <button
+                            title="Remove from this event"
+                            onClick={() => removeStaff(s.id)}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-all print:hidden"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {!hasContent && staffSlots.length === 0 && staff.length === 0 && (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Users2 className="h-10 w-10 mx-auto opacity-20 mb-3" />
+                  <p className="text-sm">No staff assigned to this event yet.</p>
                 </div>
               )}
             </>
