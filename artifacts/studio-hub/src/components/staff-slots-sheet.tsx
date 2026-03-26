@@ -130,7 +130,7 @@ function CategoryFilter({ value, onChange }: { value: EmpCategory; onChange: (v:
 
 // ── SlotCard ─────────────────────────────────────────────────────────────────
 function SlotCard({
-  slot, employees, isTwoDay, onUpdate, onDelete, onResend, onUpdateTiming,
+  slot, employees, isTwoDay, onUpdate, onDelete, onResend,
 }: {
   slot: StaffSlot;
   employees: Employee[];
@@ -138,7 +138,6 @@ function SlotCard({
   onUpdate: (id: number, data: Record<string, unknown>) => void;
   onDelete: (id: number) => void;
   onResend: (id: number) => void;
-  onUpdateTiming: (slotId: number, minutesBefore: number | null, minutesAfter: number | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [resending, setResending] = useState(false);
@@ -157,17 +156,18 @@ function SlotCard({
   const filled = !!slot.assignedEmployeeId;
 
   function save() {
+    const assignedId = form.assignedEmployeeId && form.assignedEmployeeId !== "unassigned" ? Number(form.assignedEmployeeId) : null;
     onUpdate(slot.id, {
-      assignedEmployeeId: form.assignedEmployeeId && form.assignedEmployeeId !== "unassigned" ? Number(form.assignedEmployeeId) : null,
+      assignedEmployeeId: assignedId,
       startTime: form.startTime || null,
       endTime: form.endTime || null,
       notes: form.notes || null,
       eventDay: form.eventDay,
       bonusPay: form.bonusPay ? parseFloat(form.bonusPay) : null,
+      // Bundle timing in the same request so only one notification fires
+      minutesBefore: form.minutesBefore,
+      minutesAfter: form.minutesAfter,
     });
-    if (filled) {
-      onUpdateTiming(slot.id, form.minutesBefore, form.minutesAfter);
-    }
     setEditing(false);
   }
 
@@ -400,18 +400,6 @@ export function StaffSlotsSheet({
     }
   }
 
-  const { mutate: updateSlotTiming } = useMutation({
-    mutationFn: async ({ slotId, minutesBefore, minutesAfter }: { slotId: number; minutesBefore: number | null; minutesAfter: number | null }) => {
-      const r = await fetch(`/api/events/${event!.id}/staff-slots/${slotId}/timing`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ minutesBefore, minutesAfter }), credentials: "include",
-      });
-      if (!r.ok) throw new Error("Failed to update timing");
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] }),
-    onError: () => toast({ title: "Failed to update timing", variant: "destructive" }),
-  });
-
   // Group slots by roleTypeId
   const grouped = roleTypes
     .map(rt => ({
@@ -515,8 +503,7 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {dayUnroled.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification}
-                                onUpdateTiming={(slotId, mb, ma) => updateSlotTiming({ slotId, minutesBefore: mb, minutesAfter: ma })} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
                             ))}
                           </div>
                         </div>
@@ -543,8 +530,7 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {roleSlots.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification}
-                                onUpdateTiming={(slotId, mb, ma) => updateSlotTiming({ slotId, minutesBefore: mb, minutesAfter: ma })} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
                             ))}
                           </div>
                         </div>

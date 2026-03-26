@@ -392,7 +392,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay, minutesBefore, minutesAfter } = req.body;
 
     const [prev] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
     if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -419,6 +419,27 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
       })
       .where(eq(eventStaffSlotsTable.id, slotId));
 
+    // Upsert timing on eventEmployeesTable if timing fields were included in body
+    const timingIncluded = minutesBefore !== undefined || minutesAfter !== undefined;
+    let oldMinutesBefore: number | null = null;
+    let oldMinutesAfter: number | null = null;
+    if (timingIncluded && newAssigneeId != null) {
+      const [existingEmp] = await db.select({ id: eventEmployeesTable.id, minutesBefore: eventEmployeesTable.minutesBefore, minutesAfter: eventEmployeesTable.minutesAfter })
+        .from(eventEmployeesTable)
+        .where(and(eq(eventEmployeesTable.eventId, prev.eventId), eq(eventEmployeesTable.employeeId, newAssigneeId)));
+      oldMinutesBefore = existingEmp?.minutesBefore ?? null;
+      oldMinutesAfter  = existingEmp?.minutesAfter  ?? null;
+      const newMB = minutesBefore !== undefined ? (minutesBefore === null ? null : parseInt(minutesBefore)) : undefined;
+      const newMA = minutesAfter  !== undefined ? (minutesAfter  === null ? null : parseInt(minutesAfter))  : undefined;
+      if (existingEmp) {
+        await db.update(eventEmployeesTable)
+          .set({ ...(newMB !== undefined ? { minutesBefore: newMB } : {}), ...(newMA !== undefined ? { minutesAfter: newMA } : {}) })
+          .where(eq(eventEmployeesTable.id, existingEmp.id));
+      } else {
+        await db.insert(eventEmployeesTable).values({ eventId: prev.eventId, employeeId: newAssigneeId, minutesBefore: newMB ?? null, minutesAfter: newMA ?? null });
+      }
+    }
+
     const [full] = await db.select(SLOT_SELECT)
       .from(eventStaffSlotsTable)
       .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
@@ -435,13 +456,16 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         null,
       );
     }
-    // Notify existing assignee when their shift times changed (but person didn't change)
+    // Notify existing assignee when shift times or timing changed (one email, not two)
     if (!assigneeChanged && newAssigneeId != null) {
       const startTimeChanged = startTime !== undefined &&
         (startTime ? new Date(startTime).getTime() : null) !== (prev.startTime?.getTime() ?? null);
       const endTimeChanged = endTime !== undefined &&
         (endTime ? new Date(endTime).getTime() : null) !== (prev.endTime?.getTime() ?? null);
-      if (startTimeChanged || endTimeChanged) {
+      const newMB = minutesBefore !== undefined ? (minutesBefore === null ? null : parseInt(minutesBefore)) : undefined;
+      const newMA = minutesAfter  !== undefined ? (minutesAfter  === null ? null : parseInt(minutesAfter))  : undefined;
+      const timingChanged = (newMB !== undefined && newMB !== oldMinutesBefore) || (newMA !== undefined && newMA !== oldMinutesAfter);
+      if (startTimeChanged || endTimeChanged || timingChanged) {
         notifyStaffAssignment(
           slotId, newAssigneeId, prev.eventId,
           roleTypeId !== undefined ? (roleTypeId ? Number(roleTypeId) : null) : prev.roleTypeId,
