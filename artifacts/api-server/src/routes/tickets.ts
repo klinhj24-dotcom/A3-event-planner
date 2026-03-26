@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, eventsTable, eventTicketRequestsTable, eventLineupTable, usersTable, employeesTable, contactsTable } from "@workspace/db";
 import { eq, desc, and, ne, count, sql } from "drizzle-orm";
 import { google } from "googleapis";
-import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail, makeRawEmail } from "../lib/google";
 
 const router = Router();
 
@@ -498,6 +498,76 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
 
       pendingChargeEmails.set(requestId, timer);
       console.log(`[tickets] Charge email for request ${requestId} scheduled in 5 min`);
+    }
+  } catch (err) {
+    console.error("updateTicketRequest error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Admin: edit recital signup fields ────────────────────────────────────────
+router.put("/events/:id/ticket-requests/:requestId", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const requestId = parseInt(req.params.requestId);
+    const { studentFirstName, studentLastName, instrument, recitalSong, teacher, specialConsiderations, adminNotes } = req.body;
+
+    const [before] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+    if (!before) { res.status(404).json({ error: "Not found" }); return; }
+
+    const songChanged = recitalSong !== undefined && (recitalSong || null) !== (before.recitalSong ?? null) && !!(recitalSong || "").trim();
+
+    const [updated] = await db.update(eventTicketRequestsTable)
+      .set({
+        ...(studentFirstName !== undefined ? { studentFirstName: studentFirstName || null } : {}),
+        ...(studentLastName !== undefined ? { studentLastName: studentLastName || null } : {}),
+        ...(instrument !== undefined ? { instrument: instrument || null } : {}),
+        ...(recitalSong !== undefined ? { recitalSong: recitalSong || null } : {}),
+        ...(teacher !== undefined ? { teacher: teacher || null } : {}),
+        ...(specialConsiderations !== undefined ? { specialConsiderations: specialConsiderations || null } : {}),
+        ...(adminNotes !== undefined ? { adminNotes: adminNotes || null } : {}),
+      })
+      .where(eq(eventTicketRequestsTable.id, requestId))
+      .returning();
+
+    res.json(updated);
+
+    // Email parent when recital song changes
+    if (songChanged && updated?.contactEmail) {
+      (async () => {
+        try {
+          const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, before.eventId));
+          const users = await db.select().from(usersTable);
+          const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+          if (!sender || !event) return;
+          const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+          auth.on("tokens", async (tokens) => {
+            if (tokens.access_token) {
+              await db.update(usersTable).set({
+                googleAccessToken: tokens.access_token,
+                googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+                googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+              }).where(eq(usersTable.id, sender.id));
+            }
+          });
+          const gmail = google.gmail({ version: "v1", auth });
+          const studentName = [updated.studentFirstName, updated.studentLastName].filter(Boolean).join(" ") || "your student";
+          const subject = `[TMS] Recital song update — ${studentName}`;
+          const body =
+            `Hi ${updated.contactFirstName},\n\n` +
+            `We've updated the recital song for ${studentName}.\n\n` +
+            `  Recital Song: ${recitalSong}\n` +
+            (updated.instrument ? `  Instrument: ${updated.instrument}\n` : "") +
+            `  Event: the ${event.title}\n\n` +
+            `If you have any questions, please reply to this email.\n\n` +
+            `Thanks,\nThe Music Space`;
+          const raw = makeRawEmail({ to: updated.contactEmail, from: sender.googleEmail ?? sender.email ?? "", subject, body });
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+          console.log(`[tickets] Sent recital song update email to ${updated.contactEmail}`);
+        } catch (err) {
+          console.error("[tickets] Recital song update email failed:", err);
+        }
+      })();
     }
   } catch (err) {
     console.error("updateTicketRequest error:", err);

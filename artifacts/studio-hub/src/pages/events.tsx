@@ -6,6 +6,8 @@ import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -890,6 +892,101 @@ function OpenMicPerformerList({ performers }: { performers: any[] }) {
   );
 }
 
+function EditRecitalSignupDialog({
+  open, signup, eventId, onClose, onSaved,
+}: { open: boolean; signup: any | null; eventId: number; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({ studentFirstName: "", studentLastName: "", instrument: "", recitalSong: "", teacher: "", specialConsiderations: "", adminNotes: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || !signup) return;
+    setForm({
+      studentFirstName: signup.studentFirstName ?? "",
+      studentLastName: signup.studentLastName ?? "",
+      instrument: signup.instrument ?? "",
+      recitalSong: signup.recitalSong ?? "",
+      teacher: signup.teacher ?? "",
+      specialConsiderations: signup.specialConsiderations ?? "",
+      adminNotes: signup.adminNotes ?? "",
+    });
+  }, [open, signup]);
+
+  const songChanged = signup && form.recitalSong.trim() !== (signup.recitalSong ?? "");
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/ticket-requests/${signup.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      toast({ title: "Signup updated" + (songChanged && form.recitalSong.trim() ? " · parent notified by email" : "") });
+      onSaved();
+      onClose();
+    } catch {
+      toast({ title: "Failed to save", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sf = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Recital Signup</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">{signup?.contactFirstName} {signup?.contactLastName} · {signup?.contactEmail}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs mb-1.5 block">Student First Name</Label>
+              <Input value={form.studentFirstName} onChange={sf("studentFirstName")} placeholder="First name" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1.5 block">Student Last Name</Label>
+              <Input value={form.studentLastName} onChange={sf("studentLastName")} placeholder="Last name" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs mb-1.5 block">Instrument</Label>
+            <Input value={form.instrument} onChange={sf("instrument")} placeholder="e.g. Guitar, Piano…" />
+          </div>
+          <div>
+            <Label className="text-xs mb-1.5 block">Recital Song</Label>
+            <Input value={form.recitalSong} onChange={sf("recitalSong")} placeholder="e.g. Billie Jean — Michael Jackson" />
+            {songChanged && form.recitalSong.trim() && (
+              <p className="text-[11px] text-amber-400 mt-1">Saving will email the parent about this song change.</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs mb-1.5 block">Teacher</Label>
+            <Input value={form.teacher} onChange={sf("teacher")} placeholder="Teacher name" />
+          </div>
+          <div>
+            <Label className="text-xs mb-1.5 block">Special Considerations</Label>
+            <Textarea value={form.specialConsiderations} onChange={sf("specialConsiderations")} rows={2} placeholder="Allergies, accessibility needs, etc." />
+          </div>
+          <div>
+            <Label className="text-xs mb-1.5 block">Admin Notes</Label>
+            <Textarea value={form.adminNotes} onChange={sf("adminNotes")} rows={2} placeholder="Internal notes…" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EventOverviewSheet({
   event,
   open,
@@ -905,6 +1002,7 @@ function EventOverviewSheet({
 }) {
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editSignup, setEditSignup] = useState<any | null>(null);
   const { data: ticketRequests, refetch: refetchTickets } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/ticket-requests`],
     queryFn: () => fetch(`/api/events/${event!.id}/ticket-requests`).then(r => r.json()),
@@ -1493,6 +1591,15 @@ function EventOverviewSheet({
                           })}
                         >{r.status === "confirmed" ? "Has student paid?" : "Paid"}</span>
                       </label>
+                      {isRecitalEntry && (
+                        <button
+                          onClick={() => setEditSignup(r)}
+                          title="Edit signup"
+                          className="text-muted-foreground/40 hover:text-primary transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           const name = isRecitalEntry
@@ -1737,6 +1844,14 @@ function EventOverviewSheet({
           </div>
         </div>
       </SheetContent>
+
+      <EditRecitalSignupDialog
+        open={!!editSignup}
+        signup={editSignup}
+        eventId={event?.id ?? 0}
+        onClose={() => setEditSignup(null)}
+        onSaved={() => { refetchTickets(); setEditSignup(null); }}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
