@@ -21,7 +21,7 @@ const DEFAULT_ROLES = [
   { name: "Photographer",   color: "#3b82f6", sortOrder: 4 },
 ];
 
-// ── Notify staff of assignment (email if event confirmed + calendar push) ─────
+// ── Notify staff of assignment or schedule update (email if confirmed + cal push) ──
 async function notifyStaffAssignment(
   slotId: number,
   employeeId: number,
@@ -30,6 +30,7 @@ async function notifyStaffAssignment(
   startTime: Date | null | undefined,
   endTime: Date | null | undefined,
   existingCalEventId?: string | null,
+  isUpdate = false,
 ) {
   try {
     const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
@@ -56,10 +57,15 @@ async function notifyStaffAssignment(
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
-        const subject = `[TMS] You've been added: ${roleType?.name ? `${roleType.name} — ` : ""}${event.title ?? ""}`;
+        const subject = isUpdate
+          ? `[TMS] Schedule update: ${roleType?.name ? `${roleType.name} — ` : ""}${event.title ?? ""}`
+          : `[TMS] You've been added: ${roleType?.name ? `${roleType.name} — ` : ""}${event.title ?? ""}`;
+        const intro = isUpdate
+          ? `Your schedule has been updated for the following event:`
+          : `You've been added to the following event:`;
         const emailBody =
           `Hi ${employee.name},\n\n` +
-          `You've been added to the following event:\n\n` +
+          `${intro}\n\n` +
           `  Event: the ${event.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n` +
           (roleType?.name ? `  Role: ${roleType.name}\n` : "") +
           `${shiftLine}\n` +
@@ -132,6 +138,33 @@ export async function notifyAllStaffSlotsForEvent(eventId: number) {
     console.log(`[staffing] Notified ${slots.filter(s => s.assignedEmployeeId).length} staff for event ${eventId}`);
   } catch (err) {
     console.error("notifyAllStaffSlotsForEvent failed:", err);
+  }
+}
+
+/** Notify all assigned staff that the event date/time has changed. */
+export async function notifyAllStaffEventDateChange(eventId: number) {
+  try {
+    const slots = await db.select({
+      id: eventStaffSlotsTable.id,
+      assignedEmployeeId: eventStaffSlotsTable.assignedEmployeeId,
+      roleTypeId: eventStaffSlotsTable.roleTypeId,
+      startTime: eventStaffSlotsTable.startTime,
+      endTime: eventStaffSlotsTable.endTime,
+      googleCalendarEventId: eventStaffSlotsTable.googleCalendarEventId,
+    }).from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.eventId, eventId));
+
+    for (const slot of slots) {
+      if (!slot.assignedEmployeeId) continue;
+      await notifyStaffAssignment(
+        slot.id, slot.assignedEmployeeId, eventId,
+        slot.roleTypeId, slot.startTime, slot.endTime,
+        slot.googleCalendarEventId,
+        true, // isUpdate
+      );
+    }
+    console.log(`[staffing] Sent date-change updates to ${slots.filter(s => s.assignedEmployeeId).length} staff for event ${eventId}`);
+  } catch (err) {
+    console.error("notifyAllStaffEventDateChange failed:", err);
   }
 }
 
@@ -379,6 +412,22 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         full.startTime, full.endTime,
         null,
       );
+    }
+    // Notify existing assignee when their shift times changed (but person didn't change)
+    if (!assigneeChanged && newAssigneeId != null) {
+      const startTimeChanged = startTime !== undefined &&
+        (startTime ? new Date(startTime).getTime() : null) !== (prev.startTime?.getTime() ?? null);
+      const endTimeChanged = endTime !== undefined &&
+        (endTime ? new Date(endTime).getTime() : null) !== (prev.endTime?.getTime() ?? null);
+      if (startTimeChanged || endTimeChanged) {
+        notifyStaffAssignment(
+          slotId, newAssigneeId, prev.eventId,
+          roleTypeId !== undefined ? (roleTypeId ? Number(roleTypeId) : null) : prev.roleTypeId,
+          full.startTime, full.endTime,
+          prev.googleCalendarEventId,
+          true, // isUpdate
+        );
+      }
     }
     // If employee was removed, clean up calendar event
     if (assigneeChanged && newAssigneeId == null && prev.googleCalendarEventId) {

@@ -6,7 +6,7 @@ import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, makeRawEmail, buildHtmlEmail } from "../lib/google";
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
-import { notifyAllStaffSlotsForEvent } from "./event-staffing";
+import { notifyAllStaffSlotsForEvent, notifyAllStaffEventDateChange } from "./event-staffing";
 
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
 
@@ -524,12 +524,12 @@ router.put("/events/:id", async (req, res) => {
     }
 
     // Shift comm task due dates when the event start date changes
-    if (
+    const eventDateChanged =
       startDate !== undefined &&
       existing?.startDate &&
       event.startDate &&
-      existing.startDate.getTime() !== event.startDate.getTime()
-    ) {
+      existing.startDate.getTime() !== event.startDate.getTime();
+    if (eventDateChanged) {
       shiftCommTaskDates(event.id, existing.startDate, event.startDate, (req.user as any)?.id).catch(() => {});
     }
 
@@ -549,6 +549,10 @@ router.put("/events/:id", async (req, res) => {
         // Email all assigned staff when freshly transitioning to confirmed
         if (!wasConfirmed) {
           notifyAllStaffSlotsForEvent(event.id).catch(() => {});
+        }
+        // Email all assigned staff when the event date changed on an already-confirmed event
+        if (wasConfirmed && eventDateChanged) {
+          notifyAllStaffEventDateChange(event.id).catch(() => {});
         }
       }
       res.json(finalEvent);
