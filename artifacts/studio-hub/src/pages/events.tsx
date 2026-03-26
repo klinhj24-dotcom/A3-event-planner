@@ -1069,6 +1069,8 @@ function EditTicketRequestDialog({
     });
   }, [open, ticket]);
 
+  const isCharged = ticket?.charged === true;
+
   const handleSave = async () => {
     const count = parseInt(form.ticketCount);
     if (form.ticketCount && (isNaN(count) || count < 1)) {
@@ -1088,7 +1090,22 @@ function EditTicketRequestDialog({
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
-      toast({ title: "Ticket info updated" });
+
+      // If already charged, resend the confirmation email with the updated details
+      if (isCharged) {
+        try {
+          await fetch(`/api/events/${eventId}/ticket-requests/${ticket.id}/resend-confirmation`, {
+            method: "POST",
+            credentials: "include",
+          });
+          toast({ title: "Ticket info updated · confirmation email resent to parent" });
+        } catch {
+          toast({ title: "Ticket info updated (confirmation email failed to resend)", variant: "destructive" });
+        }
+      } else {
+        toast({ title: "Ticket info updated" });
+      }
+
       onSaved();
       onClose();
     } catch {
@@ -1108,6 +1125,11 @@ function EditTicketRequestDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
+          {isCharged && (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-500">
+              This ticket has already been charged. Saving will automatically resend the confirmation email to the parent with the updated details.
+            </div>
+          )}
           <div>
             <Label className="text-xs mb-1.5 block">Number of Tickets</Label>
             <Input

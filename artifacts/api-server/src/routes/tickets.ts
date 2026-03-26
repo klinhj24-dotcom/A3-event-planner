@@ -10,6 +10,62 @@ const router = Router();
 const pendingChargeEmails = new Map<number, ReturnType<typeof setTimeout>>();
 const CHARGE_EMAIL_DELAY_MS = 5 * 60 * 1000;
 
+// ── Shared: send charge confirmation email ────────────────────────────────────
+async function sendChargeConfirmationEmail(
+  req: typeof eventTicketRequestsTable.$inferSelect,
+  event: typeof eventsTable.$inferSelect,
+) {
+  const users = await db.select().from(usersTable);
+  const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+  if (!sender || !req.contactEmail) return;
+
+  const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+  auth.on("tokens", async (tokens) => {
+    if (tokens.access_token) {
+      await db.update(usersTable).set({
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+        googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      }).where(eq(usersTable.id, sender.id));
+    }
+  });
+  const gmail = google.gmail({ version: "v1", auth });
+
+  const cc: string[] = ["info@themusicspace.com"];
+  const [contact] = await db.select().from(contactsTable)
+    .where(sql`LOWER(${contactsTable.email}) = LOWER(${req.contactEmail})`).limit(1);
+  if (contact?.email2) cc.push(contact.email2);
+
+  const isRecital = req.formType === "recital";
+  const performerLine = isRecital && req.studentFirstName
+    ? `\nPerformer: ${req.studentFirstName} ${req.studentLastName ?? ""}\n`
+    : "";
+
+  let amountLine = "";
+  if (isRecital) {
+    const fee = event.ticketPrice ? parseFloat(event.ticketPrice) : 30;
+    amountLine = `\nAmount charged: $${fee.toFixed(2)}\n`;
+  } else if (req.ticketCount && event.ticketPrice) {
+    const resolvedPrice = event.isTwoDay && req.ticketType
+      ? req.ticketType === "day1" ? event.day1Price : req.ticketType === "day2" ? event.day2Price : event.ticketPrice
+      : event.ticketPrice;
+    if (resolvedPrice) {
+      const price = parseFloat(resolvedPrice);
+      const total = price * req.ticketCount;
+      const dayLabel = event.isTwoDay && req.ticketType
+        ? req.ticketType === "day1" ? " (Day 1)" : req.ticketType === "day2" ? " (Day 2)" : " (Both Days)"
+        : "";
+      amountLine = `\nTickets: ${req.ticketCount} × $${price.toFixed(2)}${dayLabel} = $${total.toFixed(2)}\n`;
+    }
+  }
+
+  const bodyText = `Hi ${req.contactFirstName},\n\nGreat news — your card on file has been successfully charged for the ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
+  const html = buildHtmlEmail({ recipientName: req.contactFirstName ?? "there", body: bodyText });
+  const subject = `Payment Confirmed — ${event.title}`;
+  const raw = makeHtmlEmail({ to: req.contactEmail, from: sender.email || "", subject, html, cc });
+  await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+}
+
 // ── Public: get event info for ticket form ────────────────────────────────────
 router.get("/ticket/:token", async (req, res) => {
   try {
@@ -444,51 +500,8 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
         }
         try {
           const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, capturedUpdated.eventId));
-          const users = await db.select().from(usersTable);
-          const sender = users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
-          if (event && sender && capturedUpdated.contactEmail) {
-            const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
-            auth.on("tokens", async (tokens) => {
-              if (tokens.access_token) {
-                await db.update(usersTable).set({
-                  googleAccessToken: tokens.access_token,
-                  googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
-                  googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-                }).where(eq(usersTable.id, sender.id));
-              }
-            });
-            const gmail = google.gmail({ version: "v1", auth });
-
-            const cc: string[] = ["info@themusicspace.com"];
-            const [contact] = await db.select().from(contactsTable)
-              .where(sql`LOWER(${contactsTable.email}) = LOWER(${capturedUpdated.contactEmail})`).limit(1);
-            if (contact?.email2) cc.push(contact.email2);
-
-            const isRecital = capturedUpdated.formType === "recital";
-            const performerLine = isRecital && capturedUpdated.studentFirstName
-              ? `\nPerformer: ${capturedUpdated.studentFirstName} ${capturedUpdated.studentLastName ?? ""}\n`
-              : "";
-
-            let amountLine = "";
-            if (isRecital) {
-              const fee = event.ticketPrice ? parseFloat(event.ticketPrice) : 30;
-              amountLine = `\nAmount charged: $${fee.toFixed(2)}\n`;
-            } else if (capturedUpdated.ticketCount && event.ticketPrice) {
-              const resolvedPrice = event.isTwoDay && capturedUpdated.ticketType
-                ? capturedUpdated.ticketType === "day1" ? event.day1Price : capturedUpdated.ticketType === "day2" ? event.day2Price : event.ticketPrice
-                : event.ticketPrice;
-              if (resolvedPrice) {
-                const price = parseFloat(resolvedPrice);
-                const total = price * capturedUpdated.ticketCount;
-                amountLine = `\nTickets: ${capturedUpdated.ticketCount} × $${price.toFixed(2)} = $${total.toFixed(2)}\n`;
-              }
-            }
-
-            const bodyText = `Hi ${capturedUpdated.contactFirstName},\n\nGreat news — your card on file has been successfully charged for the ${event.title}.${performerLine}${amountLine}\nIf you have any questions or concerns, please reply to this email or reach us at info@themusicspace.com.\n\nThank you,\nThe Music Space Team`;
-            const html = buildHtmlEmail({ recipientName: capturedUpdated.contactFirstName ?? "there", body: bodyText });
-            const subject = `Payment Confirmed — ${event.title}`;
-            const raw = makeHtmlEmail({ to: capturedUpdated.contactEmail, from: sender.email || "", subject, html, cc });
-            await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+          if (event) {
+            await sendChargeConfirmationEmail(current, event);
             console.log(`[tickets] Charge email sent for request ${requestId}`);
           }
         } catch (emailErr) {
@@ -574,6 +587,27 @@ router.put("/events/:id/ticket-requests/:requestId", async (req, res) => {
     }
   } catch (err) {
     console.error("updateTicketRequest error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/events/:id/ticket-requests/:requestId/resend-confirmation — resend charge confirmation with latest data
+router.post("/events/:id/ticket-requests/:requestId/resend-confirmation", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const requestId = parseInt(req.params.requestId);
+    const [ticketReq] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
+    if (!ticketReq) { res.status(404).json({ error: "Not found" }); return; }
+    if (!ticketReq.charged) { res.status(400).json({ error: "Ticket has not been charged yet" }); return; }
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, ticketReq.eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+
+    await sendChargeConfirmationEmail(ticketReq, event);
+    console.log(`[tickets] Charge confirmation resent for request ${requestId}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("resend-confirmation error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
