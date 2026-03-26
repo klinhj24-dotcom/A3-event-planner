@@ -497,25 +497,44 @@ router.patch("/events/:id/staff-slots/:slotId/timing", async (req, res) => {
     if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
     if (!slot.assignedEmployeeId) { res.status(400).json({ error: "No employee assigned" }); return; }
 
+    const newMinutesBefore = minutesBefore !== undefined ? (minutesBefore === null ? null : parseInt(minutesBefore)) : undefined;
+    const newMinutesAfter  = minutesAfter  !== undefined ? (minutesAfter  === null ? null : parseInt(minutesAfter))  : undefined;
+
     // Find or create the eventEmployees record for this employee+event
-    const [existing] = await db.select({ id: eventEmployeesTable.id })
+    const [existing] = await db.select({ id: eventEmployeesTable.id, minutesBefore: eventEmployeesTable.minutesBefore, minutesAfter: eventEmployeesTable.minutesAfter })
       .from(eventEmployeesTable)
       .where(and(eq(eventEmployeesTable.eventId, eventId), eq(eventEmployeesTable.employeeId, slot.assignedEmployeeId)));
+
+    const oldMinutesBefore = existing?.minutesBefore ?? null;
+    const oldMinutesAfter  = existing?.minutesAfter  ?? null;
 
     if (existing) {
       await db.update(eventEmployeesTable)
         .set({
-          ...(minutesBefore !== undefined ? { minutesBefore: minutesBefore === null ? null : parseInt(minutesBefore) } : {}),
-          ...(minutesAfter !== undefined ? { minutesAfter: minutesAfter === null ? null : parseInt(minutesAfter) } : {}),
+          ...(newMinutesBefore !== undefined ? { minutesBefore: newMinutesBefore } : {}),
+          ...(newMinutesAfter  !== undefined ? { minutesAfter:  newMinutesAfter  } : {}),
         })
         .where(eq(eventEmployeesTable.id, existing.id));
     } else {
       await db.insert(eventEmployeesTable).values({
         eventId,
         employeeId: slot.assignedEmployeeId,
-        minutesBefore: minutesBefore != null ? parseInt(minutesBefore) : null,
-        minutesAfter: minutesAfter != null ? parseInt(minutesAfter) : null,
+        minutesBefore: newMinutesBefore ?? null,
+        minutesAfter:  newMinutesAfter  ?? null,
       });
+    }
+
+    // Notify staff if timing actually changed (confirmed events only)
+    const timingChanged =
+      (newMinutesBefore !== undefined && newMinutesBefore !== oldMinutesBefore) ||
+      (newMinutesAfter  !== undefined && newMinutesAfter  !== oldMinutesAfter);
+    if (timingChanged) {
+      notifyStaffAssignment(
+        slotId, slot.assignedEmployeeId, eventId,
+        slot.roleTypeId, slot.startTime, slot.endTime,
+        slot.googleCalendarEventId,
+        true, // isUpdate
+      );
     }
 
     res.json({ ok: true });
