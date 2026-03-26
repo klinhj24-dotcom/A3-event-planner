@@ -47,6 +47,10 @@ async function sendStaffNotificationEmail(
     if (!recipientEmail) return;
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event || event.status !== "confirmed") {
+      console.log(`[staffing] Skipping assignment email for slot ${slotId} — event is not confirmed (status: ${event?.status ?? "unknown"})`);
+      return;
+    }
     const [roleType] = roleTypeId
       ? await db.select().from(staffRoleTypesTable).where(eq(staffRoleTypesTable.id, roleTypeId))
       : [undefined];
