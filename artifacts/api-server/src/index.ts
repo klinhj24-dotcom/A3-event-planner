@@ -200,7 +200,12 @@ async function runOneTimeFixes() {
       UPDATE event_lineup el
       SET confirmed = (
         EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id)
-        AND NOT EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id AND attendance_status = 'invited')
+        AND NOT EXISTS (
+          SELECT member_id FROM event_band_invites
+          WHERE lineup_slot_id = el.id
+          GROUP BY member_id
+          HAVING NOT BOOL_OR(attendance_status IN ('confirmed', 'not_attending'))
+        )
       ),
       updated_at = NOW()
       WHERE el.type = 'act' AND el.band_id IS NOT NULL
