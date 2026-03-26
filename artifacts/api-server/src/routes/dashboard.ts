@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, eventLineupTable, bandMembersTable, eventDebriefTable, usersTable } from "@workspace/db";
-import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, notInArray, inArray } from "drizzle-orm";
+import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -51,19 +51,8 @@ router.get("/dashboard/stats", async (req, res) => {
           .limit(10),
       ]);
 
-    // Pending invites: status is "pending" on the invite row, AND the parent
-    // lineup slot is not yet confirmed (handles the case where the slot-level
-    // inviteStatus was flipped to "confirmed" without updating every invite row).
-    // Also exclude any member who already has a confirmed invite elsewhere (siblings).
-    const confirmedMembers = await db
-      .select({ memberId: eventBandInvitesTable.memberId })
-      .from(eventBandInvitesTable)
-      .where(and(eq(eventBandInvitesTable.status, "confirmed"), isNotNull(eventBandInvitesTable.memberId)))
-      .groupBy(eventBandInvitesTable.memberId);
-    const confirmedMemberIds = confirmedMembers.map(m => m.memberId).filter(Boolean) as number[];
-
-    // Slot-level confirmation guard: exclude invites whose lineup slot is confirmed.
-    // LEFT JOIN means no matching slot → all lineup columns are NULL → treat as not confirmed.
+    // Pending invites: invite is still "pending" AND its lineup slot isn't confirmed,
+    // scoped to upcoming events only so past events don't pollute the dashboard.
     const slotNotConfirmed = or(
       isNull(eventLineupTable.id),   // no lineup slot row at all → not confirmed
       and(
@@ -74,10 +63,8 @@ router.get("/dashboard/stats", async (req, res) => {
 
     const pendingInvitesWhere = and(
       eq(eventBandInvitesTable.status, "pending"),
+      gte(eventsTable.startDate, now),
       slotNotConfirmed,
-      confirmedMemberIds.length > 0
-        ? notInArray(eventBandInvitesTable.memberId, confirmedMemberIds)
-        : undefined,
     );
 
     const [pendingInvitesList, [pendingInvitesCountRow]] = await Promise.all([
@@ -97,10 +84,10 @@ router.get("/dashboard/stats", async (req, res) => {
         .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
         .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
         .where(pendingInvitesWhere)
-        .orderBy(eventsTable.startDate)
-        .limit(25),
+        .orderBy(eventsTable.startDate),
       db.select({ count: count() })
         .from(eventBandInvitesTable)
+        .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
         .leftJoin(eventLineupTable, eq(eventBandInvitesTable.lineupSlotId, eventLineupTable.id))
         .where(pendingInvitesWhere),
     ]);
