@@ -105,6 +105,8 @@ interface LineupSlot {
   // Band leader attendance
   leaderAttending?: boolean; leaderStaffSlotId?: number | null;
   bandLeaderName?: string | null;
+  // Time-change tracking
+  lockedInStartTime?: string | null;
   // Schedule conflict detection
   scheduleConflict?: boolean; conflictReason?: string | null;
   // Other group
@@ -901,17 +903,19 @@ function SlotRow({
                     <Badge variant="outline" className="text-[10px] px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shrink-0">
                       ✓ Lock-in sent
                     </Badge>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-lg h-7 text-xs gap-1.5 flex-1 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
-                      disabled={sendingTimeUpdate}
-                      onClick={handleSendTimeUpdate}
-                      title="Use this if the set time changed after the lock-in email was already sent. Emails all non-declined families (BCC) with the updated time. Can be sent multiple times."
-                    >
-                      <Clock className="h-3 w-3" />
-                      {sendingTimeUpdate ? "Sending…" : "Send Time Update"}
-                    </Button>
+                    {slot.startTime !== slot.lockedInStartTime && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-lg h-7 text-xs gap-1.5 flex-1 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                        disabled={sendingTimeUpdate}
+                        onClick={handleSendTimeUpdate}
+                        title="The set time changed after the lock-in email was sent. Click to notify this band's families of the updated time."
+                      >
+                        <Clock className="h-3 w-3" />
+                        {sendingTimeUpdate ? "Sending…" : "Time Changed — Notify Families"}
+                      </Button>
+                    )}
                   </>
                 )}
               </div>

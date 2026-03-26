@@ -99,6 +99,8 @@ export const eventLineupTable = pgTable("event_lineup", {
   // Band leader attendance
   leaderAttending: boolean("leader_attending").notNull().default(false),
   leaderStaffSlotId: integer("leader_staff_slot_id"), // plain ref to event_staff_slots.id (no FK to avoid circular)
+  // Time-change tracking (set to startTime when lock-in email is sent; cleared when time update sent)
+  lockedInStartTime: text("locked_in_start_time"),
   // Schedule conflict detection
   scheduleConflict: boolean("schedule_conflict").notNull().default(false),
   conflictReason: text("conflict_reason"),

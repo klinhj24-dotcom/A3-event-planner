@@ -167,6 +167,7 @@ async function runMigrations() {
     `ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS day_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_skipped BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE event_band_invites ADD COLUMN IF NOT EXISTS attendance_status TEXT NOT NULL DEFAULT 'invited'`,
+    `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS locked_in_start_time TEXT`,
   ];
   for (const m of migrations) {
     try {
@@ -215,6 +216,20 @@ async function runOneTimeFixes() {
     else console.log("[fix] No act slots to recalculate.");
   } catch (err) {
     console.error("[fix] Slot confirmed recalculation failed (non-fatal):", err);
+  }
+
+  // Fix: seed lockedInStartTime for slots already locked-in before this column existed.
+  // Prevents the "time changed" button from appearing on bands whose time hasn't actually changed.
+  try {
+    const result = await db.execute(sql.raw(
+      `UPDATE event_lineup SET locked_in_start_time = start_time, updated_at = NOW()
+       WHERE confirmation_sent = true AND locked_in_start_time IS NULL`
+    ));
+    const count = (result as any).rowCount ?? 0;
+    if (count > 0) console.log(`[fix] Seeded locked_in_start_time for ${count} already-locked-in slot(s).`);
+    else console.log("[fix] locked_in_start_time already seeded — no update needed.");
+  } catch (err) {
+    console.error("[fix] locked_in_start_time seed failed (non-fatal):", err);
   }
 
   // Fix: sync attendance_status for invites where family has already confirmed via invite link.

@@ -633,8 +633,8 @@ The Music Space`;
 
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
 
-    // Mark confirmation sent
-    await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
+    // Mark confirmation sent and snapshot the start time so we can detect future changes
+    await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, lockedInStartTime: slot.startTime ?? null, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
 
     res.json({ ok: true, to: TMS_CC, bcc: bccAddresses.length, cc: ccAddresses.length });
   } catch (err) {
@@ -731,6 +731,9 @@ The Music Space`;
 
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
 
+    // Snapshot the new time so the "time changed" indicator resets
+    await db.update(eventLineupTable).set({ lockedInStartTime: slot.startTime ?? null, updatedAt: new Date() }).where(eq(eventLineupTable.id, slotId));
+
     res.json({ ok: true, to: TMS_CC, bcc: bccAddresses.length, cc: ccAddresses.length });
   } catch (err) {
     console.error("sendTimeUpdate error:", err);
@@ -825,7 +828,7 @@ The Music Space`;
         const raw = makeHtmlEmail({ to: TMS_CC, from, subject: `You're Confirmed! ${bandName} @ ${event.title}`, html, cc: ccAddresses, bcc: bccAddresses });
         await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
 
-        await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, updatedAt: new Date() }).where(eq(eventLineupTable.id, slot.id));
+        await db.update(eventLineupTable).set({ confirmationSent: true, confirmed: true, lockedInStartTime: slot.startTime ?? null, updatedAt: new Date() }).where(eq(eventLineupTable.id, slot.id));
         sentCount++;
       } catch (slotErr) {
         console.error(`[bulk-confirmation] Failed for slot ${slot.id}:`, slotErr);
