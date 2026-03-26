@@ -6,6 +6,7 @@ import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, makeRawEmail, buildHtmlEmail } from "../lib/google";
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
+import { notifyAllStaffSlotsForEvent } from "./event-staffing";
 
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
 
@@ -544,6 +545,10 @@ router.put("/events/:id", async (req, res) => {
         const wasConfirmed = existing?.status === "confirmed";
         if (!wasConfirmed || !event.googleCalendarEventId) {
           tryAutoGenerateAndPushComms(userId, finalEvent);
+        }
+        // Email all assigned staff when freshly transitioning to confirmed
+        if (!wasConfirmed) {
+          notifyAllStaffSlotsForEvent(event.id).catch(() => {});
         }
       }
       res.json(finalEvent);
