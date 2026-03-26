@@ -168,6 +168,7 @@ async function runMigrations() {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_skipped BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE event_band_invites ADD COLUMN IF NOT EXISTS attendance_status TEXT NOT NULL DEFAULT 'invited'`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS locked_in_start_time TEXT`,
+    `ALTER TABLE band_members ADD COLUMN IF NOT EXISTS recital_song TEXT`,
   ];
   for (const m of migrations) {
     try {

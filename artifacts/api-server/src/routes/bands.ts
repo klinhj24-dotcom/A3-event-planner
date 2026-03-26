@@ -3,7 +3,7 @@ import { google } from "googleapis";
 import { db, bandsTable, eventLineupTable, bandMembersTable, bandContactsTable, usersTable, employeesTable, eventsTable, eventStaffSlotsTable, eventTicketRequestsTable, eventBandInvitesTable, otherGroupsTable } from "@workspace/db";
 import { eq, asc, and, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
+import { createAuthedClient, makeHtmlEmail, buildHtmlEmail, makeRawEmail } from "../lib/google";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
@@ -203,7 +203,14 @@ router.put("/bands/members/:memberId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const memberId = parseInt(req.params.memberId);
-    const { name, role, instruments, isBandLeader, email, phone, notes } = req.body;
+    const { name, role, instruments, isBandLeader, email, phone, notes, recitalSong } = req.body;
+
+    // Snapshot old song before update (for change detection)
+    const [prev] = await db.select().from(bandMembersTable).where(eq(bandMembersTable.id, memberId));
+    const oldSong = prev?.recitalSong ?? null;
+    const newSong = recitalSong !== undefined ? (recitalSong || null) : oldSong;
+    const songChanged = recitalSong !== undefined && newSong !== oldSong;
+
     const [member] = await db.update(bandMembersTable)
       .set({
         ...(name !== undefined ? { name } : {}),
@@ -213,11 +220,45 @@ router.put("/bands/members/:memberId", async (req, res) => {
         ...(email !== undefined ? { email: email || null } : {}),
         ...(phone !== undefined ? { phone: phone || null } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
+        ...(recitalSong !== undefined ? { recitalSong: recitalSong || null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(bandMembersTable.id, memberId))
       .returning();
     if (!member) { res.status(404).json({ error: "Not found" }); return; }
+
+    // If recital song changed, email all parent contacts with an email address
+    if (songChanged && newSong) {
+      (async () => {
+        try {
+          const senderUser = (req.user as any);
+          if (!senderUser?.googleAccessToken || !senderUser?.googleRefreshToken) return;
+          const contacts = await db.select().from(bandContactsTable).where(eq(bandContactsTable.memberId, memberId));
+          const recipients = contacts.filter(c => c.email);
+          if (!recipients.length) return;
+          const [band] = await db.select().from(bandsTable).where(eq(bandsTable.id, member.bandId));
+          const auth = createAuthedClient(senderUser.googleAccessToken, senderUser.googleRefreshToken, senderUser.googleTokenExpiry);
+          const gmail = google.gmail({ version: "v1", auth });
+          const from = senderUser.googleEmail ?? senderUser.email ?? "";
+          for (const contact of recipients) {
+            const subject = `[TMS] Recital song update — ${member.name}`;
+            const body =
+              `Hi ${contact.name},\n\n` +
+              `We wanted to let you know that ${member.name}'s recital song has been updated.\n\n` +
+              `  Recital Song: ${newSong}\n` +
+              (band?.name ? `  Group: ${band.name}\n` : "") +
+              `\nIf you have any questions, please reply to this email.\n\n` +
+              `Thanks,\nThe Music Space`;
+            const raw = makeRawEmail({ to: contact.email!, from, subject, body });
+            await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+            console.log(`[bands] Sent recital song update email to ${contact.email}`);
+          }
+        } catch (err) {
+          console.error("[bands] Recital song email failed:", err);
+        }
+      })();
+    }
+
     res.json(member);
   } catch (err) {
     console.error("updateMember error:", err);

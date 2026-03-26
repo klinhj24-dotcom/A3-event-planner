@@ -49,6 +49,7 @@ export const bandMembersTable = pgTable("band_members", {
   email: text("email"),           // member's own email (optional)
   phone: text("phone"),
   notes: text("notes"),
+  recitalSong: text("recital_song"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

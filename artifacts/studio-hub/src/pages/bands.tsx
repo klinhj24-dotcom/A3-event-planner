@@ -35,6 +35,7 @@ interface BandMember {
   id: number; bandId: number; name: string; role: string | null;
   instruments: string[] | null; isBandLeader: boolean;
   email: string | null; phone: string | null; notes: string | null;
+  recitalSong: string | null;
   contacts: BandContact[];
 }
 
@@ -222,7 +223,7 @@ function MemberFormDialog({
   open, bandId, member, onClose, onSaved,
 }: { open: boolean; bandId: number; member: BandMember | null; onClose: () => void; onSaved: () => void }) {
   const emptyContact = { name: "", relationship: "", email: "", phone: "" };
-  const [memberForm, setMemberForm] = useState({ name: "", instruments: [] as string[], isBandLeader: false, notes: "" });
+  const [memberForm, setMemberForm] = useState({ name: "", instruments: [] as string[], isBandLeader: false, notes: "", recitalSong: "" });
   const [primary, setPrimary] = useState(emptyContact);
   const [secondary, setSecondary] = useState(emptyContact);
   const [showSecondary, setShowSecondary] = useState(false);
@@ -246,6 +247,7 @@ function MemberFormDialog({
       instruments: member?.instruments ?? [],
       isBandLeader: member?.isBandLeader ?? false,
       notes: member?.notes ?? "",
+      recitalSong: member?.recitalSong ?? "",
     });
     const pc = member?.contacts.find(c => c.isPrimary);
     const sc = member?.contacts.find(c => !c.isPrimary);
@@ -404,6 +406,14 @@ function MemberFormDialog({
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <Label className="text-xs mb-1.5 block">Recital Song</Label>
+              <Input value={memberForm.recitalSong} onChange={mf("recitalSong")} placeholder="e.g. Billie Jean — Michael Jackson" />
+              {member && memberForm.recitalSong !== (member.recitalSong ?? "") && (
+                <p className="text-[11px] text-amber-400 mt-1">Saving will email parent contacts about this song change.</p>
+              )}
             </div>
 
             <div>
