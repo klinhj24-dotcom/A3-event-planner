@@ -1053,6 +1053,105 @@ function EditRecitalSignupDialog({
   );
 }
 
+function EditTicketRequestDialog({
+  open, ticket, eventId, isTwoDay, onClose, onSaved,
+}: { open: boolean; ticket: any | null; eventId: number; isTwoDay: boolean; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({ ticketCount: "", ticketType: "", adminNotes: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || !ticket) return;
+    setForm({
+      ticketCount: ticket.ticketCount != null ? String(ticket.ticketCount) : "",
+      ticketType: ticket.ticketType ?? "",
+      adminNotes: ticket.adminNotes ?? "",
+    });
+  }, [open, ticket]);
+
+  const handleSave = async () => {
+    const count = parseInt(form.ticketCount);
+    if (form.ticketCount && (isNaN(count) || count < 1)) {
+      toast({ title: "Ticket count must be a positive number", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/ticket-requests/${ticket.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ticketCount: form.ticketCount ? count : null,
+          ticketType: isTwoDay ? (form.ticketType || null) : null,
+          adminNotes: form.adminNotes,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      toast({ title: "Ticket info updated" });
+      onSaved();
+      onClose();
+    } catch {
+      toast({ title: "Failed to save", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Edit Ticket Info</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            {ticket?.contactFirstName} {ticket?.contactLastName} · {ticket?.contactEmail}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div>
+            <Label className="text-xs mb-1.5 block">Number of Tickets</Label>
+            <Input
+              type="number"
+              min={1}
+              value={form.ticketCount}
+              onChange={e => setForm(p => ({ ...p, ticketCount: e.target.value }))}
+              placeholder="e.g. 2"
+            />
+          </div>
+          {isTwoDay && (
+            <div>
+              <Label className="text-xs mb-1.5 block">Days Attending</Label>
+              <select
+                value={form.ticketType}
+                onChange={e => setForm(p => ({ ...p, ticketType: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">— Select —</option>
+                <option value="day1">Day 1 only</option>
+                <option value="day2">Day 2 only</option>
+                <option value="both">Both Days</option>
+              </select>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs mb-1.5 block">Admin Notes</Label>
+            <Textarea
+              value={form.adminNotes}
+              onChange={e => setForm(p => ({ ...p, adminNotes: e.target.value }))}
+              rows={2}
+              placeholder="Internal notes…"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EventOverviewSheet({
   event,
   open,
@@ -1069,6 +1168,7 @@ function EventOverviewSheet({
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editSignup, setEditSignup] = useState<any | null>(null);
+  const [editTicket, setEditTicket] = useState<any | null>(null);
   const { data: ticketRequests, refetch: refetchTickets } = useQuery<any[]>({
     queryKey: [`/api/events/${event?.id}/ticket-requests`],
     queryFn: () => fetch(`/api/events/${event!.id}/ticket-requests`).then(r => r.json()),
@@ -1657,10 +1757,18 @@ function EventOverviewSheet({
                           })}
                         >{r.status === "confirmed" ? "Has student paid?" : "Paid"}</span>
                       </label>
-                      {isRecitalEntry && (
+                      {isRecitalEntry ? (
                         <button
                           onClick={() => setEditSignup(r)}
                           title="Edit signup"
+                          className="text-muted-foreground/40 hover:text-primary transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setEditTicket(r)}
+                          title="Edit ticket info"
                           className="text-muted-foreground/40 hover:text-primary transition-colors"
                         >
                           <Pencil className="h-3 w-3" />
@@ -1917,6 +2025,15 @@ function EventOverviewSheet({
         eventId={event?.id ?? 0}
         onClose={() => setEditSignup(null)}
         onSaved={() => { refetchTickets(); setEditSignup(null); }}
+      />
+
+      <EditTicketRequestDialog
+        open={!!editTicket}
+        ticket={editTicket}
+        eventId={event?.id ?? 0}
+        isTwoDay={!!(event as any)?.isTwoDay}
+        onClose={() => setEditTicket(null)}
+        onSaved={() => { refetchTickets(); setEditTicket(null); }}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
