@@ -69,7 +69,7 @@ export function AppLayout({ children, noPadding }: LayoutProps) {
               {children}
             </main>
           ) : (
-            <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+            <main className="flex-1 overflow-auto overscroll-contain p-4 md:p-6 lg:p-8">
               <div className="mx-auto max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
                 {children}
               </div>

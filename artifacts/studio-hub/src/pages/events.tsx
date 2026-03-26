@@ -2216,7 +2216,7 @@ export default function Events() {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl gap-2"
+              className="hidden md:flex rounded-xl gap-2"
               onClick={() => {
                 const headers = ["Title", "Type", "Status", "Start Date", "End Date", "Location", "Is Paid", ...(canViewFinances ? ["Revenue", "Cost"] : []), "Lead Generating", "Has Debrief"];
                 const rows = [headers, ...(events ?? []).map((e: any) => [
@@ -2239,7 +2239,7 @@ export default function Events() {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+              className="hidden md:flex rounded-xl border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
               disabled={sendingReport}
               onClick={() => sendLateReport(undefined, {
                 onSuccess: (data) => {
@@ -2260,7 +2260,7 @@ export default function Events() {
 
             <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateTicketSource("none"); }}>
               <DialogTrigger asChild>
-                <Button className="rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
+                <Button className="hidden md:flex rounded-xl shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
                   <Plus className="h-4 w-4 mr-2" /> Create Event
                 </Button>
               </DialogTrigger>
@@ -3604,6 +3604,14 @@ export default function Events() {
           onDelete: (ev) => deleteEvent(ev.id),
         }}
       />
+
+      {/* Mobile FAB — Create Event, hidden on desktop */}
+      <button
+        className="md:hidden fixed bottom-6 right-5 z-40 flex items-center gap-2 bg-primary text-primary-foreground rounded-full px-5 py-3.5 shadow-xl shadow-primary/30 font-semibold text-sm active:scale-95 transition-transform"
+        onClick={() => setCreateOpen(true)}
+      >
+        <Plus className="h-4 w-4" /> Create Event
+      </button>
     </AppLayout>
   );
 }

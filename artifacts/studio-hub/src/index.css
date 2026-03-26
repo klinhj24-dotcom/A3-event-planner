@@ -144,7 +144,7 @@
     @apply border-border;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20 selection:text-primary;
+    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20 selection:text-primary overscroll-none;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
