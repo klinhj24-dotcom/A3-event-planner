@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable, eventStaffSlotsTable } from "@workspace/db";
+import { db, eventsTable, eventContactsTable, eventEmployeesTable, eventSignupsTable, contactsTable, employeesTable, eventDebriefTable, emailTemplatesTable, usersTable, bandsTable, eventLineupTable, eventTicketRequestsTable, commTasksTable, commScheduleRulesTable, eventStaffSlotsTable, eventBandInvitesTable, bandContactsTable } from "@workspace/db";
 import { eq, desc, asc, gte, and, ilike, inArray, sql } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { addDays, subDays } from "date-fns";
@@ -899,7 +899,7 @@ router.post("/events/:id/send-invite", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const eventId = parseInt(req.params.id);
-    const { templateId, recipientEmail, recipientName, ctaLabel } = req.body;
+    const { templateId, recipientEmail, recipientName, ctaLabel, bandId } = req.body;
     if (!templateId || !recipientEmail) {
       res.status(400).json({ error: "templateId and recipientEmail are required" });
       return;
@@ -922,6 +922,10 @@ router.post("/events/:id/send-invite", async (req, res) => {
       : [null];
     const recipientPhone = empRecord?.phone || contactRecord?.phone || "";
 
+    // For band invite templates, generate a band-confirm token so the invite is trackable on the dashboard
+    const isBandInvite = template.category === "event-invite-band" && bandId;
+    const bandConfirmToken = isBandInvite ? randomBytes(16).toString("hex") : null;
+
     // Build event variables
     const domain = getAppDomain();
     const signupParams = new URLSearchParams();
@@ -929,6 +933,8 @@ router.post("/events/:id/send-invite", async (req, res) => {
     if (recipientEmail) signupParams.set("email", recipientEmail);
     if (recipientPhone) signupParams.set("phone", recipientPhone);
     const signupUrl = `https://${domain}/signup/${event.signupToken}?${signupParams.toString()}`;
+    const bandConfirmUrl = bandConfirmToken ? `https://${domain}/band-confirm/${bandConfirmToken}` : null;
+    const ctaUrl = bandConfirmUrl ?? signupUrl;
     const eventDate = event.startDate
       ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(event.startDate))
       : "TBD";
@@ -940,12 +946,12 @@ router.post("/events/:id/send-invite", async (req, res) => {
         .replace(/\{\{event_title\}\}/g, event.title)
         .replace(/\{\{event_date\}\}/g, eventDate)
         .replace(/\{\{event_location\}\}/g, eventLocation)
-        .replace(/\{\{signup_link\}\}/g, signupUrl);
+        .replace(/\{\{signup_link\}\}/g, ctaUrl);
 
     const subject = substitute(template.subject);
     const body = substitute(template.body);
 
-    // Only invite templates get a signup CTA button — reminders go to people already signed up
+    // Only invite templates get a CTA button — reminders go to people already signed up
     const inviteCategories = ["show-request", "event-invite-staff", "event-invite-intern", "event-invite-band"];
     const hasSignup = template.category && inviteCategories.includes(template.category);
     const buttonLabel = ctaLabel || (template.category === "show-request" ? "Register Interest" : "Confirm My Spot");
@@ -954,7 +960,7 @@ router.post("/events/:id/send-invite", async (req, res) => {
       recipientName: recipientName || undefined,
       body,
       ctaLabel: hasSignup ? buttonLabel : undefined,
-      ctaUrl: hasSignup ? signupUrl : undefined,
+      ctaUrl: hasSignup ? ctaUrl : undefined,
     });
 
     // Send via Gmail
@@ -963,6 +969,47 @@ router.post("/events/:id/send-invite", async (req, res) => {
     const senderEmail = user.email || "";
     const raw = makeHtmlEmail({ to: recipientEmail, from: senderEmail, subject, html });
     const sent = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+
+    // For band invite templates, create an event_band_invites record so it shows on the dashboard
+    if (isBandInvite && bandConfirmToken) {
+      try {
+        const parsedBandId = parseInt(bandId);
+        // Find the lineup slot for this band in this event (use first match)
+        const [slot] = await db.select({ id: eventLineupTable.id, memberId: eventLineupTable.bandId })
+          .from(eventLineupTable)
+          .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.bandId, parsedBandId)));
+        // Find the band contact record
+        const [bandContact] = await db.select()
+          .from(bandContactsTable)
+          .where(and(eq(bandContactsTable.bandId, parsedBandId), eq(bandContactsTable.email, recipientEmail)));
+        // Only create if no existing pending invite for this band+event+email
+        const existing = await db.select({ id: eventBandInvitesTable.id })
+          .from(eventBandInvitesTable)
+          .where(and(
+            eq(eventBandInvitesTable.eventId, eventId),
+            eq(eventBandInvitesTable.bandId, parsedBandId),
+            eq(eventBandInvitesTable.contactEmail, recipientEmail),
+          ))
+          .limit(1);
+        if (existing.length === 0) {
+          await db.insert(eventBandInvitesTable).values({
+            eventId,
+            lineupSlotId: slot?.id ?? null,
+            bandId: parsedBandId,
+            memberId: bandContact?.memberId ?? null,
+            contactId: bandContact?.id ?? null,
+            contactName: recipientName || null,
+            contactEmail: recipientEmail,
+            token: bandConfirmToken,
+            status: "pending",
+            sentAt: new Date(),
+          });
+        }
+        console.log(`[send-invite] Created event_band_invites record for band ${parsedBandId} on event ${eventId}`);
+      } catch (trackErr) {
+        console.error("[send-invite] Failed to create band invite record (non-fatal):", trackErr);
+      }
+    }
 
     res.json({ success: true, messageId: sent.data.id, subject, to: recipientEmail });
   } catch (err) {

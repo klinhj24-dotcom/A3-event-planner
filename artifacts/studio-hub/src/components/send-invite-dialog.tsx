@@ -166,13 +166,23 @@ export function SendInviteDialog({ event, open, onClose }: Props) {
   const previewSubject = selectedTemplate ? substitute(selectedTemplate.subject, vars) : "";
   const previewBody = selectedTemplate ? substitute(selectedTemplate.body, vars) : "";
 
+  // Extract bandId from preset key (format: "band-{bandId}")
+  const selectedBandId = selectedPreset?.key.startsWith("band-")
+    ? parseInt(selectedPreset.key.replace("band-", ""))
+    : undefined;
+
   const sendMutation = useMutation({
     mutationFn: async () => {
       const r = await fetch(`/api/events/${event.id}/send-invite`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId: parseInt(templateId), recipientEmail, recipientName }),
+        body: JSON.stringify({
+          templateId: parseInt(templateId),
+          recipientEmail,
+          recipientName,
+          bandId: selectedBandId ?? null,
+        }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
