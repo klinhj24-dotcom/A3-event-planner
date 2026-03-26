@@ -62,10 +62,14 @@ router.get("/dashboard/stats", async (req, res) => {
       .groupBy(eventBandInvitesTable.memberId);
     const confirmedMemberIds = confirmedMembers.map(m => m.memberId).filter(Boolean) as number[];
 
-    // Slot-level confirmation guard: exclude invites whose lineup slot is confirmed
-    const slotNotConfirmed = and(
-      or(isNull(eventLineupTable.inviteStatus), ne(eventLineupTable.inviteStatus, "confirmed")),
-      eq(eventLineupTable.confirmed, false),
+    // Slot-level confirmation guard: exclude invites whose lineup slot is confirmed.
+    // LEFT JOIN means no matching slot → all lineup columns are NULL → treat as not confirmed.
+    const slotNotConfirmed = or(
+      isNull(eventLineupTable.id),   // no lineup slot row at all → not confirmed
+      and(
+        or(isNull(eventLineupTable.inviteStatus), ne(eventLineupTable.inviteStatus, "confirmed")),
+        eq(eventLineupTable.confirmed, false),
+      ),
     );
 
     const pendingInvitesWhere = and(
