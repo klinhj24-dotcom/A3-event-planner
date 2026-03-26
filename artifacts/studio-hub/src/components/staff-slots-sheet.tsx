@@ -31,7 +31,7 @@ interface StaffSlot {
   assignedEmployeeHourlyRate?: string | null;
   startTime?: string | null; endTime?: string | null; notes?: string | null;
   confirmed?: boolean | null; isAutoCreated?: boolean | null; eventDay?: number | null;
-  bonusPay?: string | null;
+  bonusPay?: string | null; arrivalBufferMinutes?: number | null;
 }
 interface EventMeta {
   id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean;
@@ -78,6 +78,21 @@ function fmtTimeShort(iso: string | null | undefined): string {
   if (!iso) return "";
   return format(new Date(iso), "h:mm a");
 }
+function fmtCallTime(startIso: string | null | undefined, bufferMins: number): string {
+  if (!startIso || !bufferMins) return "";
+  const callDate = new Date(new Date(startIso).getTime() - bufferMins * 60 * 1000);
+  return format(callDate, "h:mm a");
+}
+
+const BUFFER_OPTIONS = [
+  { value: 0, label: "On time" },
+  { value: 15, label: "15 min early" },
+  { value: 30, label: "30 min early" },
+  { value: 45, label: "45 min early" },
+  { value: 60, label: "1 hour early" },
+  { value: 90, label: "1.5 hours early" },
+  { value: 120, label: "2 hours early" },
+];
 function sameDay(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
   return format(new Date(a), "yyyy-MM-dd") === format(new Date(b), "yyyy-MM-dd");
@@ -146,6 +161,7 @@ function SlotCard({
     notes: slot.notes ?? "",
     eventDay: slot.eventDay ?? 1,
     bonusPay: slot.bonusPay ?? "",
+    arrivalBufferMinutes: slot.arrivalBufferMinutes ?? 0,
   });
 
   const filled = !!slot.assignedEmployeeId;
@@ -158,6 +174,7 @@ function SlotCard({
       notes: form.notes || null,
       eventDay: form.eventDay,
       bonusPay: form.bonusPay ? parseFloat(form.bonusPay) : null,
+      arrivalBufferMinutes: form.arrivalBufferMinutes,
     });
     setEditing(false);
   }
@@ -189,6 +206,17 @@ function SlotCard({
             <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">End</label>
             <Input type="datetime-local" className="h-8 rounded-lg text-xs" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} />
           </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Arrive Early</label>
+          <Select value={String(form.arrivalBufferMinutes)} onValueChange={v => setForm(f => ({ ...f, arrivalBufferMinutes: Number(v) }))}>
+            <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent position="popper">
+              {BUFFER_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
@@ -246,6 +274,11 @@ function SlotCard({
           )}
         </div>
         <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
+        {(slot.arrivalBufferMinutes ?? 0) > 0 && slot.startTime && (
+          <p className="text-[10px] text-amber-400/80 truncate">
+            Call time: {fmtCallTime(slot.startTime, slot.arrivalBufferMinutes!)}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
         {filled && (
@@ -258,7 +291,7 @@ function SlotCard({
             {resending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
           </button>
         )}
-        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "" }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
+        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "", arrivalBufferMinutes: slot.arrivalBufferMinutes ?? 0 }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
           <Pencil className="h-3 w-3" />
         </button>
         <button onClick={() => onDelete(slot.id)} className="text-muted-foreground hover:text-destructive p-1">
@@ -310,7 +343,7 @@ export function StaffSlotsSheet({
   const [addCategory, setAddCategory] = useState<EmpCategory>("all");
   const [addForm, setAddForm] = useState({
     roleTypeId: "", assignedEmployeeId: "unassigned",
-    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "",
+    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "", arrivalBufferMinutes: 0,
   });
 
   function openAddDialog(presetRoleTypeId?: string, presetDay?: number) {
@@ -322,7 +355,7 @@ export function StaffSlotsSheet({
     setAddForm({
       roleTypeId: presetRoleTypeId || "",
       assignedEmployeeId: "unassigned",
-      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1, bonusPay: "",
+      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1, bonusPay: "", arrivalBufferMinutes: 0,
     });
     setAddOpen(true);
   }
@@ -335,7 +368,7 @@ export function StaffSlotsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
-      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "" });
+      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "", arrivalBufferMinutes: 0 });
       setAddOpen(false);
       toast({ title: "Slot added" });
     },
@@ -351,7 +384,7 @@ export function StaffSlotsSheet({
     onSuccess: (data, vars) => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
       // Show toast only if employee was assigned
-      if (vars.data.assignedEmployeeId) toast({ title: "Assigned — confirmation email sent" });
+      if (vars.data.assignedEmployeeId) toast({ title: "Slot updated" });
     },
     onError: () => toast({ title: "Failed to update slot", variant: "destructive" }),
   });
@@ -574,9 +607,22 @@ export function StaffSlotsSheet({
               <Textarea className="rounded-xl min-h-[60px]" value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} placeholder="Setup instructions, parking info, etc." />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bonus Pay ($)</label>
-              <Input type="number" min={0} step={0.01} placeholder="0.00" className="rounded-xl h-9 text-sm" value={addForm.bonusPay} onChange={e => setAddForm(f => ({ ...f, bonusPay: e.target.value }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Arrive Early</label>
+                <Select value={String(addForm.arrivalBufferMinutes)} onValueChange={v => setAddForm(f => ({ ...f, arrivalBufferMinutes: Number(v) }))}>
+                  <SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent position="popper">
+                    {BUFFER_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bonus Pay ($)</label>
+                <Input type="number" min={0} step={0.01} placeholder="0.00" className="rounded-xl h-9 text-sm" value={addForm.bonusPay} onChange={e => setAddForm(f => ({ ...f, bonusPay: e.target.value }))} />
+              </div>
             </div>
 
             {event.isTwoDay && (
@@ -608,6 +654,7 @@ export function StaffSlotsSheet({
                 notes: addForm.notes || null,
                 eventDay: addForm.eventDay,
                 bonusPay: addForm.bonusPay ? parseFloat(addForm.bonusPay) : null,
+                arrivalBufferMinutes: addForm.arrivalBufferMinutes,
               })}>
               Add Slot
             </Button>

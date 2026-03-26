@@ -32,6 +32,7 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
   eventDay: integer("event_day").notNull().default(1),
   isAutoCreated: boolean("is_auto_created").notNull().default(false),
   bonusPay: decimal("bonus_pay", { precision: 10, scale: 2 }),
+  arrivalBufferMinutes: integer("arrival_buffer_minutes").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

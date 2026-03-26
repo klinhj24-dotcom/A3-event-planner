@@ -57,6 +57,18 @@ async function notifyStaffAssignment(
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
+        // Compute call time from arrivalBufferMinutes
+        const [arrivedSlot] = slotId
+          ? await db.select({ arrivalBufferMinutes: eventStaffSlotsTable.arrivalBufferMinutes }).from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId))
+          : [undefined];
+        const bufferMins = arrivedSlot?.arrivalBufferMinutes ?? 0;
+        let callTimeLine = "";
+        if (bufferMins > 0 && startTime) {
+          const callDate = new Date(new Date(startTime).getTime() - bufferMins * 60 * 1000);
+          const callStr = callDate.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+          callTimeLine = `  Please arrive by: ${callStr} (${bufferMins} min before shift)\n`;
+        }
+
         const subject = isUpdate
           ? `[TMS] Schedule update: ${roleType?.name ? `${roleType.name} — ` : ""}${event.title ?? ""}`
           : `[TMS] You've been added: ${roleType?.name ? `${roleType.name} — ` : ""}${event.title ?? ""}`;
@@ -68,7 +80,8 @@ async function notifyStaffAssignment(
           `${intro}\n\n` +
           `  Event: the ${event.title ?? ""}${eventDate ? ` — ${eventDate}` : ""}\n` +
           (roleType?.name ? `  Role: ${roleType.name}\n` : "") +
-          `${shiftLine}\n` +
+          `${shiftLine}` +
+          `${callTimeLine}\n` +
           `If you have any questions, reply to this email or contact your manager.\n\n` +
           `Thanks,\nThe Music Space`;
         const html = buildHtmlEmail({ recipientName: employee.name, body: emailBody });
@@ -302,6 +315,7 @@ const SLOT_SELECT = {
   eventDay: eventStaffSlotsTable.eventDay,
   isAutoCreated: eventStaffSlotsTable.isAutoCreated,
   bonusPay: eventStaffSlotsTable.bonusPay,
+  arrivalBufferMinutes: eventStaffSlotsTable.arrivalBufferMinutes,
   createdAt: eventStaffSlotsTable.createdAt,
 };
 
@@ -327,7 +341,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay, bonusPay } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay, bonusPay, arrivalBufferMinutes } = req.body;
 
     const [slot] = await db.insert(eventStaffSlotsTable)
       .values({
@@ -340,6 +354,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
         eventDay: eventDay ? Number(eventDay) : 1,
         isAutoCreated: isAutoCreated ?? false,
         bonusPay: bonusPay != null ? bonusPay.toString() : null,
+        arrivalBufferMinutes: arrivalBufferMinutes != null ? Number(arrivalBufferMinutes) : 0,
         // Auto-confirm immediately — no email invite needed
         confirmed: assignedEmployeeId ? true : false,
       })
@@ -371,7 +386,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay, arrivalBufferMinutes } = req.body;
 
     const [prev] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
     if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -392,6 +407,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         ...(notes !== undefined ? { notes: notes || null } : {}),
         ...(eventDay !== undefined ? { eventDay: Number(eventDay) } : {}),
         ...(bonusPay !== undefined ? { bonusPay: bonusPay != null ? bonusPay.toString() : null } : {}),
+        ...(arrivalBufferMinutes !== undefined ? { arrivalBufferMinutes: Number(arrivalBufferMinutes) } : {}),
         // Auto-confirm on assignment; clear reminder flags if assignee changes
         ...(assigneeChanged ? { confirmed: newAssigneeId != null ? true : false, confirmationToken: null, weekReminderSent: false, dayReminderSent: false } : {}),
         updatedAt: new Date(),
