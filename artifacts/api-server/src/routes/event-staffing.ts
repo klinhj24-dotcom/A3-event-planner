@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable, usersTable } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable, usersTable, eventEmployeesTable } from "@workspace/db";
+import { eq, asc, and } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
@@ -57,16 +57,16 @@ async function notifyStaffAssignment(
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
-        // Compute call time from arrivalBufferMinutes
-        const [arrivedSlot] = slotId
-          ? await db.select({ arrivalBufferMinutes: eventStaffSlotsTable.arrivalBufferMinutes }).from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId))
-          : [undefined];
-        const bufferMins = arrivedSlot?.arrivalBufferMinutes ?? 0;
+        // Look up arrive-early setting from eventEmployeesTable (shared with event edit page)
+        const [empAssignment] = await db.select({ minutesBefore: eventEmployeesTable.minutesBefore })
+          .from(eventEmployeesTable)
+          .where(and(eq(eventEmployeesTable.eventId, eventId), eq(eventEmployeesTable.employeeId, employeeId)));
+        const bufferMins = empAssignment?.minutesBefore ?? 0;
         let callTimeLine = "";
-        if (bufferMins > 0 && startTime) {
-          const callDate = new Date(new Date(startTime).getTime() - bufferMins * 60 * 1000);
+        if (bufferMins > 0 && event.startDate) {
+          const callDate = new Date(new Date(event.startDate).getTime() - bufferMins * 60 * 1000);
           const callStr = callDate.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-          callTimeLine = `  Please arrive by: ${callStr} (${bufferMins} min before shift)\n`;
+          callTimeLine = `  Please arrive by: ${callStr} (${bufferMins} min before event start)\n`;
         }
 
         const subject = isUpdate
@@ -315,7 +315,9 @@ const SLOT_SELECT = {
   eventDay: eventStaffSlotsTable.eventDay,
   isAutoCreated: eventStaffSlotsTable.isAutoCreated,
   bonusPay: eventStaffSlotsTable.bonusPay,
-  arrivalBufferMinutes: eventStaffSlotsTable.arrivalBufferMinutes,
+  eventEmployeeAssignmentId: eventEmployeesTable.id,
+  minutesBefore: eventEmployeesTable.minutesBefore,
+  minutesAfter: eventEmployeesTable.minutesAfter,
   createdAt: eventStaffSlotsTable.createdAt,
 };
 
@@ -328,6 +330,10 @@ router.get("/events/:id/staff-slots", async (req, res) => {
       .from(eventStaffSlotsTable)
       .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
+      .leftJoin(eventEmployeesTable, and(
+        eq(eventEmployeesTable.eventId, eventStaffSlotsTable.eventId),
+        eq(eventEmployeesTable.employeeId, eventStaffSlotsTable.assignedEmployeeId),
+      ))
       .where(eq(eventStaffSlotsTable.eventId, eventId))
       .orderBy(asc(eventStaffSlotsTable.startTime), asc(eventStaffSlotsTable.createdAt));
     res.json(slots);
@@ -341,7 +347,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay, bonusPay, arrivalBufferMinutes } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, isAutoCreated, eventDay, bonusPay } = req.body;
 
     const [slot] = await db.insert(eventStaffSlotsTable)
       .values({
@@ -354,7 +360,6 @@ router.post("/events/:id/staff-slots", async (req, res) => {
         eventDay: eventDay ? Number(eventDay) : 1,
         isAutoCreated: isAutoCreated ?? false,
         bonusPay: bonusPay != null ? bonusPay.toString() : null,
-        arrivalBufferMinutes: arrivalBufferMinutes != null ? Number(arrivalBufferMinutes) : 0,
         // Auto-confirm immediately — no email invite needed
         confirmed: assignedEmployeeId ? true : false,
       })
@@ -364,6 +369,7 @@ router.post("/events/:id/staff-slots", async (req, res) => {
       .from(eventStaffSlotsTable)
       .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
+      .leftJoin(eventEmployeesTable, and(eq(eventEmployeesTable.eventId, eventStaffSlotsTable.eventId), eq(eventEmployeesTable.employeeId, eventStaffSlotsTable.assignedEmployeeId)))
       .where(eq(eventStaffSlotsTable.id, slot.id));
 
     // Notify (email if confirmed + calendar push)
@@ -386,7 +392,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const slotId = parseInt(req.params.slotId);
-    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay, arrivalBufferMinutes } = req.body;
+    const { roleTypeId, assignedEmployeeId, startTime, endTime, notes, eventDay, bonusPay } = req.body;
 
     const [prev] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
     if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -407,7 +413,6 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
         ...(notes !== undefined ? { notes: notes || null } : {}),
         ...(eventDay !== undefined ? { eventDay: Number(eventDay) } : {}),
         ...(bonusPay !== undefined ? { bonusPay: bonusPay != null ? bonusPay.toString() : null } : {}),
-        ...(arrivalBufferMinutes !== undefined ? { arrivalBufferMinutes: Number(arrivalBufferMinutes) } : {}),
         // Auto-confirm on assignment; clear reminder flags if assignee changes
         ...(assigneeChanged ? { confirmed: newAssigneeId != null ? true : false, confirmationToken: null, weekReminderSent: false, dayReminderSent: false } : {}),
         updatedAt: new Date(),
@@ -418,6 +423,7 @@ router.put("/events/:id/staff-slots/:slotId", async (req, res) => {
       .from(eventStaffSlotsTable)
       .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
+      .leftJoin(eventEmployeesTable, and(eq(eventEmployeesTable.eventId, eventStaffSlotsTable.eventId), eq(eventEmployeesTable.employeeId, eventStaffSlotsTable.assignedEmployeeId)))
       .where(eq(eventStaffSlotsTable.id, slotId));
 
     // Notify new assignee (email if confirmed + calendar push)
@@ -465,6 +471,7 @@ router.post("/events/:id/staff-slots/:slotId/resend-notification", async (req, r
       .from(eventStaffSlotsTable)
       .leftJoin(staffRoleTypesTable, eq(eventStaffSlotsTable.roleTypeId, staffRoleTypesTable.id))
       .leftJoin(employeesTable, eq(eventStaffSlotsTable.assignedEmployeeId, employeesTable.id))
+      .leftJoin(eventEmployeesTable, and(eq(eventEmployeesTable.eventId, eventStaffSlotsTable.eventId), eq(eventEmployeesTable.employeeId, eventStaffSlotsTable.assignedEmployeeId)))
       .where(eq(eventStaffSlotsTable.id, slotId));
     if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
     if (!slot.assignedEmployeeId) { res.status(400).json({ error: "No employee assigned to this slot" }); return; }
@@ -473,6 +480,47 @@ router.post("/events/:id/staff-slots/:slotId/resend-notification", async (req, r
     res.json({ ok: true });
   } catch (err) {
     console.error("resend staff notification error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Upsert arrive-before / stay-after for a slot's assigned employee ─────────
+// Reads/writes eventEmployeesTable — same data as the event edit page "Assigned Staff" section.
+router.patch("/events/:id/staff-slots/:slotId/timing", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const eventId = parseInt(req.params.id);
+    const slotId = parseInt(req.params.slotId);
+    const { minutesBefore, minutesAfter } = req.body;
+
+    const [slot] = await db.select().from(eventStaffSlotsTable).where(eq(eventStaffSlotsTable.id, slotId));
+    if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
+    if (!slot.assignedEmployeeId) { res.status(400).json({ error: "No employee assigned" }); return; }
+
+    // Find or create the eventEmployees record for this employee+event
+    const [existing] = await db.select({ id: eventEmployeesTable.id })
+      .from(eventEmployeesTable)
+      .where(and(eq(eventEmployeesTable.eventId, eventId), eq(eventEmployeesTable.employeeId, slot.assignedEmployeeId)));
+
+    if (existing) {
+      await db.update(eventEmployeesTable)
+        .set({
+          ...(minutesBefore !== undefined ? { minutesBefore: minutesBefore === null ? null : parseInt(minutesBefore) } : {}),
+          ...(minutesAfter !== undefined ? { minutesAfter: minutesAfter === null ? null : parseInt(minutesAfter) } : {}),
+        })
+        .where(eq(eventEmployeesTable.id, existing.id));
+    } else {
+      await db.insert(eventEmployeesTable).values({
+        eventId,
+        employeeId: slot.assignedEmployeeId,
+        minutesBefore: minutesBefore != null ? parseInt(minutesBefore) : null,
+        minutesAfter: minutesAfter != null ? parseInt(minutesAfter) : null,
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("updateSlotTiming error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

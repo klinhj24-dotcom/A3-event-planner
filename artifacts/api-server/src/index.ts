@@ -34,7 +34,6 @@ async function runMigrations() {
     `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS event_vibe TEXT`,
     `ALTER TABLE event_debriefs ADD COLUMN IF NOT EXISTS staff_notes TEXT`,
     `ALTER TABLE event_staff_slots ADD COLUMN IF NOT EXISTS bonus_pay DECIMAL(10,2)`,
-    `ALTER TABLE event_staff_slots ADD COLUMN IF NOT EXISTS arrival_buffer_minutes INTEGER NOT NULL DEFAULT 0`,
     // ── Band invite system tables ───────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS band_members (
       id SERIAL PRIMARY KEY,

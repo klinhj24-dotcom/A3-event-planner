@@ -31,7 +31,10 @@ interface StaffSlot {
   assignedEmployeeHourlyRate?: string | null;
   startTime?: string | null; endTime?: string | null; notes?: string | null;
   confirmed?: boolean | null; isAutoCreated?: boolean | null; eventDay?: number | null;
-  bonusPay?: string | null; arrivalBufferMinutes?: number | null;
+  bonusPay?: string | null;
+  eventEmployeeAssignmentId?: number | null;
+  minutesBefore?: number | null;
+  minutesAfter?: number | null;
 }
 interface EventMeta {
   id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean;
@@ -78,21 +81,6 @@ function fmtTimeShort(iso: string | null | undefined): string {
   if (!iso) return "";
   return format(new Date(iso), "h:mm a");
 }
-function fmtCallTime(startIso: string | null | undefined, bufferMins: number): string {
-  if (!startIso || !bufferMins) return "";
-  const callDate = new Date(new Date(startIso).getTime() - bufferMins * 60 * 1000);
-  return format(callDate, "h:mm a");
-}
-
-const BUFFER_OPTIONS = [
-  { value: 0, label: "On time" },
-  { value: 15, label: "15 min early" },
-  { value: 30, label: "30 min early" },
-  { value: 45, label: "45 min early" },
-  { value: 60, label: "1 hour early" },
-  { value: 90, label: "1.5 hours early" },
-  { value: 120, label: "2 hours early" },
-];
 function sameDay(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
   return format(new Date(a), "yyyy-MM-dd") === format(new Date(b), "yyyy-MM-dd");
@@ -142,7 +130,7 @@ function CategoryFilter({ value, onChange }: { value: EmpCategory; onChange: (v:
 
 // ── SlotCard ─────────────────────────────────────────────────────────────────
 function SlotCard({
-  slot, employees, isTwoDay, onUpdate, onDelete, onResend,
+  slot, employees, isTwoDay, onUpdate, onDelete, onResend, onUpdateTiming,
 }: {
   slot: StaffSlot;
   employees: Employee[];
@@ -150,6 +138,7 @@ function SlotCard({
   onUpdate: (id: number, data: Record<string, unknown>) => void;
   onDelete: (id: number) => void;
   onResend: (id: number) => void;
+  onUpdateTiming: (slotId: number, minutesBefore: number | null, minutesAfter: number | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [resending, setResending] = useState(false);
@@ -161,7 +150,8 @@ function SlotCard({
     notes: slot.notes ?? "",
     eventDay: slot.eventDay ?? 1,
     bonusPay: slot.bonusPay ?? "",
-    arrivalBufferMinutes: slot.arrivalBufferMinutes ?? 0,
+    minutesBefore: slot.minutesBefore ?? null as number | null,
+    minutesAfter: slot.minutesAfter ?? null as number | null,
   });
 
   const filled = !!slot.assignedEmployeeId;
@@ -174,8 +164,10 @@ function SlotCard({
       notes: form.notes || null,
       eventDay: form.eventDay,
       bonusPay: form.bonusPay ? parseFloat(form.bonusPay) : null,
-      arrivalBufferMinutes: form.arrivalBufferMinutes,
     });
+    if (filled) {
+      onUpdateTiming(slot.id, form.minutesBefore, form.minutesAfter);
+    }
     setEditing(false);
   }
 
@@ -207,17 +199,20 @@ function SlotCard({
             <Input type="datetime-local" className="h-8 rounded-lg text-xs" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} />
           </div>
         </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Arrive Early</label>
-          <Select value={String(form.arrivalBufferMinutes)} onValueChange={v => setForm(f => ({ ...f, arrivalBufferMinutes: Number(v) }))}>
-            <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent position="popper">
-              {BUFFER_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {filled && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Arrive before (min)</label>
+              <Input type="number" min={0} step={5} placeholder="—" className="h-8 rounded-lg text-xs"
+                value={form.minutesBefore ?? ""} onChange={e => setForm(f => ({ ...f, minutesBefore: e.target.value ? Number(e.target.value) : null }))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Stay after (min)</label>
+              <Input type="number" min={0} step={5} placeholder="—" className="h-8 rounded-lg text-xs"
+                value={form.minutesAfter ?? ""} onChange={e => setForm(f => ({ ...f, minutesAfter: e.target.value ? Number(e.target.value) : null }))} />
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Notes</label>
@@ -274,9 +269,9 @@ function SlotCard({
           )}
         </div>
         <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
-        {(slot.arrivalBufferMinutes ?? 0) > 0 && slot.startTime && (
+        {filled && (slot.minutesBefore != null || slot.minutesAfter != null) && (
           <p className="text-[10px] text-amber-400/80 truncate">
-            Call time: {fmtCallTime(slot.startTime, slot.arrivalBufferMinutes!)}
+            {[slot.minutesBefore != null && `${slot.minutesBefore} min early`, slot.minutesAfter != null && `stay ${slot.minutesAfter} min`].filter(Boolean).join(" · ")}
           </p>
         )}
       </div>
@@ -291,7 +286,7 @@ function SlotCard({
             {resending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
           </button>
         )}
-        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "", arrivalBufferMinutes: slot.arrivalBufferMinutes ?? 0 }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
+        <button onClick={() => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "", minutesBefore: slot.minutesBefore ?? null, minutesAfter: slot.minutesAfter ?? null }); setEditing(true); }} className="text-muted-foreground hover:text-foreground p-1">
           <Pencil className="h-3 w-3" />
         </button>
         <button onClick={() => onDelete(slot.id)} className="text-muted-foreground hover:text-destructive p-1">
@@ -343,7 +338,7 @@ export function StaffSlotsSheet({
   const [addCategory, setAddCategory] = useState<EmpCategory>("all");
   const [addForm, setAddForm] = useState({
     roleTypeId: "", assignedEmployeeId: "unassigned",
-    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "", arrivalBufferMinutes: 0,
+    startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "",
   });
 
   function openAddDialog(presetRoleTypeId?: string, presetDay?: number) {
@@ -355,7 +350,7 @@ export function StaffSlotsSheet({
     setAddForm({
       roleTypeId: presetRoleTypeId || "",
       assignedEmployeeId: "unassigned",
-      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1, bonusPay: "", arrivalBufferMinutes: 0,
+      startDate: sd, startTime: st, endDate: ed, endTime: et, notes: "", eventDay: presetDay ?? 1, bonusPay: "",
     });
     setAddOpen(true);
   }
@@ -368,7 +363,7 @@ export function StaffSlotsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] });
-      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "", arrivalBufferMinutes: 0 });
+      setAddForm({ roleTypeId: "", assignedEmployeeId: "unassigned", startDate: "", startTime: "", endDate: "", endTime: "", notes: "", eventDay: 1, bonusPay: "" });
       setAddOpen(false);
       toast({ title: "Slot added" });
     },
@@ -404,6 +399,18 @@ export function StaffSlotsSheet({
       toast({ title: "Failed to resend", variant: "destructive" });
     }
   }
+
+  const { mutate: updateSlotTiming } = useMutation({
+    mutationFn: async ({ slotId, minutesBefore, minutesAfter }: { slotId: number; minutesBefore: number | null; minutesAfter: number | null }) => {
+      const r = await fetch(`/api/events/${event!.id}/staff-slots/${slotId}/timing`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minutesBefore, minutesAfter }), credentials: "include",
+      });
+      if (!r.ok) throw new Error("Failed to update timing");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/events/${event?.id}/staff-slots`] }),
+    onError: () => toast({ title: "Failed to update timing", variant: "destructive" }),
+  });
 
   // Group slots by roleTypeId
   const grouped = roleTypes
@@ -508,7 +515,8 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {dayUnroled.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification}
+                                onUpdateTiming={(slotId, mb, ma) => updateSlotTiming({ slotId, minutesBefore: mb, minutesAfter: ma })} />
                             ))}
                           </div>
                         </div>
@@ -535,7 +543,8 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {roleSlots.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification}
+                                onUpdateTiming={(slotId, mb, ma) => updateSlotTiming({ slotId, minutesBefore: mb, minutesAfter: ma })} />
                             ))}
                           </div>
                         </div>
@@ -607,22 +616,9 @@ export function StaffSlotsSheet({
               <Textarea className="rounded-xl min-h-[60px]" value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} placeholder="Setup instructions, parking info, etc." />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Arrive Early</label>
-                <Select value={String(addForm.arrivalBufferMinutes)} onValueChange={v => setAddForm(f => ({ ...f, arrivalBufferMinutes: Number(v) }))}>
-                  <SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent position="popper">
-                    {BUFFER_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bonus Pay ($)</label>
-                <Input type="number" min={0} step={0.01} placeholder="0.00" className="rounded-xl h-9 text-sm" value={addForm.bonusPay} onChange={e => setAddForm(f => ({ ...f, bonusPay: e.target.value }))} />
-              </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bonus Pay ($)</label>
+              <Input type="number" min={0} step={0.01} placeholder="0.00" className="rounded-xl h-9 text-sm" value={addForm.bonusPay} onChange={e => setAddForm(f => ({ ...f, bonusPay: e.target.value }))} />
             </div>
 
             {event.isTwoDay && (
@@ -654,7 +650,6 @@ export function StaffSlotsSheet({
                 notes: addForm.notes || null,
                 eventDay: addForm.eventDay,
                 bonusPay: addForm.bonusPay ? parseFloat(addForm.bonusPay) : null,
-                arrivalBufferMinutes: addForm.arrivalBufferMinutes,
               })}>
               Add Slot
             </Button>
