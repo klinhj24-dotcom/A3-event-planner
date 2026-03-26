@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, TouchSensor, useSensor, useSensors,
   useDraggable, useDroppable,
   type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
@@ -720,7 +720,7 @@ function SlotRow({
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Set time (manual)</label>
               <div className="relative">
@@ -737,17 +737,19 @@ function SlotRow({
                 )}
               </div>
               {draft.startTime
-                ? <p className="text-[10px] text-amber-400">Overrides auto-calc — click × to clear</p>
+                ? <p className="text-[10px] text-amber-400">Overrides auto-calc — tap × to clear</p>
                 : <p className="text-[10px] text-muted-foreground/50">Auto from slot above</p>
               }
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Duration (min)</label>
-              <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.duration} onChange={e => setDraft(d => ({ ...d, duration: e.target.value }))} placeholder="30" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Buffer after (min)</label>
-              <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.buffer} onChange={e => setDraft(d => ({ ...d, buffer: e.target.value }))} placeholder="15" />
+            <div className="grid grid-cols-2 sm:contents gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Duration (min)</label>
+                <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.duration} onChange={e => setDraft(d => ({ ...d, duration: e.target.value }))} placeholder="30" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Buffer after (min)</label>
+                <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.buffer} onChange={e => setDraft(d => ({ ...d, buffer: e.target.value }))} placeholder="15" />
+              </div>
             </div>
           </div>
 
@@ -1567,7 +1569,8 @@ export function LineupSheet({ event, open, onClose }: {
 
   // ── DnD ─────────────────────────────────────────────────────────────────────
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 10 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
