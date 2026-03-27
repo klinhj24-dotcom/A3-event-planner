@@ -314,6 +314,20 @@ async function runOneTimeFixes() {
     console.error("[fix] attendance_status sync fix failed (non-fatal):", err);
   }
 
+  // Fix: when staff set attendanceStatus='not_attending' the old code didn't also set status='declined',
+  // leaving records as status='pending' which made them appear in the dashboard pending list.
+  try {
+    const rNa = await db.execute(sql.raw(
+      `UPDATE event_band_invites SET status = 'declined', responded_at = COALESCE(responded_at, NOW()), updated_at = NOW()
+       WHERE attendance_status = 'not_attending' AND status = 'pending'`
+    ));
+    const countNa = (rNa as any).rowCount ?? 0;
+    if (countNa > 0) console.log(`[fix] Set status=declined for ${countNa} invite(s) with attendance_status=not_attending.`);
+    else console.log("[fix] No not_attending invites needed status fix.");
+  } catch (err) {
+    console.error("[fix] not_attending status fix failed (non-fatal):", err);
+  }
+
   // Fix: reclassify slots that old code marked 'confirmed' but are actually only partially resolved.
   // New code uses 'responding' for partial and 'confirmed' only when ALL members are resolved.
   try {

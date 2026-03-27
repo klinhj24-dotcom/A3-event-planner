@@ -93,28 +93,24 @@ router.get("/dashboard/stats", async (req, res) => {
       ))
       .orderBy(eventsTable.startDate);
 
-    const [trackedInvitesList, [trackedInvitesCountRow]] = await Promise.all([
-      db.select({
-          inviteId: eventBandInvitesTable.id,
-          token: eventBandInvitesTable.token,
-          contactName: eventBandInvitesTable.contactName,
-          memberName: bandMembersTable.name,
-          bandName: bandsTable.name,
-          eventId: eventsTable.id,
-          eventTitle: eventsTable.title,
-          startDate: eventsTable.startDate,
-        })
-        .from(eventBandInvitesTable)
-        .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
-        .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
-        .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
-        .where(trackedInvitesPendingWhere)
-        .orderBy(eventsTable.startDate),
-      db.select({ count: count() })
-        .from(eventBandInvitesTable)
-        .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
-        .where(trackedInvitesPendingWhere),
-    ]);
+    const trackedInvitesList = await db.select({
+        inviteId: eventBandInvitesTable.id,
+        token: eventBandInvitesTable.token,
+        memberId: eventBandInvitesTable.memberId,
+        contactName: eventBandInvitesTable.contactName,
+        contactEmail: eventBandInvitesTable.contactEmail,
+        memberName: bandMembersTable.name,
+        bandName: bandsTable.name,
+        eventId: eventsTable.id,
+        eventTitle: eventsTable.title,
+        startDate: eventsTable.startDate,
+      })
+      .from(eventBandInvitesTable)
+      .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
+      .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
+      .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
+      .where(trackedInvitesPendingWhere)
+      .orderBy(eventsTable.startDate);
 
     // Merge: tracked invite rows + one summary row per untracked slot
     const untrackedRows = untrackedSlots.map(s => ({
@@ -130,11 +126,14 @@ router.get("/dashboard/stats", async (req, res) => {
       inviteStatus: s.inviteStatus,
     }));
 
-    // Deduplicate tracked rows so we don't show multiple contacts for the same band+event
-    // as separate entries — group down to one row per (bandId, eventId)
+    // Deduplicate tracked rows: one entry per MEMBER per event (not per band).
+    // Multiple contact invites for the same member (e.g. both parents) collapse to one row.
+    // Members without a memberId fall back to contactEmail|eventId as the dedup key.
     const seenTracked = new Set<string>();
     const deduplicatedTracked = trackedInvitesList.filter(row => {
-      const key = `${row.bandName ?? ""}|${row.eventId}`;
+      const key = row.memberId != null
+        ? `member:${row.memberId}|${row.eventId}`
+        : `email:${row.contactEmail ?? row.inviteId}|${row.eventId}`;
       if (seenTracked.has(key)) return false;
       seenTracked.add(key);
       return true;
@@ -142,14 +141,15 @@ router.get("/dashboard/stats", async (req, res) => {
 
     const pendingInvitesList = [
       ...deduplicatedTracked,
-      ...untrackedRows.filter(r => !seenTracked.has(`${r.bandName ?? ""}|${r.eventId}`)),
+      ...untrackedRows,
     ].sort((a, b) => {
       if (!a.startDate) return 1;
       if (!b.startDate) return -1;
       return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
     });
 
-    const pendingInvites = (trackedInvitesCountRow?.count ?? 0) + untrackedSlots.length;
+    // Count matches the deduplicated display list so badge and list stay in sync
+    const pendingInvites = pendingInvitesList.length;
 
     // Pending debriefs for the current user — events where they are the debrief owner,
     // the event is in the "closing window", and no debrief has been submitted yet.

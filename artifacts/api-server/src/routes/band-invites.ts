@@ -561,8 +561,12 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
         }
       }
     } else {
+      // "not_attending" also sets status="declined" so the invite no longer appears as pending anywhere
+      const extraFields = attendanceStatus === "not_attending"
+        ? { attendanceStatus, status: "declined" as const, respondedAt: new Date(), updatedAt: new Date() }
+        : { attendanceStatus, updatedAt: new Date() };
       await db.update(eventBandInvitesTable)
-        .set({ attendanceStatus, updatedAt: new Date() })
+        .set(extraFields)
         .where(inArray(eventBandInvitesTable.id, inviteIds));
 
       // Recalculate slot inviteStatus + confirmed after any attendance change
