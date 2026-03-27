@@ -295,7 +295,7 @@ function SlotRow({
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
   onDelete: (id: number) => void;
   onSendInvite: (slotId: number, staffNote: string) => void;
-  onSendConfirmation: (slotId: number) => void;
+  onSendConfirmation: (slotId: number, calcStartTime: string | null) => void;
   onSendTimeUpdate: (slotId: number) => void;
   onClearConflict: (id: number) => void;
   ticketRequests?: any[];
@@ -415,7 +415,7 @@ function SlotRow({
   async function handleSendConfirmation() {
     setSendingConfirm(true);
     try {
-      await onSendConfirmation(slot.id);
+      await onSendConfirmation(slot.id, calcTime ?? null);
     } finally {
       setSendingConfirm(false);
     }
@@ -889,25 +889,32 @@ function SlotRow({
                         <li>Band leader, if an email is on file (CC)</li>
                         <li>All family contacts not marked Not Attending (BCC)</li>
                       </ul>
-                      {/* Time preview */}
-                      {slot.startTime ? (
-                        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-emerald-300 text-xs">
-                          <span className="font-semibold">Set time in email: </span>
-                          {(() => {
-                            const [h, m] = slot.startTime.split(":").map(Number);
-                            const label = `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
-                            return `${label}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`;
-                          })()}
-                        </div>
-                      ) : slot.staffNote ? (
-                        <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-amber-300 text-xs">
-                          <span className="font-semibold">No set time saved.</span> The email will say: <span className="italic">Estimated Slot: {slot.staffNote}</span>
-                        </div>
-                      ) : (
-                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-red-400 text-xs font-semibold">
-                          No set time or staff note on this slot — the email will not include any time information. Save a time first if needed.
-                        </div>
-                      )}
+                      {/* Time preview — use saved startTime, then calcTime, then staffNote */}
+                      {(() => {
+                        const fmt12t = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+                        const resolvedTime = slot.startTime || calcTime;
+                        if (resolvedTime) {
+                          return (
+                            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-emerald-300 text-xs">
+                              <span className="font-semibold">Set time in email: </span>
+                              {fmt12t(resolvedTime)}{slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}
+                              {!slot.startTime && calcTime && <span className="text-emerald-400/60 ml-1">(from show order cascade)</span>}
+                            </div>
+                          );
+                        }
+                        if (slot.staffNote) {
+                          return (
+                            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-amber-300 text-xs">
+                              <span className="font-semibold">No set time.</span> The email will say: <span className="italic">Estimated Slot: {slot.staffNote}</span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-red-400 text-xs font-semibold">
+                            No set time on this slot — the email will not include any time information. Save a time first if needed.
+                          </div>
+                        );
+                      })()}
                       <p className="text-amber-400">Before sending, confirm that all members who need to be there are marked <strong>Confirmed</strong> in the attendance list — anyone marked Not Attending will be excluded from this and future emails.</p>
                     </div>
                     <DialogFooter className="gap-2">
@@ -1512,11 +1519,12 @@ export function LineupSheet({ event, open, onClose }: {
     queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
   }
 
-  async function handleSendConfirmation(slotId: number): Promise<void> {
+  async function handleSendConfirmation(slotId: number, calcStartTime?: string | null): Promise<void> {
     const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-confirmation`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      body: JSON.stringify({ calcStartTime: calcStartTime ?? null }),
     });
     const data = await r.json();
     if (r.status === 409 && data.alreadySent) {
@@ -1582,7 +1590,19 @@ export function LineupSheet({ event, open, onClose }: {
   async function handleBulkLockIn() {
     setBulkLockingIn(true);
     try {
-      const r = await fetch(`/api/events/${eventId}/lineup/send-confirmation-bulk`, { method: "POST", credentials: "include" });
+      // Build a map of slotId → calcTime for slots without an explicit startTime
+      const calcTimesMap: Record<number, string> = {};
+      slots.forEach((s, idx) => {
+        if (s.type === "act" && s.id && !s.startTime && calcTimes[idx]) {
+          calcTimesMap[s.id] = calcTimes[idx]!;
+        }
+      });
+      const r = await fetch(`/api/events/${eventId}/lineup/send-confirmation-bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ calcStartTimes: calcTimesMap }),
+      });
       const data = await r.json();
       if (!r.ok) { toast({ title: "Bulk lock-in failed", description: data.error, variant: "destructive" }); return; }
       const unconfirmedList: string[] = data.unconfirmed ?? [];
@@ -1824,8 +1844,10 @@ export function LineupSheet({ event, open, onClose }: {
                           <div className="divide-y divide-border/30">
                             {actSlots.filter(s => s.confirmed && !s.confirmationSent && s.bandId).map(s => {
                               const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
-                              const timeLabel = s.startTime
-                                ? `${fmt12(s.startTime)}${s.durationMinutes ? ` (${s.durationMinutes} min)` : ""}`
+                              const slotIdx = slots.indexOf(s);
+                              const resolvedTime = s.startTime || (slotIdx >= 0 && calcTimes[slotIdx] ? calcTimes[slotIdx] : null);
+                              const timeLabel = resolvedTime
+                                ? `${fmt12(resolvedTime)}${s.durationMinutes ? ` (${s.durationMinutes} min)` : ""}`
                                 : s.staffNote ? `Estimated: ${s.staffNote}` : null;
                               return (
                                 <div key={s.id} className="flex items-center justify-between px-3 py-1.5 gap-3">

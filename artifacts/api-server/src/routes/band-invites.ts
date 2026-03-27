@@ -613,6 +613,9 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
       return;
     }
 
+    // Use explicit startTime from DB; fall back to frontend-calculated cascade time if provided
+    const resolvedStartTime = slot.startTime || (req.body?.calcStartTime ?? null);
+
     // Get all contacts for this slot — BCC everyone (exclude declined)
     const allInvites = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.lineupSlotId, slotId));
     if (!allInvites.length) { res.status(400).json({ error: "No contacts found to send confirmation to." }); return; }
@@ -645,8 +648,8 @@ router.post("/events/:eventId/lineup/:slotId/send-confirmation", async (req, res
       const [h, m] = t.split(":").map(Number);
       return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
     };
-    const slotTimeLine = slot.startTime
-      ? `\nYour Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
+    const slotTimeLine = resolvedStartTime
+      ? `\nYour Set Time: ${fmt12(resolvedStartTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
       : slot.staffNote ? `\nEstimated Slot: ${slot.staffNote}` : "";
 
     const emailBody = `Hi ${bandName} Band Families,
@@ -837,6 +840,8 @@ router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) =
 
     const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
 
+    const calcStartTimes: Record<number, string> = req.body?.calcStartTimes ?? {};
+
     let sentCount = 0;
     for (const slot of toSend) {
       try {
@@ -853,8 +858,9 @@ router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) =
 
         const bandName = slot.bandName ?? "Your Band";
         const performanceDay = formatPerformanceDay(event, slot.eventDay);
-        const slotTimeLine = slot.startTime
-          ? `\nYour Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
+        const resolvedTime = slot.startTime || calcStartTimes[slot.id] || null;
+        const slotTimeLine = resolvedTime
+          ? `\nYour Set Time: ${fmt12(resolvedTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
           : slot.staffNote ? `\nEstimated Slot: ${slot.staffNote}` : "";
 
         const emailBody = `Hi ${bandName} Band Families,
