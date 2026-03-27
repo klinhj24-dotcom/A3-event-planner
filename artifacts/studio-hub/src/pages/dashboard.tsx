@@ -207,11 +207,28 @@ export default function Dashboard() {
                         ? `${item.studentFirstName ?? ""} ${item.studentLastName ?? ""}`.trim()
                         : `${item.contactFirstName ?? ""} ${item.contactLastName ?? ""}`.trim();
                       const isPending = chargingId === item.id;
+
+                      // Resolve price per ticket
+                      const rawPrice = item.isTwoDay && item.ticketType
+                        ? item.ticketType === "day1" ? item.day1Price
+                        : item.ticketType === "day2" ? item.day2Price
+                        : item.ticketPrice
+                        : item.ticketPrice;
+                      const price = rawPrice ? parseFloat(rawPrice) : null;
+                      const qty = item.ticketCount ?? (isRecital ? 1 : null);
+                      const total = price != null && qty != null ? price * qty : null;
+
                       return (
                         <div key={item.id} className="flex items-center px-5 py-3 hover:bg-muted/20 transition-colors gap-3">
-                          <Link href="/charges" className="flex-1 min-w-0 space-y-0.5">
+                          <Link href="/charges" className="flex-1 min-w-0">
                             <p className="font-semibold text-foreground text-sm leading-tight truncate">{personName}</p>
-                            <p className="text-xs text-muted-foreground truncate">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground/60 mt-0.5">
+                              {qty != null ? `${qty} ticket${qty !== 1 ? "s" : ""}` : ""}
+                              {total != null ? <span className="font-medium text-foreground/80 ml-1">· ${total.toFixed(2)}</span> : ""}
+                            </p>
                           </Link>
                           <div className="shrink-0 flex flex-col items-center gap-0.5">
                             {idx === 0 && (

@@ -43,10 +43,16 @@ router.get("/dashboard/stats", async (req, res) => {
             eventTitle: eventsTable.title,
             startDate: eventsTable.startDate,
             formType: eventsTable.ticketFormType,
+            isTwoDay: eventsTable.isTwoDay,
+            ticketPrice: eventsTable.ticketPrice,
+            day1Price: eventsTable.day1Price,
+            day2Price: eventsTable.day2Price,
             contactFirstName: eventTicketRequestsTable.contactFirstName,
             contactLastName: eventTicketRequestsTable.contactLastName,
             studentFirstName: eventTicketRequestsTable.studentFirstName,
             studentLastName: eventTicketRequestsTable.studentLastName,
+            ticketCount: eventTicketRequestsTable.ticketCount,
+            ticketType: eventTicketRequestsTable.ticketType,
           })
           .from(eventTicketRequestsTable)
           .innerJoin(eventsTable, eq(eventTicketRequestsTable.eventId, eventsTable.id))
