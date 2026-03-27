@@ -21,7 +21,7 @@ router.get("/dashboard/stats", async (req, res) => {
     const [[totalContactsRow], [upcomingEventsRow], [totalEmployeesRow], [pendingSignupsRow], [overdueContactsRow], recentOutreach, upcomingEventsList, [pendingChargesRow], pendingChargesList] =
       await Promise.all([
         db.select({ count: count() }).from(contactsTable),
-        db.select({ count: count() }).from(eventsTable).where(gte(eventsTable.startDate, now)),
+        db.select({ count: count() }).from(eventsTable).where(and(gte(eventsTable.startDate, now), ne(eventsTable.status, "cancelled"))),
         db.select({ count: count() }).from(employeesTable).where(eq(employeesTable.isActive, true)),
         db.select({ count: count() }).from(eventSignupsTable).where(eq(eventSignupsTable.status, "pending")),
         db.select({ count: count() }).from(contactsTable).where(
@@ -34,7 +34,7 @@ router.get("/dashboard/stats", async (req, res) => {
           )
         ),
         db.select().from(outreachTable).orderBy(desc(outreachTable.outreachAt)).limit(5),
-        db.select().from(eventsTable).where(gte(eventsTable.startDate, now)).orderBy(eventsTable.startDate).limit(5),
+        db.select().from(eventsTable).where(and(gte(eventsTable.startDate, now), ne(eventsTable.status, "cancelled"))).orderBy(eventsTable.startDate).limit(5),
         db.select({ count: count() }).from(eventTicketRequestsTable)
           .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled"))),
         db.select({

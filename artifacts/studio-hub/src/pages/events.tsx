@@ -18,7 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, MapPin, DollarSign, CalendarCheck, Tag, Loader2,
   List, CalendarDays, Radio, ClipboardList, Mail, Instagram, Printer, Globe, AlertCircle, MailWarning, ClipboardCheck, ImageIcon, Pencil, X, Users2, Music, Receipt, Package, FileText, UserCheck,
-  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download, Mic, Zap
+  Clock, ExternalLink, ChevronRight, Info, Ticket, Copy, Check, CheckCircle2, Trash2, Send, Users, Phone, UserRound, TrendingUp, Download, Mic, Zap, RotateCcw, EyeOff
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format, isPast, differenceInDays } from "date-fns";
@@ -2085,6 +2085,7 @@ function EventOverviewSheet({
 export default function Events() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"list" | "calendar">("list");
+  const [showCancelled, setShowCancelled] = useState(false);
   const { data: events, isLoading } = useListEvents();
   const { data: eventTypeList = [] } = useActiveEventTypes();
   const { data: currentUser } = useQuery<any>({
@@ -2328,10 +2329,31 @@ export default function Events() {
 
   const { mutate: sendLateReport, isPending: sendingReport } = useSendLateReport();
 
-  const filteredEvents = events?.filter(e =>
-    e.title.toLowerCase().includes(search.toLowerCase()) ||
-    e.location?.toLowerCase().includes(search.toLowerCase())
-  );
+  const { mutate: reanimateEvent, isPending: reanimating } = useMutation({
+    mutationFn: async (eventId: number) => {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "planning" }),
+      });
+      if (!res.ok) throw new Error("Failed to reanimate event");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Event reanimated", description: "Status set back to Planning." });
+    },
+    onError: () => toast({ title: "Failed to reanimate event", variant: "destructive" }),
+  });
+
+  const filteredEvents = events?.filter(e => {
+    if (!showCancelled && e.status === "cancelled") return false;
+    return (
+      e.title.toLowerCase().includes(search.toLowerCase()) ||
+      e.location?.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   return (
     <AppLayout>
@@ -2946,8 +2968,8 @@ export default function Events() {
           )
         ) : (
           <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-border/50 bg-muted/10">
-              <div className="relative max-w-md">
+            <div className="p-4 border-b border-border/50 bg-muted/10 flex items-center gap-3">
+              <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search events by title or location..."
@@ -2956,6 +2978,18 @@ export default function Events() {
                   className="pl-9 rounded-xl border-border/60 bg-background focus-visible:ring-primary/20"
                 />
               </div>
+              <button
+                onClick={() => setShowCancelled(v => !v)}
+                title={showCancelled ? "Hide cancelled events" : "Show cancelled events"}
+                className={`shrink-0 flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-2 border transition-colors ${
+                  showCancelled
+                    ? "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
+                    : "text-muted-foreground border-border/60 bg-muted/30 hover:text-foreground hover:border-border"
+                }`}
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                {showCancelled ? "Hiding cancelled" : "Show cancelled"}
+              </button>
             </div>
 
             <div className="overflow-x-auto">
@@ -3053,6 +3087,19 @@ export default function Events() {
                               <Badge variant="outline" className="text-[10px] font-semibold mr-1 border" style={tagStyle(event.calendarTag)}>
                                 {CALENDAR_TAGS.find(t => t.value === event.calendarTag)?.label ?? event.calendarTag}
                               </Badge>
+                            )}
+                            {/* Reanimate (cancelled only) */}
+                            {event.status === "cancelled" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Reanimate — set back to Planning"
+                                className="h-7 w-7 p-0 rounded-lg text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
+                                onClick={() => reanimateEvent(event.id)}
+                                disabled={reanimating}
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
                             )}
                             {/* Edit event */}
                             <Button
