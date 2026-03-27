@@ -506,8 +506,17 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
             for (const inv of notYetConfirmed) {
               if (!inv.contactEmail) continue;
               const subject = `Booking Confirmed — ${bandName} at ${event?.title ?? "The Music Space"}`;
+
+              // Look up the performer name for this invite
+              let performerName: string | null = null;
+              if (inv.memberId) {
+                const [memberRow] = await db.select({ name: bandMembersTable.name }).from(bandMembersTable).where(eq(bandMembersTable.id, inv.memberId));
+                performerName = memberRow?.name ?? null;
+              }
+
               let body = `Hi ${inv.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
               body += `EVENT DETAILS\n`;
+              if (performerName) body += `Performer: ${performerName}\n`;
               body += `Event: ${event?.title ?? "TBD"}\n`;
               body += `Performance Date: ${performanceDay}\n`;
               if (event?.location) body += `Location: ${event.location}\n`;
@@ -516,7 +525,19 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
                 if (slot.durationMinutes) body += ` (${slot.durationMinutes} min)`;
                 body += ` — subject to change based on other students' availability\n`;
               }
-              if (event?.ticketsUrl) {
+              // Guest list section
+              if (event?.allowGuestList) {
+                body += `\nGUEST LIST\n`;
+                const policyDesc = event.guestListPolicy === "plus_two"
+                  ? "you and up to 2 guests are"
+                  : event.guestListPolicy === "plus_one"
+                  ? "you and 1 additional guest are"
+                  : "you are";
+                body += `As a performer, ${policyDesc} on the complimentary performer guest list — no ticket needed for admission.\n`;
+                if (event.ticketsUrl) {
+                  body += `\nFor any family or friends beyond your guest list allowance, general admission tickets are available here:\n${event.ticketsUrl}\n`;
+                }
+              } else if (event?.ticketsUrl) {
                 body += `\nGeneral Admission Tickets\nShare this link with family and friends who want to attend:\n${event.ticketsUrl}\n`;
               }
               body += `\nIf anything changes or you have questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;

@@ -300,6 +300,7 @@ function SlotRow({
   onClearConflict: (id: number) => void;
   ticketRequests?: any[];
 }) {
+  const queryClient = useQueryClient();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: slot.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -436,7 +437,9 @@ function SlotRow({
       credentials: "include",
       body: JSON.stringify({ inviteIds, attendanceStatus }),
     });
+    // Refetch invites AND invalidate the lineup so the slot badge (inviteStatus) updates immediately
     refetchInvites();
+    queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
   }
 
   // ── Group header rendering ────────────────────────────────────────────────
