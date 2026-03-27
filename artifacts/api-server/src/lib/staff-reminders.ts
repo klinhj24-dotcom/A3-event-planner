@@ -99,14 +99,15 @@ export async function runStaffReminders() {
     for (const { slot, event, employee, role } of weekCandidates) {
       if (!employee.email) continue;
       try {
+        const TZ = "America/New_York";
         const eventDate = event.startDate
-          ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+          ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: TZ })
           : "";
         const shiftStart = slot.startTime
-          ? new Date(slot.startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+          ? new Date(slot.startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
         const shiftEnd = slot.endTime
-          ? new Date(slot.endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })
+          ? new Date(slot.endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
@@ -143,14 +144,15 @@ export async function runStaffReminders() {
     for (const { slot, event, employee, role } of dayCandidates) {
       if (!employee.email) continue;
       try {
+        const TZ = "America/New_York";
         const eventDate = event.startDate
-          ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+          ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: TZ })
           : "";
         const shiftStart = slot.startTime
-          ? new Date(slot.startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+          ? new Date(slot.startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
         const shiftEnd = slot.endTime
-          ? new Date(slot.endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })
+          ? new Date(slot.endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 

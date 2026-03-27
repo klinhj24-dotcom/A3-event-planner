@@ -46,14 +46,15 @@ async function notifyStaffAssignment(
       const allUsers = await db.select().from(usersTable);
       const sender = allUsers.find(u => u.googleAccessToken && u.googleRefreshToken);
       if (sender) {
+        const TZ = "America/New_York";
         const eventDate = event.startDate
-          ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+          ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: TZ })
           : "";
         const shiftStart = startTime
-          ? new Date(startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+          ? new Date(startTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
         const shiftEnd = endTime
-          ? new Date(endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })
+          ? new Date(endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
         const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
@@ -65,7 +66,7 @@ async function notifyStaffAssignment(
         let callTimeLine = "";
         if (bufferMins > 0 && event.startDate) {
           const callDate = new Date(new Date(event.startDate).getTime() - bufferMins * 60 * 1000);
-          const callStr = callDate.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+          const callStr = callDate.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: TZ });
           callTimeLine = `  Please arrive by: ${callStr} (${bufferMins} min before event start)\n`;
         }
 
@@ -213,7 +214,7 @@ router.get("/staff-confirm/:token", async (req, res) => {
     await db.update(eventStaffSlotsTable).set({ confirmed: true, updatedAt: new Date() }).where(eq(eventStaffSlotsTable.id, slot.id));
 
     const eventDate = event?.startDate
-      ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+      ? new Date(event.startDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/New_York" })
       : "";
     const subtitle = `${event?.title ?? "your event"}${eventDate ? ` on ${eventDate}` : ""}`;
     res.send(confirmHtml("Confirmed!", `Thanks${employee?.name ? `, ${employee.name.split(" ")[0]}` : ""}! You've confirmed your participation for <strong>${subtitle}</strong>.`, true));
