@@ -199,33 +199,39 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="p-0">
               {stats?.pendingChargesList && stats.pendingChargesList.length > 0 ? (
-                <div className="divide-y divide-border/20">
-                  {stats.pendingChargesList.map((item: any) => {
-                    const isRecital = item.formType === "recital" && item.studentFirstName;
-                    const personName = isRecital
-                      ? `${item.studentFirstName ?? ""} ${item.studentLastName ?? ""}`.trim()
-                      : `${item.contactFirstName ?? ""} ${item.contactLastName ?? ""}`.trim();
-                    const isLoading = chargingId === item.id;
-                    return (
-                      <div key={item.id} className="flex items-center justify-between px-5 py-3 hover:bg-black/20 transition-colors group">
-                        <Link href="/charges" className="flex-1 min-w-0 space-y-0.5 cursor-pointer">
-                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{personName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
-                        </Link>
-                        <button
-                          onClick={() => markCharged(item.id)}
-                          disabled={isLoading}
-                          title="Mark as charged"
-                          className="shrink-0 ml-3 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/50 disabled:opacity-50 transition-colors"
-                        >
-                          {isLoading
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <CheckCircle2 className="h-3.5 w-3.5" />}
-                          Charged
-                        </button>
-                      </div>
-                    );
-                  })}
+                <div>
+                  <div className="flex items-center justify-end px-5 pt-2 pb-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Check when charged</p>
+                  </div>
+                  <div className="divide-y divide-border/20">
+                    {stats.pendingChargesList.map((item: any) => {
+                      const isRecital = item.formType === "recital" && item.studentFirstName;
+                      const personName = isRecital
+                        ? `${item.studentFirstName ?? ""} ${item.studentLastName ?? ""}`.trim()
+                        : `${item.contactFirstName ?? ""} ${item.contactLastName ?? ""}`.trim();
+                      const isPending = chargingId === item.id;
+                      return (
+                        <div key={item.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-0 px-4 py-3 hover:bg-muted/20 transition-colors">
+                          <div className="flex justify-center pr-3">
+                            <button
+                              onClick={() => markCharged(item.id)}
+                              disabled={isPending}
+                              title="Mark card as charged"
+                              className="h-8 w-8 rounded-xl border-2 border-border/50 bg-background hover:border-emerald-500 hover:bg-emerald-500/5 flex items-center justify-center transition-all shadow-sm group disabled:opacity-50"
+                            >
+                              {isPending
+                                ? <Loader2 className="h-4 w-4 text-muted-foreground/40 animate-spin" />
+                                : <CheckCircle2 className="h-4 w-4 text-muted-foreground/20 group-hover:text-emerald-400 transition-colors" />}
+                            </button>
+                          </div>
+                          <Link href="/charges" className="min-w-0 space-y-0.5 cursor-pointer">
+                            <p className="font-semibold text-foreground text-sm leading-tight truncate">{personName}</p>
+                            <p className="text-xs text-muted-foreground truncate">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : null}
             </CardContent>
