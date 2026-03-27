@@ -883,11 +883,14 @@ The Music Space`;
 router.get("/band-confirm/:token", async (req, res) => {
   try {
     const { token } = req.params;
-    const [invite] = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.token, token));
-    if (!invite) {
+    const [inviteRaw] = await db.select().from(eventBandInvitesTable).where(eq(eventBandInvitesTable.token, token));
+    if (!inviteRaw) {
       res.status(404).json({ error: "This link is invalid or has expired." });
       return;
     }
+
+    // Work with a mutable copy so we can patch status/attendanceStatus if we auto-heal below
+    const invite = { ...inviteRaw };
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, invite.eventId));
     const [slot] = await db
@@ -905,9 +908,35 @@ router.get("/band-confirm/:token", async (req, res) => {
       memberName = member?.name ?? null;
     }
 
-    // Find if another contact for the same MEMBER already responded
-    const siblingInvites = await db.select().from(eventBandInvitesTable)
-      .where(and(eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId), eq(eventBandInvitesTable.memberId!, invite.memberId!)));
+    // If this invite is still pending but the same email already has a confirmed invite for this
+    // event (e.g. they confirmed via a different token from a dialog-send vs. slot-send), auto-fix
+    // this record and show the "already confirmed" page instead of the confirm form.
+    if (invite.status === "pending" && invite.contactEmail) {
+      const [confirmedSibling] = await db.select({ id: eventBandInvitesTable.id, respondedAt: eventBandInvitesTable.respondedAt })
+        .from(eventBandInvitesTable)
+        .where(and(
+          eq(eventBandInvitesTable.eventId, invite.eventId),
+          eq(eventBandInvitesTable.contactEmail, invite.contactEmail.toLowerCase()),
+          eq(eventBandInvitesTable.status, "confirmed"),
+        ));
+      if (confirmedSibling) {
+        // Heal this pending record on the spot so the lineup and this link both reflect confirmed
+        await db.update(eventBandInvitesTable).set({
+          status: "confirmed",
+          attendanceStatus: "confirmed",
+          respondedAt: confirmedSibling.respondedAt ?? new Date(),
+          updatedAt: new Date(),
+        }).where(eq(eventBandInvitesTable.id, invite.id));
+        invite.status = "confirmed";
+        invite.attendanceStatus = "confirmed";
+      }
+    }
+
+    // Find if another contact for the same MEMBER already responded (slot-scoped sibling check)
+    const siblingInvites = invite.memberId
+      ? await db.select().from(eventBandInvitesTable)
+          .where(and(eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId), eq(eventBandInvitesTable.memberId, invite.memberId)))
+      : [];
     const alreadyConfirmed = siblingInvites.find(s => s.status === "confirmed" && s.id !== invite.id);
     const alreadyDeclined = siblingInvites.find(s => s.status === "declined" && s.id !== invite.id);
 

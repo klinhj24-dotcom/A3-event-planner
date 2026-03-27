@@ -235,6 +235,9 @@ async function runOneTimeFixes() {
   // Fix: backfill pending invites that have a confirmed sibling record for the same slot + email.
   // Happens when the bulk-dialog invite (contactId=null) was confirmed, then the per-slot "Send Invite"
   // button created a NEW pending record for the same email because the contactId check missed it.
+  // Matches pending invites where the same contact email already has a confirmed invite for the
+  // SAME EVENT (regardless of which slot or lineupSlotId — one record may have null from a dialog
+  // send and another the real slot ID from the per-slot button).
   try {
     const rSib = await db.execute(sql.raw(`
       UPDATE event_band_invites ebi_pending
@@ -243,7 +246,7 @@ async function runOneTimeFixes() {
           responded_at = COALESCE(
             ebi_pending.responded_at,
             (SELECT responded_at FROM event_band_invites
-             WHERE lineup_slot_id = ebi_pending.lineup_slot_id
+             WHERE event_id = ebi_pending.event_id
                AND LOWER(contact_email) = LOWER(ebi_pending.contact_email)
                AND status = 'confirmed'
                AND id != ebi_pending.id
@@ -254,14 +257,14 @@ async function runOneTimeFixes() {
         AND ebi_pending.contact_email IS NOT NULL
         AND EXISTS (
           SELECT 1 FROM event_band_invites ebi_conf
-          WHERE ebi_conf.lineup_slot_id = ebi_pending.lineup_slot_id
+          WHERE ebi_conf.event_id = ebi_pending.event_id
             AND LOWER(ebi_conf.contact_email) = LOWER(ebi_pending.contact_email)
             AND ebi_conf.status = 'confirmed'
             AND ebi_conf.id != ebi_pending.id
         )
     `));
     const countSib = (rSib as any).rowCount ?? 0;
-    if (countSib > 0) console.log(`[fix] Backfilled ${countSib} pending invite(s) to confirmed via confirmed sibling-by-email.`);
+    if (countSib > 0) console.log(`[fix] Backfilled ${countSib} pending invite(s) to confirmed via confirmed sibling-by-email (event-level).`);
     else console.log("[fix] No pending invites had confirmed siblings to sync.");
   } catch (err) {
     console.error("[fix] Sibling-by-email backfill failed (non-fatal):", err);
