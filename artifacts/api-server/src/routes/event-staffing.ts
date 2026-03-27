@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable, usersTable, eventEmployeesTable } from "@workspace/db";
+import { db, staffRoleTypesTable, eventStaffSlotsTable, employeesTable, eventsTable, usersTable, eventEmployeesTable, eventStaffTasksTable } from "@workspace/db";
 import { eq, asc, and } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
@@ -580,6 +580,78 @@ router.delete("/events/:id/staff-slots/:slotId", async (req, res) => {
     }
   } catch (err) {
     console.error("deleteEventStaffSlot error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Staff Tasks ───────────────────────────────────────────────────────────────
+// GET  /events/:id/staff-tasks           — all tasks for the event
+// POST /events/:id/staff-tasks           — create a task (body: staffSlotId?, taskText)
+// PATCH /events/:id/staff-tasks/:taskId  — update taskText or isDone
+// DELETE /events/:id/staff-tasks/:taskId — delete
+
+router.get("/events/:id/staff-tasks", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  const eventId = Number(req.params.id);
+  try {
+    const tasks = await db
+      .select()
+      .from(eventStaffTasksTable)
+      .where(eq(eventStaffTasksTable.eventId, eventId))
+      .orderBy(asc(eventStaffTasksTable.createdAt));
+    res.json(tasks);
+  } catch (err) {
+    console.error("getStaffTasks error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/events/:id/staff-tasks", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  const eventId = Number(req.params.id);
+  const { staffSlotId, taskText } = req.body;
+  if (!taskText?.trim()) { res.status(400).json({ error: "taskText is required" }); return; }
+  try {
+    const [task] = await db
+      .insert(eventStaffTasksTable)
+      .values({ eventId, staffSlotId: staffSlotId ?? null, taskText: taskText.trim() })
+      .returning();
+    res.json(task);
+  } catch (err) {
+    console.error("createStaffTask error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/events/:id/staff-tasks/:taskId", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  const taskId = Number(req.params.taskId);
+  const { taskText, isDone } = req.body;
+  const update: Record<string, unknown> = {};
+  if (taskText !== undefined) update.taskText = taskText.trim();
+  if (isDone !== undefined) update.isDone = isDone;
+  if (Object.keys(update).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
+  try {
+    const [task] = await db
+      .update(eventStaffTasksTable)
+      .set(update)
+      .where(eq(eventStaffTasksTable.id, taskId))
+      .returning();
+    res.json(task);
+  } catch (err) {
+    console.error("updateStaffTask error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/events/:id/staff-tasks/:taskId", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  const taskId = Number(req.params.taskId);
+  try {
+    await db.delete(eventStaffTasksTable).where(eq(eventStaffTasksTable.id, taskId));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("deleteStaffTask error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

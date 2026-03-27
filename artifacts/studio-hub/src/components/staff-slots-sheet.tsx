@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Pencil, UserRound, Users2, Check, X, Send, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, UserRound, Users2, Check, X, Send, Loader2, ListTodo } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface StaffRoleType {
@@ -35,6 +35,10 @@ interface StaffSlot {
   eventEmployeeAssignmentId?: number | null;
   minutesBefore?: number | null;
   minutesAfter?: number | null;
+}
+interface StaffTask {
+  id: number; eventId: number; staffSlotId?: number | null;
+  taskText: string; isDone: boolean; createdAt: string;
 }
 interface EventMeta {
   id: number; title: string; startDate?: string | null; endDate?: string | null; location?: string | null; isTwoDay?: boolean;
@@ -131,6 +135,7 @@ function CategoryFilter({ value, onChange }: { value: EmpCategory; onChange: (v:
 // ── SlotCard ─────────────────────────────────────────────────────────────────
 function SlotCard({
   slot, employees, isTwoDay, onUpdate, onDelete, onResend,
+  tasks, onAddTask, onToggleTask, onDeleteTask,
 }: {
   slot: StaffSlot;
   employees: Employee[];
@@ -138,8 +143,14 @@ function SlotCard({
   onUpdate: (id: number, data: Record<string, unknown>) => void;
   onDelete: (id: number) => void;
   onResend: (id: number) => void;
+  tasks: StaffTask[];
+  onAddTask: (slotId: number, text: string) => void;
+  onToggleTask: (taskId: number, isDone: boolean) => void;
+  onDeleteTask: (taskId: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [newTask, setNewTask] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
   const [resending, setResending] = useState(false);
   const [editCategory, setEditCategory] = useState<EmpCategory>("all");
   const [form, setForm] = useState({
@@ -251,52 +262,121 @@ function SlotCard({
 
   const openEdit = () => { setForm({ assignedEmployeeId: slot.assignedEmployeeId ? String(slot.assignedEmployeeId) : "unassigned", startTime: toLocalInput(slot.startTime), endTime: toLocalInput(slot.endTime), notes: slot.notes ?? "", eventDay: slot.eventDay ?? 1, bonusPay: slot.bonusPay ?? "", minutesBefore: slot.minutesBefore ?? null, minutesAfter: slot.minutesAfter ?? null }); setEditing(true); };
 
+  function submitTask() {
+    const t = newTask.trim();
+    if (!t) return;
+    onAddTask(slot.id, t);
+    setNewTask("");
+    setAddingTask(false);
+  }
+
   return (
-    <div className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${filled ? "border-border/30 bg-muted/20" : "border-dashed border-border/50 bg-transparent"}`}>
-      <div className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-full ${filled ? "bg-primary/10 text-primary" : "bg-muted/40 text-muted-foreground/40"}`}>
-        <UserRound className="h-3.5 w-3.5" />
-      </div>
-      {/* Tappable body — opens edit on mobile tap */}
-      <button className="flex-1 min-w-0 text-left" onClick={openEdit}>
-        <div className="flex items-center gap-1.5">
-          <p className={`text-sm font-medium truncate ${filled ? "text-foreground" : "text-muted-foreground/50 italic"}`}>
-            {filled ? slot.assignedEmployeeName : "Unassigned"}
-          </p>
-          {filled && slot.confirmed && (
-            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"><Check className="h-2.5 w-2.5" />Confirmed</span>
+    <div className={`group rounded-xl border transition-colors ${filled ? "border-border/30 bg-muted/20" : "border-dashed border-border/50 bg-transparent"}`}>
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <div className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-full ${filled ? "bg-primary/10 text-primary" : "bg-muted/40 text-muted-foreground/40"}`}>
+          <UserRound className="h-3.5 w-3.5" />
+        </div>
+        {/* Tappable body — opens edit on mobile tap */}
+        <button className="flex-1 min-w-0 text-left" onClick={openEdit}>
+          <div className="flex items-center gap-1.5">
+            <p className={`text-sm font-medium truncate ${filled ? "text-foreground" : "text-muted-foreground/50 italic"}`}>
+              {filled ? slot.assignedEmployeeName : "Unassigned"}
+            </p>
+            {filled && slot.confirmed && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"><Check className="h-2.5 w-2.5" />Confirmed</span>
+            )}
+            {isTwoDay && (
+              <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${(slot.eventDay ?? 1) === 2 ? "bg-orange-500/15 text-orange-400" : "bg-sky-500/15 text-sky-400"}`}>
+                Day {slot.eventDay ?? 1}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
+          {filled && (slot.minutesBefore != null || slot.minutesAfter != null) && (
+            <p className="text-[10px] text-amber-400/80 truncate">
+              {[slot.minutesBefore != null && `${slot.minutesBefore} min early`, slot.minutesAfter != null && `stay ${slot.minutesAfter} min`].filter(Boolean).join(" · ")}
+            </p>
           )}
-          {isTwoDay && (
-            <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${(slot.eventDay ?? 1) === 2 ? "bg-orange-500/15 text-orange-400" : "bg-sky-500/15 text-sky-400"}`}>
-              Day {slot.eventDay ?? 1}
-            </span>
+        </button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
+          <button
+            title="Add task"
+            onClick={(e) => { e.stopPropagation(); setAddingTask(v => !v); }}
+            className={`p-2 transition-colors ${addingTask ? "text-primary" : "text-muted-foreground hover:text-primary"}`}
+          >
+            <ListTodo className="h-3.5 w-3.5" />
+          </button>
+          {filled && (
+            <button
+              title="Resend assignment email"
+              disabled={resending}
+              onClick={async (e) => { e.stopPropagation(); setResending(true); try { await onResend(slot.id); } finally { setResending(false); } }}
+              className="text-muted-foreground hover:text-primary p-2 transition-colors disabled:opacity-50"
+            >
+              {resending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          <button onClick={(e) => { e.stopPropagation(); openEdit(); }} className="text-muted-foreground hover:text-foreground p-2">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(slot.id); }} className="text-muted-foreground hover:text-destructive p-2">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Tasks section */}
+      {(tasks.length > 0 || addingTask) && (
+        <div className="px-3 pb-2.5 space-y-1 border-t border-border/20 pt-2">
+          {tasks.map(task => (
+            <div key={task.id} className="flex items-center gap-2 group/task">
+              <button
+                onClick={() => onToggleTask(task.id, !task.isDone)}
+                className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                  task.isDone
+                    ? "bg-primary border-primary text-primary-foreground"
+                    : "border-border/60 hover:border-primary/50"
+                }`}
+              >
+                {task.isDone && <Check className="h-2.5 w-2.5" />}
+              </button>
+              <span className={`flex-1 text-xs leading-relaxed ${task.isDone ? "line-through text-muted-foreground/50" : "text-foreground/80"}`}>
+                {task.taskText}
+              </span>
+              <button
+                onClick={() => onDeleteTask(task.id)}
+                className="shrink-0 text-muted-foreground/30 hover:text-destructive p-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {addingTask && (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <input
+                autoFocus
+                value={newTask}
+                onChange={e => setNewTask(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") submitTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }}
+                placeholder="Describe the task…"
+                className="flex-1 bg-transparent text-xs border-b border-border/40 focus:border-primary/60 outline-none py-0.5 placeholder:text-muted-foreground/40"
+              />
+              <button onClick={submitTask} className="text-primary hover:text-primary/80 p-0.5"><Check className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { setAddingTask(false); setNewTask(""); }} className="text-muted-foreground hover:text-foreground p-0.5"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )}
+          {!addingTask && (
+            <button
+              onClick={() => setAddingTask(true)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-primary/60 transition-colors pt-0.5"
+            >
+              <Plus className="h-3 w-3" /> Add task
+            </button>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground truncate">{shiftLabel(slot.startTime, slot.endTime)}</p>
-        {filled && (slot.minutesBefore != null || slot.minutesAfter != null) && (
-          <p className="text-[10px] text-amber-400/80 truncate">
-            {[slot.minutesBefore != null && `${slot.minutesBefore} min early`, slot.minutesAfter != null && `stay ${slot.minutesAfter} min`].filter(Boolean).join(" · ")}
-          </p>
-        )}
-      </button>
-      {/* Action buttons: always visible on mobile, hover-only on desktop */}
-      <div className="flex items-center gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
-        {filled && (
-          <button
-            title="Resend assignment email"
-            disabled={resending}
-            onClick={async (e) => { e.stopPropagation(); setResending(true); try { await onResend(slot.id); } finally { setResending(false); } }}
-            className="text-muted-foreground hover:text-primary p-2 transition-colors disabled:opacity-50"
-          >
-            {resending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          </button>
-        )}
-        <button onClick={(e) => { e.stopPropagation(); openEdit(); }} className="text-muted-foreground hover:text-foreground p-2">
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(slot.id); }} className="text-muted-foreground hover:text-destructive p-2">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      )}
     </div>
   );
 }
@@ -335,6 +415,52 @@ export function StaffSlotsSheet({
       return r.json();
     },
     enabled: !!event?.id,
+  });
+
+  // ── Staff tasks ────────────────────────────────────────────────────────────
+  const tasksKey = [`/api/events/${event?.id}/staff-tasks`];
+  const { data: allTasks = [] } = useQuery<StaffTask[]>({
+    queryKey: tasksKey,
+    queryFn: async () => {
+      const r = await fetch(`/api/events/${event!.id}/staff-tasks`, { credentials: "include" });
+      return r.json();
+    },
+    enabled: !!event?.id,
+  });
+
+  const { mutate: addTask } = useMutation({
+    mutationFn: async ({ slotId, taskText }: { slotId: number; taskText: string }) => {
+      const r = await fetch(`/api/events/${event!.id}/staff-tasks`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffSlotId: slotId, taskText }),
+      });
+      if (!r.ok) throw new Error("Failed to add task");
+      return r.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksKey }),
+    onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
+  });
+
+  const { mutate: toggleTask } = useMutation({
+    mutationFn: async ({ taskId, isDone }: { taskId: number; isDone: boolean }) => {
+      const r = await fetch(`/api/events/${event!.id}/staff-tasks/${taskId}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDone }),
+      });
+      if (!r.ok) throw new Error("Failed to update task");
+      return r.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksKey }),
+  });
+
+  const { mutate: deleteTask } = useMutation({
+    mutationFn: async (taskId: number) => {
+      await fetch(`/api/events/${event!.id}/staff-tasks/${taskId}`, { method: "DELETE", credentials: "include" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksKey }),
+    onError: () => toast({ title: "Failed to delete task", variant: "destructive" }),
   });
 
   // ── Add slot dialog ────────────────────────────────────────────────────────
@@ -507,7 +633,11 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {dayUnroled.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification}
+                                tasks={allTasks.filter(t => t.staffSlotId === slot.id)}
+                                onAddTask={(slotId, taskText) => addTask({ slotId, taskText })}
+                                onToggleTask={(taskId, isDone) => toggleTask({ taskId, isDone })}
+                                onDeleteTask={(taskId) => deleteTask(taskId)} />
                             ))}
                           </div>
                         </div>
@@ -534,7 +664,11 @@ export function StaffSlotsSheet({
                           <div className="space-y-2">
                             {roleSlots.map(slot => (
                               <SlotCard key={slot.id} slot={slot} employees={employees} isTwoDay={event.isTwoDay}
-                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification} />
+                                onUpdate={(id, data) => updateSlot({ id, data })} onDelete={deleteSlot} onResend={resendNotification}
+                                tasks={allTasks.filter(t => t.staffSlotId === slot.id)}
+                                onAddTask={(slotId, taskText) => addTask({ slotId, taskText })}
+                                onToggleTask={(taskId, isDone) => toggleTask({ taskId, isDone })}
+                                onDeleteTask={(taskId) => deleteTask(taskId)} />
                             ))}
                           </div>
                         </div>

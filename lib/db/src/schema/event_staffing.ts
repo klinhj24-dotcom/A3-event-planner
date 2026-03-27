@@ -38,3 +38,16 @@ export const eventStaffSlotsTable = pgTable("event_staff_slots", {
 
 export type EventStaffSlot = typeof eventStaffSlotsTable.$inferSelect;
 export type InsertEventStaffSlot = typeof eventStaffSlotsTable.$inferInsert;
+
+// Tasks that can be manually assigned to a specific staff slot
+export const eventStaffTasksTable = pgTable("event_staff_tasks", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => eventsTable.id, { onDelete: "cascade" }).notNull(),
+  staffSlotId: integer("staff_slot_id").references(() => eventStaffSlotsTable.id, { onDelete: "cascade" }),
+  taskText: text("task_text").notNull(),
+  isDone: boolean("is_done").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type EventStaffTask = typeof eventStaffTasksTable.$inferSelect;
+export type InsertEventStaffTask = typeof eventStaffTasksTable.$inferInsert;

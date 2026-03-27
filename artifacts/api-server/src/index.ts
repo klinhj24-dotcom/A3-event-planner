@@ -168,6 +168,15 @@ async function runMigrations() {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS open_mic_skipped BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE event_band_invites ADD COLUMN IF NOT EXISTS attendance_status TEXT NOT NULL DEFAULT 'invited'`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS locked_in_start_time TEXT`,
+    // ── Staff tasks — manually entered tasks per slot ────────────────────────
+    `CREATE TABLE IF NOT EXISTS event_staff_tasks (
+      id SERIAL PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      staff_slot_id INTEGER REFERENCES event_staff_slots(id) ON DELETE CASCADE,
+      task_text TEXT NOT NULL,
+      is_done BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ];
   for (const m of migrations) {
     try {
