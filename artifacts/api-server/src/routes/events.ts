@@ -266,8 +266,12 @@ router.get("/events", async (req, res) => {
   }
   try {
     const { status, type, upcoming } = req.query;
-    const conditions = [eq(eventsTable.openMicSkipped, false)];
-    if (status && typeof status === "string") conditions.push(eq(eventsTable.status, status));
+    // Skipped open mics are hidden from the normal list, but should appear when
+    // explicitly fetching cancelled events so staff can see the full history.
+    const conditions = status === "cancelled"
+      ? [eq(eventsTable.status, "cancelled")]
+      : [eq(eventsTable.openMicSkipped, false)];
+    if (status && typeof status === "string" && status !== "cancelled") conditions.push(eq(eventsTable.status, status));
     if (type && typeof type === "string") conditions.push(eq(eventsTable.type, type));
     if (upcoming === "true") conditions.push(gte(eventsTable.startDate, new Date()));
 

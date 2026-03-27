@@ -2087,6 +2087,11 @@ export default function Events() {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [showCancelled, setShowCancelled] = useState(false);
   const { data: events, isLoading } = useListEvents();
+  const { data: cancelledEvents } = useQuery<any[]>({
+    queryKey: ["/api/events", "cancelled"],
+    queryFn: () => fetch("/api/events?status=cancelled", { credentials: "include" }).then(r => r.json()),
+    enabled: showCancelled,
+  });
   const { data: eventTypeList = [] } = useActiveEventTypes();
   const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/auth/user"],
@@ -2347,11 +2352,20 @@ export default function Events() {
     onError: () => toast({ title: "Failed to reanimate event", variant: "destructive" }),
   });
 
-  const filteredEvents = events?.filter(e => {
+  // When showing cancelled, merge in skipped open mics (openMicSkipped=true) from the separate query
+  const mergedEvents = (() => {
+    const base = events ?? [];
+    if (!showCancelled || !cancelledEvents) return base;
+    const existingIds = new Set(base.map(e => e.id));
+    const extras = cancelledEvents.filter((c: any) => !existingIds.has(c.id));
+    return [...base, ...extras];
+  })();
+
+  const filteredEvents = mergedEvents.filter(e => {
     if (!showCancelled && e.status === "cancelled") return false;
     return (
       e.title.toLowerCase().includes(search.toLowerCase()) ||
-      e.location?.toLowerCase().includes(search.toLowerCase())
+      (e.location?.toLowerCase().includes(search.toLowerCase()) ?? false)
     );
   });
 
