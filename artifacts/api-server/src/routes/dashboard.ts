@@ -93,6 +93,17 @@ router.get("/dashboard/stats", async (req, res) => {
       ))
       .orderBy(eventsTable.startDate);
 
+    // Also exclude invites whose lineup slot has been manually confirmed (slot.confirmed = true
+    // or slot.inviteStatus = 'confirmed'), since those bands are already locked in even if
+    // the individual invite record still says "pending".
+    const slotNotYetConfirmed = or(
+      isNull(eventLineupTable.id),    // no slot linked — include it
+      and(
+        eq(eventLineupTable.confirmed, false),
+        ne(eventLineupTable.inviteStatus, "confirmed"),
+      ),
+    );
+
     const [trackedInvitesList, [trackedInvitesCountRow]] = await Promise.all([
       db.select({
           inviteId: eventBandInvitesTable.id,
@@ -106,14 +117,16 @@ router.get("/dashboard/stats", async (req, res) => {
         })
         .from(eventBandInvitesTable)
         .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
+        .leftJoin(eventLineupTable, eq(eventBandInvitesTable.lineupSlotId, eventLineupTable.id))
         .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
         .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
-        .where(trackedInvitesPendingWhere)
+        .where(and(trackedInvitesPendingWhere, slotNotYetConfirmed))
         .orderBy(eventsTable.startDate),
       db.select({ count: count() })
         .from(eventBandInvitesTable)
         .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
-        .where(trackedInvitesPendingWhere),
+        .leftJoin(eventLineupTable, eq(eventBandInvitesTable.lineupSlotId, eventLineupTable.id))
+        .where(and(trackedInvitesPendingWhere, slotNotYetConfirmed)),
     ]);
 
     // Merge: tracked invite rows + one summary row per untracked slot
