@@ -2087,7 +2087,7 @@ export default function Events() {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [showCancelled, setShowCancelled] = useState(false);
   const { data: events, isLoading } = useListEvents();
-  const { data: cancelledEvents } = useQuery<any[]>({
+  const { data: cancelledEvents, isLoading: loadingCancelled } = useQuery<any[]>({
     queryKey: ["/api/events", "cancelled"],
     queryFn: () => fetch("/api/events?status=cancelled", { credentials: "include" }).then(r => r.json()),
     enabled: showCancelled,
@@ -2352,13 +2352,18 @@ export default function Events() {
     onError: () => toast({ title: "Failed to reanimate event", variant: "destructive" }),
   });
 
-  // When showing cancelled, merge in skipped open mics (openMicSkipped=true) from the separate query
+  // When showing cancelled, merge in skipped open mics (openMicSkipped=true) from the separate query,
+  // then re-sort the whole list by startDate so cancelled events appear in the right chronological position.
   const mergedEvents = (() => {
     const base = events ?? [];
     if (!showCancelled || !cancelledEvents) return base;
     const existingIds = new Set(base.map(e => e.id));
     const extras = cancelledEvents.filter((c: any) => !existingIds.has(c.id));
-    return [...base, ...extras];
+    return [...base, ...extras].sort((a, b) => {
+      const da = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+      const db = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+      return da - db;
+    });
   })();
 
   const filteredEvents = mergedEvents.filter(e => {
@@ -3001,8 +3006,11 @@ export default function Events() {
                     : "text-muted-foreground border-border/60 bg-muted/30 hover:text-foreground hover:border-border"
                 }`}
               >
-                <EyeOff className="h-3.5 w-3.5" />
-                {showCancelled ? "Hiding cancelled" : "Show cancelled"}
+                {showCancelled && loadingCancelled
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <EyeOff className="h-3.5 w-3.5" />
+                }
+                {showCancelled ? "Showing cancelled" : "Show cancelled"}
               </button>
             </div>
 
