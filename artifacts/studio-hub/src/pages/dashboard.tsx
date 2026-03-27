@@ -19,6 +19,11 @@ export default function Dashboard() {
     setTimeout(() => setCopiedInviteId(null), 2000);
   }
 
+  function firstWord(name: string | null | undefined): string {
+    if (!name) return "Link";
+    return name.trim().split(/\s+/)[0];
+  }
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -214,8 +219,12 @@ export default function Dashboard() {
                         <div className="space-y-0.5 min-w-0">
                           <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{displayName}</p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                            {item.memberName && item.contactName && (
-                              <span className="text-muted-foreground/70">via {item.contactName}</span>
+                            {item.memberName && (item.links?.length > 0 || item.contactName) && (
+                              <span className="text-muted-foreground/70">
+                                via {item.links && item.links.length > 1
+                                  ? (item.links as any[]).map((l: any) => firstWord(l.contactName)).filter(Boolean).join(" & ")
+                                  : item.contactName}
+                              </span>
                             )}
                             {item.bandName && !item.memberName && !item.contactName && (
                               <span className="text-muted-foreground/70">{item.bandName}</span>
@@ -226,7 +235,29 @@ export default function Dashboard() {
                             )}
                           </div>
                         </div>
-                        {item.token ? (
+                        {item.links && item.links.length > 0 ? (
+                          <div className="shrink-0 ml-3 flex items-center gap-1.5">
+                            {(item.links as any[]).filter((l: any) => l.token).map((link: any) => {
+                              const isLinkCopied = copiedInviteId === link.inviteId;
+                              const showName = item.links.length > 1;
+                              return (
+                                <button
+                                  key={link.inviteId}
+                                  onClick={() => copyInviteLink(link.inviteId, link.token)}
+                                  title={`Copy confirmation link${showName && link.contactName ? ` for ${link.contactName}` : ""}`}
+                                  className={`flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2.5 py-1.5 border ${
+                                    isLinkCopied
+                                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                                      : "text-primary/70 bg-primary/5 border-primary/20 hover:text-primary hover:bg-primary/10"
+                                  }`}
+                                >
+                                  {isLinkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                  {isLinkCopied ? "Copied!" : showName ? firstWord(link.contactName) : "Copy link"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : item.token ? (
                           <button
                             onClick={() => copyInviteLink(item.inviteId, item.token)}
                             title="Copy confirmation link"

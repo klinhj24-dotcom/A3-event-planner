@@ -126,18 +126,22 @@ router.get("/dashboard/stats", async (req, res) => {
       inviteStatus: s.inviteStatus,
     }));
 
-    // Deduplicate tracked rows: one entry per MEMBER per event (not per band).
-    // Multiple contact invites for the same member (e.g. both parents) collapse to one row.
-    // Members without a memberId fall back to contactEmail|eventId as the dedup key.
-    const seenTracked = new Set<string>();
-    const deduplicatedTracked = trackedInvitesList.filter(row => {
+    // Group tracked rows by member+event: one display row per student, with ALL contact links collected.
+    // e.g. if both parents were invited for the same student, one row shows with two "Copy link" buttons.
+    type LinkEntry = { inviteId: number; token: string | null; contactName: string | null };
+    type GroupedRow = (typeof trackedInvitesList)[0] & { links: LinkEntry[] };
+    const memberGroupMap = new Map<string, GroupedRow>();
+    for (const row of trackedInvitesList) {
       const key = row.memberId != null
         ? `member:${row.memberId}|${row.eventId}`
-        : `email:${row.contactEmail ?? row.inviteId}|${row.eventId}`;
-      if (seenTracked.has(key)) return false;
-      seenTracked.add(key);
-      return true;
-    });
+        : `email:${row.contactEmail ?? String(row.inviteId)}|${row.eventId}`;
+      if (!memberGroupMap.has(key)) {
+        memberGroupMap.set(key, { ...row, links: [{ inviteId: row.inviteId, token: row.token, contactName: row.contactName }] });
+      } else {
+        memberGroupMap.get(key)!.links.push({ inviteId: row.inviteId, token: row.token, contactName: row.contactName });
+      }
+    }
+    const deduplicatedTracked = Array.from(memberGroupMap.values());
 
     const pendingInvitesList = [
       ...deduplicatedTracked,
