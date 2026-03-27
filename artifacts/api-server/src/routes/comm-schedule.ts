@@ -437,6 +437,56 @@ router.post("/comm-schedule/tasks/late-report", async (req, res) => {
   }
 });
 
+// POST /comm-schedule/tasks/recalculate-dates — recompute pending/late task due dates from current event startDate
+router.post("/comm-schedule/tasks/recalculate-dates", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { eventId } = req.body;
+    if (!eventId) { res.status(400).json({ error: "eventId is required" }); return; }
+
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) { res.status(404).json({ error: "Event not found" }); return; }
+    if (!event.startDate) { res.status(400).json({ error: "Event has no start date" }); return; }
+
+    const eventDate = new Date(event.startDate);
+
+    // Fetch all non-done tasks for this event that have a rule
+    const tasks = await db
+      .select({ id: commTasksTable.id, ruleId: commTasksTable.ruleId, status: commTasksTable.status })
+      .from(commTasksTable)
+      .where(and(eq(commTasksTable.eventId, eventId)));
+
+    const tasksWithRule = tasks.filter(t => t.ruleId != null && t.status !== "done");
+    if (tasksWithRule.length === 0) {
+      res.json({ updated: 0, message: "No pending tasks with rules found — all are either done or have no rule." });
+      return;
+    }
+
+    const ruleIds = [...new Set(tasksWithRule.map(t => t.ruleId!))];
+    const rules = await db.select().from(commScheduleRulesTable).where(inArray(commScheduleRulesTable.id, ruleIds));
+    const ruleMap = new Map(rules.map(r => [r.id, r]));
+
+    let updated = 0;
+    for (const task of tasksWithRule) {
+      const rule = ruleMap.get(task.ruleId!);
+      if (!rule) continue;
+      const dueDate = rule.timingDays < 0
+        ? subDays(eventDate, Math.abs(rule.timingDays))
+        : addDays(eventDate, rule.timingDays);
+      // Reset status to "pending" now that the date is corrected
+      await db.update(commTasksTable)
+        .set({ dueDate, status: "pending", updatedAt: new Date() })
+        .where(eq(commTasksTable.id, task.id));
+      updated++;
+    }
+
+    res.json({ updated });
+  } catch (err) {
+    console.error("recalculateDates error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /comm-schedule/tasks/generate — generate tasks for an event from rules
 router.post("/comm-schedule/tasks/generate", async (req, res) => {
   if (!requireAdmin(req, res)) return;

@@ -79,6 +79,20 @@ function CommTasksSheet({
       fetch(`/api/calendar/sync-comms/${event!.id}`, { method: "POST", credentials: "include" }).then(r => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, event?.id] }),
   });
+  const { mutate: recalcDates, isPending: recalculating } = useMutation({
+    mutationFn: () =>
+      fetch("/api/comm-schedule/tasks/recalculate-dates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ eventId: event!.id }),
+      }).then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/comm-schedule/tasks`, event?.id] });
+      toast({ title: `${data.updated} task date${data.updated !== 1 ? "s" : ""} recalculated from the event's current date` });
+    },
+    onError: () => toast({ title: "Failed to recalculate dates", variant: "destructive" }),
+  });
   const { mutate: bulkAssign, isPending: bulkAssigning } = useMutation({
     mutationFn: async (assignedToEmployeeId: number | null) => {
       const res = await fetch("/api/comm-schedule/tasks/bulk-assign", {
@@ -225,6 +239,21 @@ function CommTasksSheet({
           <p className="text-xs text-muted-foreground mt-1.5 text-center leading-snug">
             Only pushes tasks missing a calendar entry — existing ones are never touched.
           </p>
+          {tasks.filter(t => t.status !== "done").length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mt-2 rounded-xl w-full text-xs text-muted-foreground hover:text-foreground gap-1.5"
+              onClick={() => recalcDates()}
+              disabled={recalculating}
+              title="If the event date changed after tasks were generated, this recomputes all pending task due dates based on the current event date."
+            >
+              {recalculating
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <RotateCcw className="h-3 w-3" />}
+              Recalculate dates from event date
+            </Button>
+          )}
 
           {employees.length > 0 && (
             <div className="mt-3 flex items-center gap-2">
