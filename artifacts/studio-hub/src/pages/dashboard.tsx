@@ -1,16 +1,44 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { useGetDashboardStats } from "@workspace/api-client-react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check, ClipboardCheck } from "lucide-react";
+import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check, ClipboardCheck, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const { data: stats, isLoading } = useGetDashboardStats();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [copiedInviteId, setCopiedInviteId] = useState<number | null>(null);
+  const [chargingId, setChargingId] = useState<number | null>(null);
+
+  const { mutate: markCharged } = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/ticket-requests/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ charged: true }),
+      });
+      if (!res.ok) throw new Error("Failed to mark as charged");
+      return res.json();
+    },
+    onMutate: (id) => setChargingId(id),
+    onSuccess: () => {
+      setChargingId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({ title: "Marked as charged" });
+    },
+    onError: () => {
+      setChargingId(null);
+      toast({ title: "Failed to mark as charged", variant: "destructive" });
+    },
+  });
 
   function copyInviteLink(inviteId: number, token: string | null) {
     if (!token) return;
@@ -177,14 +205,25 @@ export default function Dashboard() {
                     const personName = isRecital
                       ? `${item.studentFirstName ?? ""} ${item.studentLastName ?? ""}`.trim()
                       : `${item.contactFirstName ?? ""} ${item.contactLastName ?? ""}`.trim();
+                    const isLoading = chargingId === item.id;
                     return (
-                      <Link key={item.id} href="/charges" className="flex items-center justify-between px-5 py-3 hover:bg-black/20 transition-colors group cursor-pointer">
-                        <div className="space-y-0.5">
-                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors">{personName}</p>
-                          <p className="text-xs text-muted-foreground">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
-                        </div>
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/30 group-hover:text-rose-400 transition-colors" />
-                      </Link>
+                      <div key={item.id} className="flex items-center justify-between px-5 py-3 hover:bg-black/20 transition-colors group">
+                        <Link href="/charges" className="flex-1 min-w-0 space-y-0.5 cursor-pointer">
+                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{personName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
+                        </Link>
+                        <button
+                          onClick={() => markCharged(item.id)}
+                          disabled={isLoading}
+                          title="Mark as charged"
+                          className="shrink-0 ml-3 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/50 disabled:opacity-50 transition-colors"
+                        >
+                          {isLoading
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Charged
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
