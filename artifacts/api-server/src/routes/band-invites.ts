@@ -29,7 +29,10 @@ function formatEventWindow(event: any): string {
   const opts: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" };
   const start = event.startDate ? new Date(event.startDate).toLocaleDateString("en-US", opts) : null;
   const end = event.endDate ? new Date(event.endDate).toLocaleDateString("en-US", { ...opts, weekday: undefined }) : null;
-  if (start && end && start !== end) return `${start} – ${end}`;
+  // Compare raw ISO date strings (not formatted, which differ due to weekday) to detect single-day events
+  const isSameDay = event.startDate && event.endDate &&
+    new Date(event.startDate).toDateString() === new Date(event.endDate).toDateString();
+  if (start && end && !isSameDay) return `${start} – ${end}`;
   return start ?? "TBD";
 }
 
@@ -503,6 +506,11 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
             const auth = createAuthedClient(gmailUser.googleAccessToken!, gmailUser.googleRefreshToken!, gmailUser.googleTokenExpiry);
             const gmail = google.gmail({ version: "v1", auth });
 
+            // Pre-compute cascade time for this slot (used when slot has no explicit startTime)
+            const allSlotsCalcPatch = await getAllSlotsForCalc(invite.eventId);
+            const calcStartTimePatch = computeCalcTime(allSlotsCalcPatch, slotId);
+            const resolvedSlotTime = slot?.startTime ?? calcStartTimePatch;
+
             for (const inv of notYetConfirmed) {
               if (!inv.contactEmail) continue;
               const subject = `Booking Confirmed — ${bandName} at ${event?.title ?? "The Music Space"}`;
@@ -520,10 +528,12 @@ router.patch("/events/:eventId/lineup/:slotId/invites/attendance", async (req, r
               body += `Event: ${event?.title ?? "TBD"}\n`;
               body += `Performance Date: ${performanceDay}\n`;
               if (event?.location) body += `Location: ${event.location}\n`;
-              if (slot?.startTime) {
-                body += `Est. Set Time: ${fmt12(slot.startTime)}`;
-                if (slot.durationMinutes) body += ` (${slot.durationMinutes} min)`;
+              if (resolvedSlotTime) {
+                body += `Est. Set Time: ${fmt12(resolvedSlotTime)}`;
+                if (slot?.durationMinutes) body += ` (${slot.durationMinutes} min)`;
                 body += ` — subject to change based on other students' availability\n`;
+              } else if (inv.staffNote?.trim()) {
+                body += `Est. Set Time: ${inv.staffNote.trim()}\n`;
               }
               // Guest list section
               if (event?.allowGuestList) {
@@ -988,8 +998,13 @@ router.post("/band-confirm/:token", async (req, res) => {
       respondedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(eventBandInvitesTable.id, invite.id));
-    const rowsUpdated = (updateResult as any).rowCount ?? (updateResult as any).rowsAffected ?? "?";
+    const rowsUpdated = (updateResult as any).rowCount ?? (updateResult as any).rowsAffected ?? 1;
     console.log(`[band-confirm] token=${token} action=${action} invite.id=${invite.id} rows_updated=${rowsUpdated}`);
+    if (rowsUpdated === 0) {
+      console.error(`[band-confirm] DB write produced 0 rows for invite.id=${invite.id} — returning error so contact can retry`);
+      res.status(500).json({ error: "We had trouble saving your response. Please try clicking the link again." });
+      return;
+    }
 
     // If confirmed: auto-confirm other pending contacts for the SAME student only
     // (e.g. if one parent confirmed for their kid, no need to chase the other parent for that same kid)
@@ -1074,16 +1089,23 @@ router.post("/band-confirm/:token", async (req, res) => {
             performerName = memberRow?.name ?? null;
           }
 
+          // Resolve the best available time: explicit startTime > calculated cascade time > staffNote range
+          const allSlotsCalc = await getAllSlotsForCalc(invite.eventId);
+          const calcStartTime = invite.lineupSlotId ? computeCalcTime(allSlotsCalc, invite.lineupSlotId) : null;
+          const resolvedStartTime = slot?.startTime ?? calcStartTime;
+
           let body = `Hi ${invite.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
           body += `EVENT DETAILS\n`;
           if (performerName) body += `Performer: ${performerName}\n`;
           body += `Event: ${event?.title ?? "TBD"}\n`;
           body += `Performance Date: ${performanceDay}\n`;
           if (event?.location) body += `Location: ${event.location}\n`;
-          if (slot?.startTime) {
-            body += `Est. Set Time: ${fmt12(slot.startTime)}`;
-            if (slot.durationMinutes) body += ` (${slot.durationMinutes} min)`;
+          if (resolvedStartTime) {
+            body += `Est. Set Time: ${fmt12(resolvedStartTime)}`;
+            if (slot?.durationMinutes) body += ` (${slot.durationMinutes} min)`;
             body += ` — subject to change based on other students' availability\n`;
+          } else if (invite.staffNote?.trim()) {
+            body += `Est. Set Time: ${invite.staffNote.trim()}\n`;
           }
           if (conflictNote?.trim()) body += `\nYour note: ${conflictNote.trim()}\n`;
 

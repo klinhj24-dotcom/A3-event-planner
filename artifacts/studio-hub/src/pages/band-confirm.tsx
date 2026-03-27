@@ -46,7 +46,7 @@ export default function BandConfirmPage() {
     }
   }, [data?.guestEntry]);
 
-  const { mutate: respond, isPending } = useMutation({
+  const { mutate: respond, isPending, isError: isSubmitError, error: submitError } = useMutation({
     mutationFn: async (action: "confirm" | "decline") => {
       const res = await fetch(`/api/band-confirm/${token}`, {
         method: "POST",
@@ -314,6 +314,13 @@ export default function BandConfirmPage() {
                       <p className="text-muted-foreground text-xs">General admission tickets for family and friends attending the event:</p>
                     )}
                     <a href={event.ticketsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs block pt-0.5">{event.ticketsUrl}</a>
+                  </div>
+                )}
+
+                {/* Submission error */}
+                {isSubmitError && (
+                  <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-600 dark:text-red-400 text-center">
+                    {(submitError as Error)?.message || "Something went wrong. Please try again."}
                   </div>
                 )}
 
