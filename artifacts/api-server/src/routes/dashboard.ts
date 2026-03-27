@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, eventLineupTable, bandMembersTable, eventDebriefTable, usersTable } from "@workspace/db";
-import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, inArray } from "drizzle-orm";
+import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, inArray, notInArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -63,6 +63,13 @@ router.get("/dashboard/stats", async (req, res) => {
     );
 
     // Slots that are invited/responding but have zero tracked invite records
+    // First: get all slot IDs that already have event_band_invites rows
+    const trackedSlotRows = await db
+      .select({ lineupSlotId: eventBandInvitesTable.lineupSlotId })
+      .from(eventBandInvitesTable)
+      .where(isNotNull(eventBandInvitesTable.lineupSlotId));
+    const trackedSlotIds = [...new Set(trackedSlotRows.map(r => r.lineupSlotId).filter((id): id is number => id !== null))];
+
     const untrackedSlots = await db
       .select({
         slotId: eventLineupTable.id,
@@ -82,10 +89,7 @@ router.get("/dashboard/stats", async (req, res) => {
         eq(eventLineupTable.confirmed, false),
         isNotNull(eventLineupTable.bandId),
         inArray(eventLineupTable.inviteStatus, ["sent", "responding"]),
-        sql`NOT EXISTS (
-          SELECT 1 FROM event_band_invites ebi
-          WHERE ebi.lineup_slot_id = ${eventLineupTable.id}
-        )`,
+        trackedSlotIds.length > 0 ? notInArray(eventLineupTable.id, trackedSlotIds) : undefined,
       ))
       .orderBy(eventsTable.startDate);
 
@@ -221,7 +225,7 @@ router.get("/dashboard/stats", async (req, res) => {
       upcomingEventsList,
       pendingCharges: pendingChargesRow?.count ?? 0,
       pendingChargesList,
-      pendingInvites: pendingInvitesCountRow?.count ?? 0,
+      pendingInvites: pendingInvites,
       pendingInvitesList,
       pendingDebriefs: pendingDebriefsList.length,
       pendingDebriefsList,

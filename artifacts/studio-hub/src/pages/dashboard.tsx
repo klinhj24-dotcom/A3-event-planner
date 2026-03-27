@@ -205,16 +205,20 @@ export default function Dashboard() {
             <CardContent className="p-0">
               {stats?.pendingInvitesList && stats.pendingInvitesList.length > 0 ? (
                 <div className="divide-y divide-border/20">
-                  {(stats.pendingInvitesList as any[]).map((item: any) => {
-                    const studentName = item.memberName ?? item.contactName ?? "Unknown";
-                    const isCopied = copiedInviteId === item.inviteId;
+                  {(stats.pendingInvitesList as any[]).map((item: any, idx: number) => {
+                    const displayName = item.memberName ?? item.contactName ?? item.bandName ?? "Unknown";
+                    const rowKey = item.inviteId != null ? `inv-${item.inviteId}` : `slot-${item.slotId ?? idx}`;
+                    const isCopied = item.inviteId != null && copiedInviteId === item.inviteId;
                     return (
-                      <div key={item.inviteId} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group">
+                      <div key={rowKey} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group">
                         <div className="space-y-0.5 min-w-0">
-                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{studentName}</p>
+                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{displayName}</p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                             {item.memberName && item.contactName && (
                               <span className="text-muted-foreground/70">via {item.contactName}</span>
+                            )}
+                            {item.bandName && !item.memberName && !item.contactName && (
+                              <span className="text-muted-foreground/70">{item.bandName}</span>
                             )}
                             <span className="truncate">{item.eventTitle}</span>
                             {item.startDate && (
@@ -222,7 +226,7 @@ export default function Dashboard() {
                             )}
                           </div>
                         </div>
-                        {item.token && (
+                        {item.token ? (
                           <button
                             onClick={() => copyInviteLink(item.inviteId, item.token)}
                             title="Copy confirmation link"
@@ -235,6 +239,8 @@ export default function Dashboard() {
                             {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                             {isCopied ? "Copied!" : "Copy link"}
                           </button>
+                        ) : (
+                          <span className="shrink-0 ml-3 text-xs text-muted-foreground/50 italic">Awaiting response</span>
                         )}
                       </div>
                     );
