@@ -1818,6 +1818,26 @@ export function LineupSheet({ event, open, onClose }: {
                           <li>Band leader, if an email is on file (CC)</li>
                           <li>All family contacts not marked Not Attending (BCC)</li>
                         </ul>
+                        {/* Per-band time preview */}
+                        <div className="rounded-lg border border-border/40 overflow-hidden">
+                          <div className="bg-muted/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Times in emails</div>
+                          <div className="divide-y divide-border/30">
+                            {actSlots.filter(s => s.confirmed && !s.confirmationSent && s.bandId).map(s => {
+                              const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+                              const timeLabel = s.startTime
+                                ? `${fmt12(s.startTime)}${s.durationMinutes ? ` (${s.durationMinutes} min)` : ""}`
+                                : s.staffNote ? `Estimated: ${s.staffNote}` : null;
+                              return (
+                                <div key={s.id} className="flex items-center justify-between px-3 py-1.5 gap-3">
+                                  <span className="text-xs text-foreground font-medium truncate">{s.bandName ?? s.label ?? "Unnamed"}</span>
+                                  {timeLabel
+                                    ? <span className="text-xs text-emerald-400 shrink-0">{timeLabel}</span>
+                                    : <span className="text-xs text-red-400 shrink-0 font-semibold">No time set</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <p className="text-amber-400">Make sure attendance has been reviewed for all bands — anyone marked Not Attending will be excluded. Bands that already have a lock-in sent are skipped automatically.</p>
                       </div>
                       <DialogFooter className="gap-2">
