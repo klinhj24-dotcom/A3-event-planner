@@ -247,24 +247,39 @@ async function runOneTimeFixes() {
     console.error("[fix] attendance_status sync fix failed (non-fatal):", err);
   }
 
-  // Fix: clear dangling "pending" invite records for slots that are already confirmed.
-  // When one contact confirms, the slot flips to inviteStatus='confirmed' but sibling invite
-  // records (other contacts for the same slot) were left as "pending". Clean them up now,
-  // and going forward the band-confirm POST handler clears them immediately on confirmation.
+  // Repair: undo batch-confirmations set by the erroneous startup fix that ran in a previous
+  // deploy. That fix bulk-set status='confirmed' on ALL pending invites in confirmed slots,
+  // which then cascaded into attendanceStatus='confirmed' via the attendance-status sync above.
+  // We identify victims as invites confirmed SIGNIFICANTLY LATER (> 1 hour) than the first
+  // real confirmer for their slot — batch DB operations at server restart time are hours/days
+  // after the original link click. Same-member auto-confirms within the same request are safe
+  // (they happen within seconds of the click and are correctly preserved by this threshold).
   try {
     const result = await db.execute(sql.raw(
-      `UPDATE event_band_invites ebi
-       SET status = 'confirmed', responded_at = NOW(), updated_at = NOW()
-       FROM event_lineup el
-       WHERE ebi.lineup_slot_id = el.id
-         AND ebi.status = 'pending'
-         AND el.invite_status = 'confirmed'`
+      `WITH per_slot_first AS (
+         SELECT lineup_slot_id, MIN(responded_at) AS original_time
+         FROM event_band_invites
+         WHERE status = 'confirmed'
+           AND lineup_slot_id IS NOT NULL
+           AND responded_at IS NOT NULL
+         GROUP BY lineup_slot_id
+       )
+       UPDATE event_band_invites ebi
+       SET status = 'pending',
+           attendance_status = 'invited',
+           responded_at = NULL,
+           updated_at = NOW()
+       FROM per_slot_first psf
+       WHERE ebi.lineup_slot_id = psf.lineup_slot_id
+         AND ebi.status = 'confirmed'
+         AND ebi.responded_at IS NOT NULL
+         AND ebi.responded_at > psf.original_time + INTERVAL '1 hour'`
     ));
     const count = (result as any).rowCount ?? 0;
-    if (count > 0) console.log(`[fix] Cleared ${count} dangling pending invite(s) where slot was already confirmed.`);
-    else console.log("[fix] No dangling pending invites found — no update needed.");
+    if (count > 0) console.log(`[repair] Reset ${count} batch-confirmed invite(s) that were incorrectly set by a prior startup fix.`);
+    else console.log("[repair] No batch-confirmed invites found — no repair needed.");
   } catch (err) {
-    console.error("[fix] Dangling pending invites cleanup failed (non-fatal):", err);
+    console.error("[repair] Batch-confirm repair failed (non-fatal):", err);
   }
 
 }
