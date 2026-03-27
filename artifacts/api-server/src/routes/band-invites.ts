@@ -920,19 +920,6 @@ router.post("/band-confirm/:token", async (req, res) => {
       updatedAt: new Date(),
     }).where(eq(eventBandInvitesTable.id, invite.id));
 
-    // If confirmed: auto-confirm other pending contacts for the SAME student only
-    // (e.g. if one parent confirmed for their kid, no need to chase the other parent for that same kid)
-    // Do NOT touch contacts for other students in the same band slot
-    if (newStatus === "confirmed" && invite.memberId) {
-      await db.update(eventBandInvitesTable)
-        .set({ status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
-        .where(and(
-          eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId),
-          eq(eventBandInvitesTable.memberId, invite.memberId),
-          eq(eventBandInvitesTable.status, "pending"),
-        ));
-    }
-
     // Update slot inviteStatus: check if any contact confirmed or all declined
     const allSlotInvites = await db.select().from(eventBandInvitesTable)
       .where(eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId));
@@ -940,6 +927,17 @@ router.post("/band-confirm/:token", async (req, res) => {
     const allDeclined = allSlotInvites.every(i => i.status === "declined");
     const newSlotStatus = anyConfirmed ? "confirmed" : allDeclined ? "declined" : "sent";
     await db.update(eventLineupTable).set({ inviteStatus: newSlotStatus, updatedAt: new Date() }).where(eq(eventLineupTable.id, invite.lineupSlotId));
+
+    // If the slot is now confirmed: mark ALL remaining pending invites for this slot as confirmed.
+    // Once one contact says yes for a slot, the band is coming — no need to keep chasing everyone else.
+    if (newSlotStatus === "confirmed") {
+      await db.update(eventBandInvitesTable)
+        .set({ status: "confirmed", respondedAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(eventBandInvitesTable.lineupSlotId, invite.lineupSlotId),
+          eq(eventBandInvitesTable.status, "pending"),
+        ));
+    }
 
     const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, invite.eventId));
     const [slot] = await db

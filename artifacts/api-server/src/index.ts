@@ -247,6 +247,26 @@ async function runOneTimeFixes() {
     console.error("[fix] attendance_status sync fix failed (non-fatal):", err);
   }
 
+  // Fix: clear dangling "pending" invite records for slots that are already confirmed.
+  // When one contact confirms, the slot flips to inviteStatus='confirmed' but sibling invite
+  // records (other contacts for the same slot) were left as "pending". Clean them up now,
+  // and going forward the band-confirm POST handler clears them immediately on confirmation.
+  try {
+    const result = await db.execute(sql.raw(
+      `UPDATE event_band_invites ebi
+       SET status = 'confirmed', responded_at = NOW(), updated_at = NOW()
+       FROM event_lineup el
+       WHERE ebi.lineup_slot_id = el.id
+         AND ebi.status = 'pending'
+         AND el.invite_status = 'confirmed'`
+    ));
+    const count = (result as any).rowCount ?? 0;
+    if (count > 0) console.log(`[fix] Cleared ${count} dangling pending invite(s) where slot was already confirmed.`);
+    else console.log("[fix] No dangling pending invites found — no update needed.");
+  } catch (err) {
+    console.error("[fix] Dangling pending invites cleanup failed (non-fatal):", err);
+  }
+
 }
 
 async function initDb() {
