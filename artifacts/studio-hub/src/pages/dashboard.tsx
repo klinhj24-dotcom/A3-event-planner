@@ -218,28 +218,20 @@ function PendingInvitesSheet({
                     </Link>
                   </div>
                   {group.items.map((item: any, idx: number) => {
-                    const displayName = item.memberName ?? item.contactName ?? item.bandName ?? "Unknown";
-                    const rowKey = item.inviteId != null ? `inv-${item.inviteId}` : `slot-${item.slotId ?? idx}`;
-                    const isCopied = item.inviteId != null && copiedInviteId === item.inviteId;
+                    const displayName = item.bandName ?? "Unknown";
+                    const rowKey = `slot-${item.slotId ?? idx}`;
+                    const isCopied = copiedInviteId === item.slotId;
                     return (
                       <div key={rowKey} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors gap-3">
                         <div className="space-y-0.5 min-w-0">
                           <p className="font-medium text-foreground text-sm truncate">{displayName}</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                            {item.memberName && item.contactName && (
-                              <span className="text-muted-foreground/70">via {item.contactName}</span>
-                            )}
-                            {item.bandName && !item.memberName && !item.contactName && (
-                              <span className="text-muted-foreground/70">{item.bandName}</span>
-                            )}
-                            {item.inviteStatus === "responding" && (
-                              <span className="text-amber-400 font-medium">Responding</span>
-                            )}
-                          </div>
+                          {item.inviteStatus === "responding" && (
+                            <p className="text-xs text-amber-400 font-medium">Responding</p>
+                          )}
                         </div>
                         {item.token ? (
                           <button
-                            onClick={() => onCopy(item.inviteId, item.token)}
+                            onClick={() => onCopy(item.slotId, item.token)}
                             title="Copy confirmation link"
                             className={`shrink-0 flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2.5 py-1.5 border ${
                               isCopied
@@ -251,7 +243,7 @@ function PendingInvitesSheet({
                             {isCopied ? "Copied!" : "Copy link"}
                           </button>
                         ) : (
-                          <span className="shrink-0 text-xs text-muted-foreground/50 italic">Awaiting response</span>
+                          <span className="shrink-0 text-xs text-muted-foreground/50 italic">No link</span>
                         )}
                       </div>
                     );
@@ -280,10 +272,10 @@ export default function Dashboard() {
   const [chargesSheetOpen, setChargesSheetOpen] = useState(false);
   const [invitesSheetOpen, setInvitesSheetOpen] = useState(false);
 
-  function copyInviteLink(inviteId: number, token: string | null) {
+  function copyInviteLink(slotId: number, token: string | null) {
     if (!token) return;
     navigator.clipboard.writeText(`${window.location.origin}/band-confirm/${token}`);
-    setCopiedInviteId(inviteId);
+    setCopiedInviteId(slotId);
     setTimeout(() => setCopiedInviteId(null), 2000);
   }
 
@@ -493,29 +485,26 @@ export default function Dashboard() {
               {pendingInvitesList.length > 0 ? (
                 <div className="divide-y divide-border/20">
                   {pendingInvitesList.slice(0, 5).map((item: any, idx: number) => {
-                    const displayName = item.memberName ?? item.contactName ?? item.bandName ?? "Unknown";
-                    const rowKey = item.inviteId != null ? `inv-${item.inviteId}` : `slot-${item.slotId ?? idx}`;
-                    const isCopied = item.inviteId != null && copiedInviteId === item.inviteId;
+                    const displayName = item.bandName ?? "Unknown";
+                    const rowKey = `slot-${item.slotId ?? idx}`;
+                    const isCopied = copiedInviteId === item.slotId;
                     return (
                       <div key={rowKey} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group">
                         <div className="space-y-0.5 min-w-0">
                           <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors truncate">{displayName}</p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                            {item.memberName && item.contactName && (
-                              <span className="text-muted-foreground/70">via {item.contactName}</span>
-                            )}
-                            {item.bandName && !item.memberName && !item.contactName && (
-                              <span className="text-muted-foreground/70">{item.bandName}</span>
-                            )}
                             <span className="truncate">{item.eventTitle}</span>
                             {item.startDate && (
                               <span className="shrink-0">{format(new Date(item.startDate), "MMM d")}</span>
+                            )}
+                            {item.inviteStatus === "responding" && (
+                              <span className="text-amber-400 font-medium shrink-0">Responding</span>
                             )}
                           </div>
                         </div>
                         {item.token ? (
                           <button
-                            onClick={() => copyInviteLink(item.inviteId, item.token)}
+                            onClick={() => copyInviteLink(item.slotId, item.token)}
                             title="Copy confirmation link"
                             className={`shrink-0 ml-3 flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2.5 py-1.5 border ${
                               isCopied
@@ -527,7 +516,7 @@ export default function Dashboard() {
                             {isCopied ? "Copied!" : "Copy link"}
                           </button>
                         ) : (
-                          <span className="shrink-0 ml-3 text-xs text-muted-foreground/50 italic">Awaiting response</span>
+                          <span className="shrink-0 ml-3 text-xs text-muted-foreground/50 italic">No link</span>
                         )}
                       </div>
                     );

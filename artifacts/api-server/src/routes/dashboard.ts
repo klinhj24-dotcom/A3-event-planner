@@ -51,29 +51,14 @@ router.get("/dashboard/stats", async (req, res) => {
           .limit(10),
       ]);
 
-    // Pending invites: two sources merged together:
-    // 1. Individual event_band_invites records with status="pending" (tracked, have tokens)
-    // 2. Lineup slots with inviteStatus IN ('sent','responding') that have NO invite records yet
-    //    (legacy data — bands invited before per-contact tracking was introduced)
-    // Both are scoped to upcoming events only.
-
-    const trackedInvitesPendingWhere = and(
-      eq(eventBandInvitesTable.status, "pending"),
-      gte(eventsTable.startDate, now),
-    );
-
-    // Slots that are invited/responding but have zero tracked invite records
-    // First: get all slot IDs that already have event_band_invites rows
-    const trackedSlotRows = await db
-      .select({ lineupSlotId: eventBandInvitesTable.lineupSlotId })
-      .from(eventBandInvitesTable)
-      .where(isNotNull(eventBandInvitesTable.lineupSlotId));
-    const trackedSlotIds = [...new Set(trackedSlotRows.map(r => r.lineupSlotId).filter((id): id is number => id !== null))];
-
-    const untrackedSlots = await db
+    // Pending band invitations = lineup act slots that have been invited but not yet confirmed.
+    // Source of truth: event_lineup.confirmed + event_lineup.inviteStatus.
+    // A slot is "pending" when: confirmed=false AND inviteStatus IN ('sent','responding').
+    // We do NOT merge event_band_invites here — that table has one row per contact per slot
+    // and caused double-counting. The lineup slot is always the canonical record.
+    const pendingInviteRows = await db
       .select({
         slotId: eventLineupTable.id,
-        bandId: eventLineupTable.bandId,
         bandName: bandsTable.name,
         eventId: eventsTable.id,
         eventTitle: eventsTable.title,
@@ -89,80 +74,36 @@ router.get("/dashboard/stats", async (req, res) => {
         eq(eventLineupTable.confirmed, false),
         isNotNull(eventLineupTable.bandId),
         inArray(eventLineupTable.inviteStatus, ["sent", "responding"]),
-        trackedSlotIds.length > 0 ? notInArray(eventLineupTable.id, trackedSlotIds) : undefined,
       ))
       .orderBy(eventsTable.startDate);
 
-    // Also exclude invites whose lineup slot has been manually confirmed (slot.confirmed = true
-    // or slot.inviteStatus = 'confirmed'), since those bands are already locked in even if
-    // the individual invite record still says "pending".
-    const slotNotYetConfirmed = or(
-      isNull(eventLineupTable.id),    // no slot linked — include it
-      and(
-        eq(eventLineupTable.confirmed, false),
-        ne(eventLineupTable.inviteStatus, "confirmed"),
-      ),
-    );
-
-    const [trackedInvitesList, [trackedInvitesCountRow]] = await Promise.all([
-      db.select({
-          inviteId: eventBandInvitesTable.id,
-          token: eventBandInvitesTable.token,
-          contactName: eventBandInvitesTable.contactName,
-          memberName: bandMembersTable.name,
-          bandName: bandsTable.name,
-          eventId: eventsTable.id,
-          eventTitle: eventsTable.title,
-          startDate: eventsTable.startDate,
-        })
+    // For the pop-out: attach the most recent invite token per slot so staff can copy the link
+    const pendingSlotIds = pendingInviteRows.map(r => r.slotId);
+    const slotTokens: Record<number, string> = {};
+    if (pendingSlotIds.length > 0) {
+      const tokenRows = await db
+        .select({ lineupSlotId: eventBandInvitesTable.lineupSlotId, token: eventBandInvitesTable.token })
         .from(eventBandInvitesTable)
-        .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
-        .leftJoin(eventLineupTable, eq(eventBandInvitesTable.lineupSlotId, eventLineupTable.id))
-        .leftJoin(bandsTable, eq(eventBandInvitesTable.bandId, bandsTable.id))
-        .leftJoin(bandMembersTable, eq(eventBandInvitesTable.memberId, bandMembersTable.id))
-        .where(and(trackedInvitesPendingWhere, slotNotYetConfirmed))
-        .orderBy(eventsTable.startDate),
-      db.select({ count: count() })
-        .from(eventBandInvitesTable)
-        .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
-        .leftJoin(eventLineupTable, eq(eventBandInvitesTable.lineupSlotId, eventLineupTable.id))
-        .where(and(trackedInvitesPendingWhere, slotNotYetConfirmed)),
-    ]);
+        .where(and(
+          inArray(eventBandInvitesTable.lineupSlotId, pendingSlotIds),
+          eq(eventBandInvitesTable.status, "pending"),
+        ));
+      for (const t of tokenRows) {
+        if (t.lineupSlotId && t.token) slotTokens[t.lineupSlotId] = t.token;
+      }
+    }
 
-    // Merge: tracked invite rows + one summary row per untracked slot
-    const untrackedRows = untrackedSlots.map(s => ({
-      inviteId: null as number | null,
-      token: null as string | null,
-      contactName: null as string | null,
-      memberName: null as string | null,
-      bandName: s.bandName,
-      eventId: s.eventId,
-      eventTitle: s.eventTitle,
-      startDate: s.startDate,
-      slotId: s.slotId,
-      inviteStatus: s.inviteStatus,
+    const pendingInvitesList = pendingInviteRows.map(r => ({
+      slotId: r.slotId,
+      bandName: r.bandName,
+      eventId: r.eventId,
+      eventTitle: r.eventTitle,
+      startDate: r.startDate,
+      inviteStatus: r.inviteStatus,
+      token: slotTokens[r.slotId] ?? null,
     }));
 
-    // Deduplicate tracked rows so we don't show multiple contacts for the same band+event
-    // as separate entries — group down to one row per (bandId, eventId)
-    const seenTracked = new Set<string>();
-    const deduplicatedTracked = trackedInvitesList.filter(row => {
-      const key = `${row.bandName ?? ""}|${row.eventId}`;
-      if (seenTracked.has(key)) return false;
-      seenTracked.add(key);
-      return true;
-    });
-
-    const pendingInvitesList = [
-      ...deduplicatedTracked,
-      ...untrackedRows.filter(r => !seenTracked.has(`${r.bandName ?? ""}|${r.eventId}`)),
-    ].sort((a, b) => {
-      if (!a.startDate) return 1;
-      if (!b.startDate) return -1;
-      return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-    });
-
-    const pendingInvites = (trackedInvitesCountRow?.count ?? 0) + untrackedSlots.length;
+    const pendingInvites = pendingInviteRows.length;
 
     // Pending debriefs for the current user — events where they are the debrief owner,
     // the event is in the "closing window", and no debrief has been submitted yet.
