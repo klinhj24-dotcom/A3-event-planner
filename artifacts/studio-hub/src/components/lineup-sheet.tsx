@@ -1187,6 +1187,21 @@ function DraggableBandCard({ band, children }: { band: Band; children: React.Rea
   );
 }
 
+function DraggableOtherGroupCard({ group, children }: { group: OtherGroup; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `other-${group.id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1 }}
+      className="touch-none"
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ── Droppable show order area ────────────────────────────────────────────────
 function DroppableShowOrder({ children, isEmpty, className }: { children: React.ReactNode; isEmpty: boolean; className?: string }) {
   const { setNodeRef, isOver } = useDroppable({ id: "show-order" });
@@ -1296,6 +1311,8 @@ export function LineupSheet({ event, open, onClose }: {
   useEffect(() => { setLocalSlots(null); }, [rawSlots, eventId]);
 
   const [activeDragBand, setActiveDragBand] = useState<Band | null>(null);
+  const [activeDragOtherGroup, setActiveDragOtherGroup] = useState<OtherGroup | null>(null);
+  const [rosterTab, setRosterTab] = useState<"bands" | "external">("bands");
 
   // ── Band mutations ─────────────────────────────────────────────────────────
   const [newBandName, setNewBandName] = useState("");
@@ -1583,48 +1600,52 @@ export function LineupSheet({ event, open, onClose }: {
     if (activeId.startsWith("band-")) {
       const bandId = Number(activeId.replace("band-", ""));
       setActiveDragBand(rawBands.find(b => b.id === bandId) ?? null);
+      setActiveDragOtherGroup(null);
+    } else if (activeId.startsWith("other-")) {
+      const groupId = Number(activeId.replace("other-", ""));
+      setActiveDragOtherGroup(otherGroups.find(g => g.id === groupId) ?? null);
+      setActiveDragBand(null);
     }
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveDragBand(null);
+    setActiveDragOtherGroup(null);
     if (!over) return;
 
     // Band card dropped onto show order or a day zone → create act slot
     const activeId = String(active.id);
     const overId = String(over.id);
+
+    function resolveDropTarget() {
+      let eventDay = newSlot.eventDay;
+      let insertPosition = slots.length;
+      if (overId === "day-zone-1") { eventDay = 1; }
+      else if (overId === "day-zone-2") { eventDay = 2; }
+      else {
+        const targetSlot = slots.find(s => String(s.id) === overId);
+        if (targetSlot) { eventDay = targetSlot.eventDay; insertPosition = targetSlot.position; }
+      }
+      return { eventDay, insertPosition };
+    }
+
     if (activeId.startsWith("band-")) {
       const bandId = Number(activeId.replace("band-", ""));
       const band = rawBands.find(b => b.id === bandId);
       if (band) {
-        // Determine which day zone / slot was dropped on
-        let eventDay = newSlot.eventDay;
-        let insertPosition = slots.length;
-        if (overId === "day-zone-1") {
-          eventDay = 1;
-        } else if (overId === "day-zone-2") {
-          eventDay = 2;
-        } else {
-          // Dropped directly on an existing slot — inherit that slot's day and insert before it
-          const targetSlot = slots.find(s => String(s.id) === overId);
-          if (targetSlot) {
-            eventDay = targetSlot.eventDay;
-            insertPosition = targetSlot.position;
-          }
-        }
-        addSlot({
-          type: "act",
-          bandId,
-          label: null,
-          groupName: null,
-          startTime: null,
-          durationMinutes: null,
-          bufferMinutes: 15,
-          isOverlapping: false,
-          eventDay,
-          position: insertPosition,
-        });
+        const { eventDay, insertPosition } = resolveDropTarget();
+        addSlot({ type: "act", bandId, label: null, groupName: null, startTime: null, durationMinutes: null, bufferMinutes: 15, isOverlapping: false, eventDay, position: insertPosition });
+      }
+      return;
+    }
+
+    if (activeId.startsWith("other-")) {
+      const groupId = Number(activeId.replace("other-", ""));
+      const group = otherGroups.find(g => g.id === groupId);
+      if (group) {
+        const { eventDay, insertPosition } = resolveDropTarget();
+        addSlot({ type: "act", otherGroupId: groupId, label: null, groupName: null, startTime: null, durationMinutes: null, bufferMinutes: 15, isOverlapping: false, eventDay, position: insertPosition });
       }
       return;
     }
@@ -1872,54 +1893,103 @@ export function LineupSheet({ event, open, onClose }: {
         <div className="flex flex-1 overflow-hidden">
           {/* ── Left: Bands panel ─────────────────────────────────────────────── */}
           {!isRecital && <div className={`w-full sm:w-72 sm:shrink-0 border-r border-border/30 flex-col overflow-hidden ${mobileTab === "roster" ? "flex" : "hidden sm:flex"}`}>
+            {/* Header row */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/20">
               <span className="text-sm font-semibold">Band Roster</span>
               <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg gap-1" onClick={() => setAddBandOpen(true)}>
                 <Plus className="h-3 w-3" /> Add Band
               </Button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {rawBands.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-6">No bands yet. Add one to get started.</p>
-              )}
-              {rawBands.map(band => (
-                <DraggableBandCard key={band.id} band={band}>
-                  <div className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group cursor-grab active:cursor-grabbing">
-                    <div className="flex items-start gap-2">
-                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{band.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
+            {/* Tabs: Student Bands / External Acts */}
+            <div className="flex border-b border-border/20 shrink-0">
+              <button
+                onClick={() => setRosterTab("bands")}
+                className={`flex-1 py-2 text-xs font-medium transition-colors ${rosterTab === "bands" ? "text-foreground border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Student Bands
+              </button>
+              <button
+                onClick={() => setRosterTab("external")}
+                className={`flex-1 py-2 text-xs font-medium transition-colors ${rosterTab === "external" ? "text-foreground border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                External Acts
+                {otherGroups.length > 0 && <span className="ml-1 text-[10px] text-muted-foreground">({otherGroups.length})</span>}
+              </button>
+            </div>
+
+            {/* Student bands list */}
+            {rosterTab === "bands" && (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {rawBands.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-6">No bands yet. Add one to get started.</p>
+                )}
+                {rawBands.map(band => (
+                  <DraggableBandCard key={band.id} band={band}>
+                    <div className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group cursor-grab active:cursor-grabbing">
+                      <div className="flex items-start gap-2">
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{band.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {band.genre && <span className="text-[10px] text-muted-foreground truncate">{band.genre}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onPointerDown={e => e.stopPropagation()}>
+                          <button
+                            title="Manage members & contacts"
+                            onClick={() => setManagingMembersBand(band)}
+                            className="text-muted-foreground hover:text-primary p-0.5"
+                          >
+                            <Users className="h-3 w-3" />
+                          </button>
+                          <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", notes: band.notes ?? "", website: band.website ?? "", instagram: band.instagram ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button onClick={() => deleteBand(band.id)} className="text-muted-foreground hover:text-destructive p-0.5">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onPointerDown={e => e.stopPropagation()}>
-                        <button
-                          title="Manage members & contacts"
-                          onClick={() => setManagingMembersBand(band)}
-                          className="text-muted-foreground hover:text-primary p-0.5"
-                        >
-                          <Users className="h-3 w-3" />
-                        </button>
-                        <button onClick={() => { setEditingBand(band); setEditBandForm({ name: band.name, genre: band.genre ?? "", members: band.members ? String(band.members) : "", notes: band.notes ?? "", website: band.website ?? "", instagram: band.instagram ?? "" }); }} className="text-muted-foreground hover:text-foreground p-0.5">
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button onClick={() => deleteBand(band.id)} className="text-muted-foreground hover:text-destructive p-0.5">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                      <button
+                        onPointerDown={e => e.stopPropagation()}
+                        onClick={() => setManagingMembersBand(band)}
+                        className="mt-1.5 text-[10px] text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
+                      >
+                        <Users className="h-2.5 w-2.5" /> Members & Contacts
+                      </button>
+                    </div>
+                  </DraggableBandCard>
+                ))}
+              </div>
+            )}
+
+            {/* External acts list */}
+            {rosterTab === "external" && (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {otherGroups.length === 0 && (
+                  <div className="text-center py-6 space-y-1">
+                    <p className="text-xs text-muted-foreground">No external acts yet.</p>
+                    <p className="text-[10px] text-muted-foreground/60">Add them on the Bands page under "External Acts".</p>
+                  </div>
+                )}
+                {otherGroups.map(group => (
+                  <DraggableOtherGroupCard key={group.id} group={group}>
+                    <div className="rounded-xl bg-muted/30 border border-border/30 px-3 py-2.5 group cursor-grab active:cursor-grabbing">
+                      <div className="flex items-start gap-2">
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{group.name}</p>
+                          {group.description && <p className="text-[10px] text-muted-foreground truncate">{group.description}</p>}
+                          {group.contactName && (
+                            <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">Contact: {group.contactName}</p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onPointerDown={e => e.stopPropagation()}
-                      onClick={() => setManagingMembersBand(band)}
-                      className="mt-1.5 text-[10px] text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
-                    >
-                      <Users className="h-2.5 w-2.5" /> Members & Contacts
-                    </button>
-                  </div>
-                </DraggableBandCard>
-              ))}
-            </div>
+                  </DraggableOtherGroupCard>
+                ))}
+              </div>
+            )}
           </div>}
 
           {/* ── Right: Lineup panel ───────────────────────────────────────────── */}
@@ -1979,10 +2049,10 @@ export function LineupSheet({ event, open, onClose }: {
                         </span>
                         <div className={`h-px flex-1 ${day === 1 ? "bg-sky-500/20" : "bg-orange-500/20"}`} />
                       </div>
-                      <DroppableDayZone day={day} isDragging={!!activeDragBand}>
+                      <DroppableDayZone day={day} isDragging={!!(activeDragBand || activeDragOtherGroup)}>
                         {daySlots.length === 0 ? (
-                          <p className={`text-xs text-center py-4 italic transition-colors ${activeDragBand ? (day === 1 ? "text-sky-400/60" : "text-orange-400/60") : "text-muted-foreground/40"}`}>
-                            {activeDragBand ? `Drop here to add to Day ${day}` : `No slots for Day ${day} yet — drag a band here or use Add Slot`}
+                          <p className={`text-xs text-center py-4 italic transition-colors ${(activeDragBand || activeDragOtherGroup) ? (day === 1 ? "text-sky-400/60" : "text-orange-400/60") : "text-muted-foreground/40"}`}>
+                            {(activeDragBand || activeDragOtherGroup) ? `Drop here to add to Day ${day}` : `No slots for Day ${day} yet — drag a band here or use Add Slot`}
                           </p>
                         ) : (
                           <div className="space-y-2 py-1">
@@ -2063,6 +2133,17 @@ export function LineupSheet({ event, open, onClose }: {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{activeDragBand.name}</p>
                   {activeDragBand.genre && <p className="text-[10px] text-muted-foreground truncate">{activeDragBand.genre}</p>}
+                </div>
+              </div>
+            </div>
+          )}
+          {activeDragOtherGroup && (
+            <div className="rounded-xl bg-background border border-secondary/40 shadow-2xl shadow-black/40 px-3 py-2.5 w-60 rotate-1 scale-105 pointer-events-none">
+              <div className="flex items-center gap-2">
+                <Music className="h-3.5 w-3.5 text-secondary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{activeDragOtherGroup.name}</p>
+                  {activeDragOtherGroup.description && <p className="text-[10px] text-muted-foreground truncate">{activeDragOtherGroup.description}</p>}
                 </div>
               </div>
             </div>
