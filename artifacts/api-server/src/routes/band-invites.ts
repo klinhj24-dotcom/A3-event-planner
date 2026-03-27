@@ -2,7 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import { google } from "googleapis";
 import { db, eventsTable, eventLineupTable, bandsTable, bandMembersTable, bandContactsTable, eventBandInvitesTable, eventGuestListTable, usersTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { format } from "date-fns";
 
@@ -207,9 +207,17 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
     for (const contact of contacts) {
       if (!contact.email) continue;
 
-      // Check for existing invite — skip if already sent (by contactId or by email address)
-      const [existing] = await db.select().from(eventBandInvitesTable)
-        .where(and(eq(eventBandInvitesTable.lineupSlotId, slotId), eq(eventBandInvitesTable.contactId, contact.id)));
+      // Check for existing invite — skip if already sent (by contactId OR by email address).
+      // Checking by email is critical because invites from the bulk dialog may have contactId=null,
+      // so the contactId check alone would miss them and create a duplicate pending record.
+      const [existing] = await db.select({ id: eventBandInvitesTable.id }).from(eventBandInvitesTable)
+        .where(and(
+          eq(eventBandInvitesTable.lineupSlotId, slotId),
+          or(
+            eq(eventBandInvitesTable.contactId, contact.id),
+            eq(eventBandInvitesTable.contactEmail, contact.email.toLowerCase()),
+          ),
+        ));
       if (existing) continue;
 
       // Also skip if we already sent to this email address in this batch (deduplication by address)
@@ -1007,8 +1015,16 @@ router.post("/band-confirm/:token", async (req, res) => {
           const bandName = slot?.bandName ?? "your band";
           const subject = `Booking Confirmed — ${bandName} at ${event?.title ?? "The Music Space"}`;
 
+          // Look up the member name if available
+          let performerName: string | null = null;
+          if (invite.memberId) {
+            const [memberRow] = await db.select({ name: bandMembersTable.name }).from(bandMembersTable).where(eq(bandMembersTable.id, invite.memberId));
+            performerName = memberRow?.name ?? null;
+          }
+
           let body = `Hi ${invite.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
           body += `EVENT DETAILS\n`;
+          if (performerName) body += `Performer: ${performerName}\n`;
           body += `Event: ${event?.title ?? "TBD"}\n`;
           body += `Performance Date: ${performanceDay}\n`;
           if (event?.location) body += `Location: ${event.location}\n`;

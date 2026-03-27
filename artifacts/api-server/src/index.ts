@@ -232,6 +232,41 @@ async function runOneTimeFixes() {
     console.error("[fix] locked_in_start_time seed failed (non-fatal):", err);
   }
 
+  // Fix: backfill pending invites that have a confirmed sibling record for the same slot + email.
+  // Happens when the bulk-dialog invite (contactId=null) was confirmed, then the per-slot "Send Invite"
+  // button created a NEW pending record for the same email because the contactId check missed it.
+  try {
+    const rSib = await db.execute(sql.raw(`
+      UPDATE event_band_invites ebi_pending
+      SET status = 'confirmed',
+          attendance_status = 'confirmed',
+          responded_at = COALESCE(
+            ebi_pending.responded_at,
+            (SELECT responded_at FROM event_band_invites
+             WHERE lineup_slot_id = ebi_pending.lineup_slot_id
+               AND LOWER(contact_email) = LOWER(ebi_pending.contact_email)
+               AND status = 'confirmed'
+               AND id != ebi_pending.id
+             LIMIT 1)
+          ),
+          updated_at = NOW()
+      WHERE ebi_pending.status = 'pending'
+        AND ebi_pending.contact_email IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM event_band_invites ebi_conf
+          WHERE ebi_conf.lineup_slot_id = ebi_pending.lineup_slot_id
+            AND LOWER(ebi_conf.contact_email) = LOWER(ebi_pending.contact_email)
+            AND ebi_conf.status = 'confirmed'
+            AND ebi_conf.id != ebi_pending.id
+        )
+    `));
+    const countSib = (rSib as any).rowCount ?? 0;
+    if (countSib > 0) console.log(`[fix] Backfilled ${countSib} pending invite(s) to confirmed via confirmed sibling-by-email.`);
+    else console.log("[fix] No pending invites had confirmed siblings to sync.");
+  } catch (err) {
+    console.error("[fix] Sibling-by-email backfill failed (non-fatal):", err);
+  }
+
   // Fix: backfill invite records that are still 'pending' but the member already confirmed via a prior
   // invite link (evidenced by a guest list entry for that member + event). This happens when contacts
   // are re-invited (new record created) after the original invite was already confirmed — the old
