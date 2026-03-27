@@ -451,13 +451,15 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
   }
   try {
     const requestId = parseInt(req.params.requestId);
-    const { status, adminNotes } = req.body;
+    const { status, adminNotes, charged } = req.body;
 
     // Fetch current state before update
     const [before] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
 
-    // "confirmed" = registration accepted + card charged (same action)
-    const chargingNow = status === "confirmed" && before?.status !== "confirmed";
+    // Explicit charged:true from dashboard/charges page — also confirms the status
+    const markingChargedDirectly = charged === true && !before?.charged;
+    // "confirmed" status transition also marks as charged
+    const chargingNow = markingChargedDirectly || (status === "confirmed" && before?.status !== "confirmed");
     // Only uncharge if moving away from confirmed to pending (not to "not_attending" — they still paid)
     const unchargingNow = status !== undefined && status === "pending" && before?.status === "confirmed";
 
@@ -465,6 +467,8 @@ router.patch("/events/:id/ticket-requests/:requestId", async (req, res) => {
       .update(eventTicketRequestsTable)
       .set({
         ...(status !== undefined ? { status } : {}),
+        // When marking as charged directly, also set status → confirmed
+        ...(markingChargedDirectly && before?.status !== "confirmed" ? { status: "confirmed" } : {}),
         ...(adminNotes !== undefined ? { adminNotes } : {}),
         ...(chargingNow ? { charged: true, chargedAt: new Date() } : {}),
         ...(unchargingNow ? { charged: false, chargedAt: null } : {}),
