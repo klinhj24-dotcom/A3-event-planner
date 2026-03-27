@@ -981,13 +981,15 @@ router.post("/band-confirm/:token", async (req, res) => {
     const newStatus = action === "decline" ? "declined" : "confirmed";
     // attendanceStatus mirrors status: confirmed → confirmed, declined → not_attending
     const newAttendanceStatus = newStatus === "confirmed" ? "confirmed" : "not_attending";
-    await db.update(eventBandInvitesTable).set({
+    const updateResult = await db.update(eventBandInvitesTable).set({
       status: newStatus,
       attendanceStatus: newAttendanceStatus,
       conflictNote: conflictNote?.trim() || null,
       respondedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(eventBandInvitesTable.id, invite.id));
+    const rowsUpdated = (updateResult as any).rowCount ?? (updateResult as any).rowsAffected ?? "?";
+    console.log(`[band-confirm] token=${token} action=${action} invite.id=${invite.id} rows_updated=${rowsUpdated}`);
 
     // If confirmed: auto-confirm other pending contacts for the SAME student only
     // (e.g. if one parent confirmed for their kid, no need to chase the other parent for that same kid)
