@@ -889,6 +889,25 @@ function SlotRow({
                         <li>Band leader, if an email is on file (CC)</li>
                         <li>All family contacts not marked Not Attending (BCC)</li>
                       </ul>
+                      {/* Time preview */}
+                      {slot.startTime ? (
+                        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-emerald-300 text-xs">
+                          <span className="font-semibold">Set time in email: </span>
+                          {(() => {
+                            const [h, m] = slot.startTime.split(":").map(Number);
+                            const label = `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+                            return `${label}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`;
+                          })()}
+                        </div>
+                      ) : slot.staffNote ? (
+                        <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-amber-300 text-xs">
+                          <span className="font-semibold">No set time saved.</span> The email will say: <span className="italic">Estimated Slot: {slot.staffNote}</span>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-red-400 text-xs font-semibold">
+                          No set time or staff note on this slot — the email will not include any time information. Save a time first if needed.
+                        </div>
+                      )}
                       <p className="text-amber-400">Before sending, confirm that all members who need to be there are marked <strong>Confirmed</strong> in the attendance list — anyone marked Not Attending will be excluded from this and future emails.</p>
                     </div>
                     <DialogFooter className="gap-2">
