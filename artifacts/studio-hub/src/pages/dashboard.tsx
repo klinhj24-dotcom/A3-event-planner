@@ -200,19 +200,23 @@ export default function Dashboard() {
             <CardContent className="p-0">
               {stats?.pendingChargesList && stats.pendingChargesList.length > 0 ? (
                 <div>
-                  <div className="flex items-center justify-end px-5 pt-2 pb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Check when charged</p>
-                  </div>
                   <div className="divide-y divide-border/20">
-                    {stats.pendingChargesList.map((item: any) => {
+                    {stats.pendingChargesList.map((item: any, idx: number) => {
                       const isRecital = item.formType === "recital" && item.studentFirstName;
                       const personName = isRecital
                         ? `${item.studentFirstName ?? ""} ${item.studentLastName ?? ""}`.trim()
                         : `${item.contactFirstName ?? ""} ${item.contactLastName ?? ""}`.trim();
                       const isPending = chargingId === item.id;
                       return (
-                        <div key={item.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-0 px-4 py-3 hover:bg-muted/20 transition-colors">
-                          <div className="flex justify-center pr-3">
+                        <div key={item.id} className="flex items-center px-5 py-3 hover:bg-muted/20 transition-colors gap-3">
+                          <Link href="/charges" className="flex-1 min-w-0 space-y-0.5">
+                            <p className="font-semibold text-foreground text-sm leading-tight truncate">{personName}</p>
+                            <p className="text-xs text-muted-foreground truncate">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
+                          </Link>
+                          <div className="shrink-0 flex flex-col items-center gap-0.5">
+                            {idx === 0 && (
+                              <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40 whitespace-nowrap">Check when charged</p>
+                            )}
                             <button
                               onClick={() => markCharged(item.id)}
                               disabled={isPending}
@@ -224,10 +228,6 @@ export default function Dashboard() {
                                 : <CheckCircle2 className="h-4 w-4 text-muted-foreground/20 group-hover:text-emerald-400 transition-colors" />}
                             </button>
                           </div>
-                          <Link href="/charges" className="min-w-0 space-y-0.5 cursor-pointer">
-                            <p className="font-semibold text-foreground text-sm leading-tight truncate">{personName}</p>
-                            <p className="text-xs text-muted-foreground truncate">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
-                          </Link>
                         </div>
                       );
                     })}
