@@ -172,22 +172,21 @@ export default function Dashboard() {
             <CardContent className="p-0">
               {stats?.pendingChargesList && stats.pendingChargesList.length > 0 ? (
                 <div className="divide-y divide-border/20">
-                  {stats.pendingChargesList.map((item: any) => (
-                    <Link key={item.eventId} href="/charges" className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
-                      <div className="space-y-0.5">
-                        <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors">{item.eventTitle}</p>
-                        {item.startDate && (
-                          <p className="text-xs text-muted-foreground">{format(new Date(item.startDate), "MMM d, yyyy")}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-full px-2.5 py-0.5">
-                          {item.pendingCount} uncharged
-                        </span>
-                        <CheckCircle2 className="h-4 w-4 text-muted-foreground/30 group-hover:text-rose-400 transition-colors" />
-                      </div>
-                    </Link>
-                  ))}
+                  {stats.pendingChargesList.map((item: any) => {
+                    const isRecital = item.formType === "recital" && item.studentFirstName;
+                    const personName = isRecital
+                      ? `${item.studentFirstName ?? ""} ${item.studentLastName ?? ""}`.trim()
+                      : `${item.contactFirstName ?? ""} ${item.contactLastName ?? ""}`.trim();
+                    return (
+                      <Link key={item.id} href="/charges" className="flex items-center justify-between px-5 py-3 hover:bg-black/20 transition-colors group cursor-pointer">
+                        <div className="space-y-0.5">
+                          <p className="font-medium text-foreground text-sm group-hover:text-primary transition-colors">{personName}</p>
+                          <p className="text-xs text-muted-foreground">{item.eventTitle}{item.startDate ? ` · ${format(new Date(item.startDate), "MMM d")}` : ""}</p>
+                        </div>
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/30 group-hover:text-rose-400 transition-colors" />
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : null}
             </CardContent>

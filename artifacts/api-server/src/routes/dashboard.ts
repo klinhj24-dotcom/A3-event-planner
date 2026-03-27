@@ -38,17 +38,21 @@ router.get("/dashboard/stats", async (req, res) => {
         db.select({ count: count() }).from(eventTicketRequestsTable)
           .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled"))),
         db.select({
+            id: eventTicketRequestsTable.id,
             eventId: eventsTable.id,
             eventTitle: eventsTable.title,
             startDate: eventsTable.startDate,
-            pendingCount: count(eventTicketRequestsTable.id),
+            formType: eventsTable.ticketFormType,
+            contactFirstName: eventTicketRequestsTable.contactFirstName,
+            contactLastName: eventTicketRequestsTable.contactLastName,
+            studentFirstName: eventTicketRequestsTable.studentFirstName,
+            studentLastName: eventTicketRequestsTable.studentLastName,
           })
           .from(eventTicketRequestsTable)
           .innerJoin(eventsTable, eq(eventTicketRequestsTable.eventId, eventsTable.id))
           .where(and(eq(eventTicketRequestsTable.charged, false), ne(eventTicketRequestsTable.status, "cancelled")))
-          .groupBy(eventsTable.id, eventsTable.title, eventsTable.startDate)
           .orderBy(eventsTable.startDate)
-          .limit(10),
+          .limit(15),
       ]);
 
     // Pending invites: two sources merged together:
