@@ -150,7 +150,7 @@ export default function BandConfirmPage() {
         )}
 
         {/* Already confirmed — friendly shortcut view */}
-        {!result && invite && (invite.status === "confirmed" || alreadyConfirmedBy) && (
+        {!result && invite && (invite.status === "confirmed" || alreadyConfirmedBy || data?.guestEntry?.submitted) && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
             <div className="rounded-2xl border border-emerald-500/30 bg-card p-8 text-center space-y-4">
               <div className="h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
@@ -177,7 +177,7 @@ export default function BandConfirmPage() {
         )}
 
         {/* Invite view */}
-        {!result && invite && invite.status !== "confirmed" && !alreadyConfirmedBy && (
+        {!result && invite && invite.status !== "confirmed" && !alreadyConfirmedBy && !data?.guestEntry?.submitted && (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
               <div className="p-6 space-y-4">

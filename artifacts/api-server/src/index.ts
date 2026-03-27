@@ -232,6 +232,32 @@ async function runOneTimeFixes() {
     console.error("[fix] locked_in_start_time seed failed (non-fatal):", err);
   }
 
+  // Fix: backfill invite records that are still 'pending' but the member already confirmed via a prior
+  // invite link (evidenced by a guest list entry for that member + event). This happens when contacts
+  // are re-invited (new record created) after the original invite was already confirmed — the old
+  // confirmed record may have been replaced, but the guest list entry persists.
+  try {
+    const r0 = await db.execute(sql.raw(`
+      UPDATE event_band_invites ebi
+      SET status = 'confirmed',
+          attendance_status = 'confirmed',
+          responded_at = COALESCE(responded_at, NOW()),
+          updated_at = NOW()
+      WHERE ebi.member_id IS NOT NULL
+        AND ebi.status = 'pending'
+        AND EXISTS (
+          SELECT 1 FROM event_guest_list egl
+          WHERE egl.event_id = ebi.event_id
+            AND egl.band_member_id = ebi.member_id
+        )
+    `));
+    const count0 = (r0 as any).rowCount ?? 0;
+    if (count0 > 0) console.log(`[fix] Backfilled ${count0} pending invite(s) to confirmed based on existing guest list entries.`);
+    else console.log("[fix] No pending invites needed guest-list backfill.");
+  } catch (err) {
+    console.error("[fix] Guest-list invite backfill failed (non-fatal):", err);
+  }
+
   // Fix: sync attendance_status for invites where family has already responded via invite link.
   // confirmed → attendanceStatus = 'confirmed'; declined → attendanceStatus = 'not_attending'
   try {
@@ -277,6 +303,57 @@ async function runOneTimeFixes() {
     else console.log("[fix] Slot invite statuses already correct — no update needed.");
   } catch (err) {
     console.error("[fix] Slot status recalc failed (non-fatal):", err);
+  }
+
+  // Fix: forward-promote slots from sent/responding → confirmed where ALL members are now resolved.
+  // Needed after the guest-list backfill above marks pending invites as confirmed.
+  try {
+    // First: sent → responding (someone responded but not all resolved)
+    const rFwd1 = await db.execute(sql.raw(`
+      UPDATE event_lineup el
+      SET invite_status = 'responding', updated_at = NOW()
+      WHERE el.invite_status = 'sent'
+        AND EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id AND status != 'pending')
+        AND EXISTS (
+          SELECT 1
+          FROM (
+            SELECT
+              COALESCE(member_id::text, 'c:' || id::text) AS member_key,
+              BOOL_OR(status = 'confirmed' OR attendance_status = 'confirmed') AS is_confirmed,
+              BOOL_AND(status = 'declined' OR attendance_status = 'not_attending') AS all_out
+            FROM event_band_invites
+            WHERE lineup_slot_id = el.id
+            GROUP BY COALESCE(member_id::text, 'c:' || id::text)
+          ) members
+          WHERE NOT (is_confirmed OR all_out)
+        )
+    `));
+    // Second: sent/responding → confirmed (all members resolved)
+    const rFwd2 = await db.execute(sql.raw(`
+      UPDATE event_lineup el
+      SET invite_status = 'confirmed', confirmed = TRUE, updated_at = NOW()
+      WHERE el.invite_status IN ('sent', 'responding')
+        AND EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM (
+            SELECT
+              COALESCE(member_id::text, 'c:' || id::text) AS member_key,
+              BOOL_OR(status = 'confirmed' OR attendance_status = 'confirmed') AS is_confirmed,
+              BOOL_AND(status = 'declined' OR attendance_status = 'not_attending') AS all_out
+            FROM event_band_invites
+            WHERE lineup_slot_id = el.id
+            GROUP BY COALESCE(member_id::text, 'c:' || id::text)
+          ) members
+          WHERE NOT (is_confirmed OR all_out)
+        )
+        AND EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id AND status != 'pending')
+    `));
+    const fwdCount = ((rFwd1 as any).rowCount ?? 0) + ((rFwd2 as any).rowCount ?? 0);
+    if (fwdCount > 0) console.log(`[fix] Forward-promoted ${fwdCount} slot(s) to responding/confirmed based on resolved invites.`);
+    else console.log("[fix] No slots needed forward promotion.");
+  } catch (err) {
+    console.error("[fix] Slot forward-promotion failed (non-fatal):", err);
   }
 
 }
