@@ -18,8 +18,8 @@ export default function Dashboard() {
   const [chargingId, setChargingId] = useState<number | null>(null);
 
   const { mutate: markCharged } = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/ticket-requests/${id}`, {
+    mutationFn: async ({ id, eventId }: { id: number; eventId: number }) => {
+      const res = await fetch(`/api/events/${eventId}/ticket-requests/${id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -28,7 +28,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to mark as charged");
       return res.json();
     },
-    onMutate: (id) => setChargingId(id),
+    onMutate: ({ id }) => setChargingId(id),
     onSuccess: () => {
       setChargingId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
@@ -235,7 +235,7 @@ export default function Dashboard() {
                               <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40 whitespace-nowrap">Check when charged</p>
                             )}
                             <button
-                              onClick={() => markCharged(item.id)}
+                              onClick={() => markCharged({ id: item.id, eventId: item.eventId })}
                               disabled={isPending}
                               title="Mark card as charged"
                               className="h-8 w-8 rounded-xl border-2 border-border/50 bg-background hover:border-emerald-500 hover:bg-emerald-500/5 flex items-center justify-center transition-all shadow-sm group disabled:opacity-50"
