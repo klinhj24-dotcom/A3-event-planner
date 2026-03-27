@@ -232,19 +232,51 @@ async function runOneTimeFixes() {
     console.error("[fix] locked_in_start_time seed failed (non-fatal):", err);
   }
 
-  // Fix: sync attendance_status for invites where family has already confirmed via invite link.
-  // When the attendanceStatus column was added it defaulted to 'invited'. Any contact whose
-  // status is 'confirmed' (clicked their link) should have attendanceStatus = 'confirmed' too.
+  // Fix: sync attendance_status for invites where family has already responded via invite link.
+  // confirmed → attendanceStatus = 'confirmed'; declined → attendanceStatus = 'not_attending'
   try {
-    const result = await db.execute(sql.raw(
+    const r1 = await db.execute(sql.raw(
       `UPDATE event_band_invites SET attendance_status = 'confirmed', updated_at = NOW()
        WHERE status = 'confirmed' AND attendance_status = 'invited'`
     ));
-    const count = (result as any).rowCount ?? 0;
-    if (count > 0) console.log(`[fix] Synced attendance_status to 'confirmed' for ${count} invite(s) where family had already confirmed.`);
+    const r2 = await db.execute(sql.raw(
+      `UPDATE event_band_invites SET attendance_status = 'not_attending', updated_at = NOW()
+       WHERE status = 'declined' AND attendance_status = 'invited'`
+    ));
+    const count = ((r1 as any).rowCount ?? 0) + ((r2 as any).rowCount ?? 0);
+    if (count > 0) console.log(`[fix] Synced attendance_status for ${count} invite(s) based on confirmed/declined status.`);
     else console.log("[fix] attendance_status already synced — no update needed.");
   } catch (err) {
     console.error("[fix] attendance_status sync fix failed (non-fatal):", err);
+  }
+
+  // Fix: reclassify slots that old code marked 'confirmed' but are actually only partially resolved.
+  // New code uses 'responding' for partial and 'confirmed' only when ALL members are resolved.
+  try {
+    const r3 = await db.execute(sql.raw(`
+      UPDATE event_lineup el
+      SET invite_status = 'responding', updated_at = NOW()
+      WHERE el.invite_status = 'confirmed'
+        AND EXISTS (SELECT 1 FROM event_band_invites WHERE lineup_slot_id = el.id)
+        AND EXISTS (
+          SELECT 1
+          FROM (
+            SELECT
+              COALESCE(member_id::text, 'c:' || id::text) AS member_key,
+              BOOL_OR(status = 'confirmed' OR attendance_status = 'confirmed') AS is_confirmed,
+              BOOL_AND(status = 'declined' OR attendance_status = 'not_attending') AS all_out
+            FROM event_band_invites
+            WHERE lineup_slot_id = el.id
+            GROUP BY COALESCE(member_id::text, 'c:' || id::text)
+          ) members
+          WHERE NOT (is_confirmed OR all_out)
+        )
+    `));
+    const count3 = (r3 as any).rowCount ?? 0;
+    if (count3 > 0) console.log(`[fix] Reclassified ${count3} slot(s) from confirmed → responding (partial responses).`);
+    else console.log("[fix] Slot invite statuses already correct — no update needed.");
+  } catch (err) {
+    console.error("[fix] Slot status recalc failed (non-fatal):", err);
   }
 
 }

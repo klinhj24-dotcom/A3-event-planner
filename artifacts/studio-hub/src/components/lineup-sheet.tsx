@@ -192,10 +192,11 @@ const SLOT_TYPE_META: Record<string, { label: string; icon: React.ReactNode; col
 };
 
 const INVITE_STATUS_META: Record<string, { label: string; cls: string }> = {
-  not_sent:  { label: "Not Invited", cls: "bg-muted/40 text-muted-foreground" },
-  sent:      { label: "Invite Sent", cls: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
-  confirmed: { label: "Responding",  cls: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
-  declined:  { label: "Declined",    cls: "bg-red-500/15 text-red-400 border-red-500/20" },
+  not_sent:   { label: "Not Invited", cls: "bg-muted/40 text-muted-foreground" },
+  sent:       { label: "Invite Sent", cls: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
+  responding: { label: "Responding",  cls: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
+  confirmed:  { label: "Confirmed",   cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  declined:   { label: "Declined",    cls: "bg-red-500/15 text-red-400 border-red-500/20" },
 };
 
 // ── Invite status row (one per student/member group) ───────────────────────────
@@ -1653,7 +1654,7 @@ export function LineupSheet({ event, open, onClose }: {
           ? (s.otherGroupName ?? s.bandName ?? s.label ?? "")
           : (s.label ?? s.type);
         const status = s.type === "act"
-          ? (s.confirmed ? "Confirmed" : s.inviteStatus === "invited" ? "Invited" : "Pending")
+          ? (s.confirmed ? "Confirmed" : s.inviteStatus === "responding" ? "Responding" : s.inviteStatus === "sent" ? "Invited" : s.inviteStatus === "not_sent" ? "Not Invited" : "Pending")
           : "";
         return [
           ...(isTwoDayEvent ? [`Day ${s.eventDay}`] : []),
