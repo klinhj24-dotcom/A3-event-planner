@@ -596,69 +596,22 @@ function SlotRow({
       {/* Expanded edit panel */}
       {expanded && (
         <div className="border-t border-border/40 px-4 pb-4 pt-3 space-y-3">
-          {/* Band / act selection */}
+          {/* Band / act — read-only; delete and re-add to change */}
           {slot.type === "act" && !isRecital && (
-            <div className="space-y-2">
-              {/* Toggle: Student Band vs Other Group */}
-              <div className="flex items-center rounded-lg border border-border/50 bg-muted/20 p-0.5 w-fit gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setDraft(d => ({ ...d, actType: "band", otherGroupId: "" }))}
-                  className={`text-[11px] font-medium px-3 py-1 rounded-md transition-all ${draft.actType === "band" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >Student Band</button>
-                <button
-                  type="button"
-                  onClick={() => setDraft(d => ({ ...d, actType: "other", bandId: "", label: "" }))}
-                  className={`text-[11px] font-medium px-3 py-1 rounded-md transition-all ${draft.actType === "other" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >Other Group</button>
+            <div className="rounded-lg border border-border/30 bg-muted/10 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                  {slot.otherGroupId ? "Other Group" : "Student Band"}
+                </p>
+                <p className="text-sm font-medium truncate">{slot.bandName ?? slot.label ?? "—"}</p>
+                {slot.otherGroupId && (() => {
+                  const g = otherGroups.find(g => g.id === slot.otherGroupId);
+                  return g && (g.contactName || g.contactEmail) ? (
+                    <p className="text-[11px] text-muted-foreground truncate">{g.contactName}{g.contactEmail ? ` · ${g.contactEmail}` : ""}</p>
+                  ) : null;
+                })()}
               </div>
-              {draft.actType === "band" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Band</label>
-                    <Select value={draft.bandId} onValueChange={(v) => setDraft(d => ({ ...d, bandId: v, label: v === "_custom" ? d.label : "" }))}>
-                      <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Pick a band…" /></SelectTrigger>
-                      <SelectContent position="popper">
-                        <SelectItem value="_custom">Custom name…</SelectItem>
-                        {bands.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {(draft.bandId === "_custom" || !draft.bandId) && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Custom Label</label>
-                      <Input className="h-8 rounded-lg text-xs" value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="Act name…" />
-                    </div>
-                  )}
-                </div>
-              )}
-              {draft.actType === "other" && (() => {
-                const selectedGroup = otherGroups.find(g => String(g.id) === draft.otherGroupId);
-                return (
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Other Group</label>
-                      <Select value={draft.otherGroupId} onValueChange={(v) => setDraft(d => ({ ...d, otherGroupId: v }))}>
-                        <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue placeholder="Pick a group…" /></SelectTrigger>
-                        <SelectContent position="popper">
-                          {otherGroups.length === 0
-                            ? <SelectItem value="_none" disabled>No other groups yet — add them in the Bands page</SelectItem>
-                            : otherGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}{g.description ? ` — ${g.description}` : ""}</SelectItem>)
-                          }
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {selectedGroup && (selectedGroup.contactName || selectedGroup.contactEmail || selectedGroup.contactPhone) && (
-                      <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 space-y-0.5">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Point of Contact</p>
-                        {selectedGroup.contactName && <p className="text-xs font-medium">{selectedGroup.contactName}</p>}
-                        {selectedGroup.contactEmail && <p className="text-[11px] text-muted-foreground">{selectedGroup.contactEmail}</p>}
-                        {selectedGroup.contactPhone && <p className="text-[11px] text-muted-foreground">{selectedGroup.contactPhone}</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              <p className="text-[10px] text-muted-foreground/50 italic shrink-0">Delete &amp; re-add to change</p>
             </div>
           )}
           {slot.type === "act" && isRecital && (
