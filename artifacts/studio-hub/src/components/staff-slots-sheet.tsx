@@ -170,8 +170,8 @@ function SlotCard({
     const assignedId = form.assignedEmployeeId && form.assignedEmployeeId !== "unassigned" ? Number(form.assignedEmployeeId) : null;
     onUpdate(slot.id, {
       assignedEmployeeId: assignedId,
-      startTime: form.startTime || null,
-      endTime: form.endTime || null,
+      startTime: form.startTime ? new Date(form.startTime).toISOString() : null,
+      endTime: form.endTime ? new Date(form.endTime).toISOString() : null,
       notes: form.notes || null,
       eventDay: form.eventDay,
       bonusPay: form.bonusPay ? parseFloat(form.bonusPay) : null,
@@ -769,8 +769,8 @@ export function StaffSlotsSheet({
               onClick={() => addSlot({
                 roleTypeId: Number(addForm.roleTypeId),
                 assignedEmployeeId: addForm.assignedEmployeeId && addForm.assignedEmployeeId !== "unassigned" ? Number(addForm.assignedEmployeeId) : null,
-                startTime: addForm.startDate && addForm.startTime ? `${addForm.startDate}T${addForm.startTime}:00` : null,
-                endTime: addForm.endDate && addForm.endTime ? `${addForm.endDate}T${addForm.endTime}:00` : null,
+                startTime: addForm.startDate && addForm.startTime ? new Date(`${addForm.startDate}T${addForm.startTime}:00`).toISOString() : null,
+                endTime: addForm.endDate && addForm.endTime ? new Date(`${addForm.endDate}T${addForm.endTime}:00`).toISOString() : null,
                 notes: addForm.notes || null,
                 eventDay: addForm.eventDay,
                 bonusPay: addForm.bonusPay ? parseFloat(addForm.bonusPay) : null,
