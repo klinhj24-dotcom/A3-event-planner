@@ -56,7 +56,7 @@ async function notifyStaffAssignment(
         const shiftEnd = endTime
           ? new Date(endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
-        const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
+        const shiftLine = shiftStart ? `  Event time: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
         // Look up arrive-early setting from eventEmployeesTable (shared with event edit page)
         const [empAssignment] = await db.select({ minutesBefore: eventEmployeesTable.minutesBefore })

@@ -109,7 +109,7 @@ export async function runStaffReminders() {
         const shiftEnd = slot.endTime
           ? new Date(slot.endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
-        const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
+        const shiftLine = shiftStart ? `  Event time: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
         await sendReminderEmail(sender, employee.email, employee.name, event.title, role.name, eventDate, shiftLine, slot.confirmed ? null : slot.confirmationToken, true, 7);
         await db.update(eventStaffSlotsTable).set({ weekReminderSent: true }).where(eq(eventStaffSlotsTable.id, slot.id));
@@ -154,7 +154,7 @@ export async function runStaffReminders() {
         const shiftEnd = slot.endTime
           ? new Date(slot.endTime).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ })
           : null;
-        const shiftLine = shiftStart ? `  Shift: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
+        const shiftLine = shiftStart ? `  Event time: ${shiftStart}${shiftEnd ? ` – ${shiftEnd}` : ""}\n` : "";
 
         await sendReminderEmail(sender, employee.email, employee.name, event.title, role.name, eventDate, shiftLine, slot.confirmed ? null : slot.confirmationToken, true, 1);
         await db.update(eventStaffSlotsTable).set({ dayReminderSent: true }).where(eq(eventStaffSlotsTable.id, slot.id));
