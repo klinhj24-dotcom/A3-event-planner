@@ -154,7 +154,7 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
   try {
     const eventId = parseInt(req.params.eventId);
     const slotId = parseInt(req.params.slotId);
-    const { staffNote } = req.body;
+    const { staffNote, calcStartTime } = req.body;
 
     const sender = await getSenderUser();
     if (!sender) { res.status(400).json({ error: "No Google-authenticated user found. Connect Gmail first." }); return; }
@@ -198,8 +198,10 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
     const eventWindow = formatEventWindow(event);
 
     const fmt12Invite = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
+    // Prefer the frontend-provided cascade time (avoids stale-position race condition);
+    // fall back to DB-computed cascade only if the frontend didn't send one
     const allSlotsForCalc = await getAllSlotsForCalc(eventId);
-    const slotCalcTime = computeCalcTime(allSlotsForCalc, slotId);
+    const slotCalcTime = calcStartTime ?? computeCalcTime(allSlotsForCalc, slotId);
     const effectiveTime = slot.startTime ?? slotCalcTime;
     const performanceDate = formatPerformanceDay(event, slot.eventDay);
 

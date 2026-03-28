@@ -294,7 +294,7 @@ function SlotRow({
   slot: LineupSlot; calcTime: string | null; bands: Band[]; otherGroups: OtherGroup[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
   onDelete: (id: number) => void;
-  onSendInvite: (slotId: number, staffNote: string) => void;
+  onSendInvite: (slotId: number, staffNote: string, calcStartTime: string | null) => void;
   onSendConfirmation: (slotId: number, calcStartTime: string | null) => void;
   onSendTimeUpdate: (slotId: number) => void;
   onClearConflict: (id: number) => void;
@@ -405,7 +405,7 @@ function SlotRow({
   async function handleSendInvite() {
     setSendingInvite(true);
     try {
-      await onSendInvite(slot.id, draft.staffNote);
+      await onSendInvite(slot.id, draft.staffNote, calcTime ?? null);
       refetchInvites();
     } finally {
       setSendingInvite(false);
@@ -1512,12 +1512,12 @@ export function LineupSheet({ event, open, onClose }: {
   const [bulkLockingIn, setBulkLockingIn] = useState(false);
   const [bulkLockInConfirmOpen, setBulkLockInConfirmOpen] = useState(false);
 
-  async function handleSendInvite(slotId: number, staffNote: string): Promise<void> {
+  async function handleSendInvite(slotId: number, staffNote: string, calcStartTime: string | null = null): Promise<void> {
     const r = await fetch(`/api/events/${eventId}/lineup/${slotId}/send-invite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ staffNote }),
+      body: JSON.stringify({ staffNote, calcStartTime }),
     });
     const data = await r.json();
     if (!r.ok) {
