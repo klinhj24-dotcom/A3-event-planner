@@ -1181,7 +1181,6 @@ router.post("/band-confirm/:token", async (req, res) => {
           const gmail = google.gmail({ version: "v1", auth });
           const from = gmailUser.email || "";
 
-          // ── Booking confirmation email → family contact ─────────────────────
           let body = `Hi ${invite.contactName ?? "there"},\n\nYour booking has been confirmed. We're looking forward to having ${bandName} perform!\n\n`;
           body += `EVENT DETAILS\n`;
           if (performerName) body += `Performer: ${performerName}\n`;
@@ -1217,24 +1216,9 @@ router.post("/band-confirm/:token", async (req, res) => {
           body += `\nIf anything changes or you have questions, please reply to this email.\n\nSee you there!\nThe Music Space Team`;
 
           const html = buildHtmlEmail({ recipientName: invite.contactName ?? "there", body });
-          const raw = makeHtmlEmail({ to: invite.contactEmail, from, subject, html });
+          const raw = makeHtmlEmail({ to: invite.contactEmail, from, subject, html, cc: [TMS_CC] });
           await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-          console.log(`[band-confirm] Confirmation email sent to ${invite.contactEmail} for invite.id=${invite.id}`);
-
-          // ── Internal staff alert → TMS ──────────────────────────────────────
-          // Separate from the family email so staff always know when someone confirms,
-          // regardless of whether the family email succeeds.
-          const staffSubject = `✅ ${invite.contactName ?? "A contact"} confirmed for ${bandName} — ${event?.title ?? ""}`;
-          let staffBody = `${invite.contactName ?? "A contact"} confirmed the booking for ${bandName}`;
-          if (performerName) staffBody += ` (performer: ${performerName})`;
-          staffBody += `.\n\nEvent: ${event?.title ?? "TBD"}\nPerformance Date: ${performanceDay}\n`;
-          if (resolvedStartTime) staffBody += `Est. Set Time: ${fmt12(resolvedStartTime)}\n`;
-          if (conflictNote?.trim()) staffBody += `\nNote from contact: "${conflictNote.trim()}"\n`;
-          staffBody += `\nView the lineup in the portal to send the lock-in email when ready.`;
-          const staffHtml = buildHtmlEmail({ recipientName: "The Music Space Team", body: staffBody });
-          const staffRaw = makeHtmlEmail({ to: TMS_CC, from, subject: staffSubject, html: staffHtml });
-          await gmail.users.messages.send({ userId: "me", requestBody: { raw: staffRaw } });
-          console.log(`[band-confirm] Staff alert sent to ${TMS_CC} for invite.id=${invite.id}`);
+          console.log(`[band-confirm] Confirmation email sent to ${invite.contactEmail} (CC ${TMS_CC}) for invite.id=${invite.id}`);
         }
       } catch (emailErr) {
         console.error("[band-confirm] Confirmation email failed (non-fatal):", emailErr);
