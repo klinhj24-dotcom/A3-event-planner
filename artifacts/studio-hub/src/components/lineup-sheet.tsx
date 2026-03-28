@@ -865,13 +865,13 @@ function SlotRow({
                   <Send className="h-3 w-3" />
                   {sendingInvite ? "Sending…" : slot.inviteStatus === "not_sent" ? "Send Invite" : "Re-invite New Contacts"}
                 </Button>
-                {slot.inviteStatus !== "not_sent" && slot.confirmed && !slot.confirmationSent && (
+                {(slot.inviteStatus !== "not_sent" || (slot.otherGroupId && !slot.bandId)) && slot.confirmed && !slot.confirmationSent && (
                   <Button
                     size="sm"
                     className="rounded-lg h-7 text-xs gap-1.5 flex-1 bg-emerald-600 hover:bg-emerald-500"
                     disabled={sendingConfirm}
                     onClick={() => setLockInConfirmOpen(true)}
-                    title="Send the official booking confirmation to all families (BCC) and the band leader (CC). Goes to info@ as the To address. Only shows after invites have been sent."
+                    title={slot.otherGroupId && !slot.bandId ? "Send the official booking confirmation directly to this group's contact email." : "Send the official booking confirmation to all families (BCC) and the band leader (CC). Goes to info@ as the To address. Only shows after invites have been sent."}
                   >
                     <CheckCircle2 className="h-3 w-3" />
                     {sendingConfirm ? "Sending…" : "Send Lock-In Email"}
@@ -884,11 +884,18 @@ function SlotRow({
                     </DialogHeader>
                     <div className="space-y-3 text-sm text-muted-foreground">
                       <p>This will send the official booking confirmation for <span className="text-foreground font-medium">{displayName}</span> to:</p>
-                      <ul className="list-disc list-inside space-y-1 pl-1">
-                        <li>info@themusicspace.com (To)</li>
-                        <li>Band leader, if an email is on file (CC)</li>
-                        <li>All family contacts not marked Not Attending (BCC)</li>
-                      </ul>
+                      {slot.otherGroupId && !slot.bandId ? (
+                        <ul className="list-disc list-inside space-y-1 pl-1">
+                          <li>{slot.otherGroupContactEmail ? <><span className="text-foreground">{slot.otherGroupContactName ?? slot.otherGroupName}</span> — {slot.otherGroupContactEmail} (To)</> : <span className="text-red-400">No contact email on file — add one on the Bands page first.</span>}</li>
+                          <li>info@themusicspace.com (CC)</li>
+                        </ul>
+                      ) : (
+                        <ul className="list-disc list-inside space-y-1 pl-1">
+                          <li>info@themusicspace.com (To)</li>
+                          <li>Band leader, if an email is on file (CC)</li>
+                          <li>All family contacts not marked Not Attending (BCC)</li>
+                        </ul>
+                      )}
                       {/* Time preview — use saved startTime, then calcTime, then staffNote */}
                       {(() => {
                         const fmt12t = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
@@ -915,7 +922,9 @@ function SlotRow({
                           </div>
                         );
                       })()}
-                      <p className="text-amber-400">Before sending, confirm that all members who need to be there are marked <strong>Confirmed</strong> in the attendance list — anyone marked Not Attending will be excluded from this and future emails.</p>
+                      {(!slot.otherGroupId || slot.bandId) && (
+                        <p className="text-amber-400">Before sending, confirm that all members who need to be there are marked <strong>Confirmed</strong> in the attendance list — anyone marked Not Attending will be excluded from this and future emails.</p>
+                      )}
                     </div>
                     <DialogFooter className="gap-2">
                       <Button variant="outline" size="sm" onClick={() => setLockInConfirmOpen(false)}>Cancel</Button>
@@ -1536,7 +1545,7 @@ export function LineupSheet({ event, open, onClose }: {
       toast({ title: "Failed to send confirmation", description: data.error, variant: "destructive" });
       throw new Error(data.error);
     }
-    toast({ title: "Lock-in confirmation sent!", description: `To: ${data.to}${data.bcc > 0 ? ` + ${data.bcc} BCC'd` : ""}` });
+    toast({ title: "Lock-in confirmation sent!", description: data.isExternal ? "Email sent directly to external act contact." : "Email sent to info@ with families BCC'd." });
     queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
   }
 
@@ -1750,7 +1759,9 @@ export function LineupSheet({ event, open, onClose }: {
   const invitedCount = actSlots.filter(s => s.inviteStatus !== "not_sent").length;
   const confirmedCount = actSlots.filter(s => s.inviteStatus === "confirmed").length;
   const uninvitedCount = actSlots.filter(s => s.inviteStatus === "not_sent").length;
-  const unlockedConfirmedCount = actSlots.filter(s => s.confirmed && !s.confirmationSent).length;
+  // Count all confirmed acts that haven't been locked in — includes student bands + other groups
+  const allActSlots = slots.filter(s => s.type === "act");
+  const unlockedConfirmedCount = allActSlots.filter(s => s.confirmed && !s.confirmationSent).length;
 
   function submitAddSlot() {
     addSlot({
@@ -1829,29 +1840,33 @@ export function LineupSheet({ event, open, onClose }: {
                   <Dialog open={bulkLockInConfirmOpen} onOpenChange={setBulkLockInConfirmOpen}>
                     <DialogContent className="max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Lock In All Bands?</DialogTitle>
+                        <DialogTitle>Lock In All Acts?</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-3 text-sm text-muted-foreground">
-                        <p>This will send lock-in emails for <span className="text-foreground font-medium">{unlockedConfirmedCount} band{unlockedConfirmedCount !== 1 ? "s" : ""}</span>. Each email goes to:</p>
+                        <p>This will send lock-in emails for <span className="text-foreground font-medium">{unlockedConfirmedCount} act{unlockedConfirmedCount !== 1 ? "s" : ""}</span>:</p>
                         <ul className="list-disc list-inside space-y-1 pl-1">
-                          <li>info@themusicspace.com (To)</li>
-                          <li>Band leader, if an email is on file (CC)</li>
-                          <li>All family contacts not marked Not Attending (BCC)</li>
+                          <li><strong>Student bands</strong> — To: info@, CC: band leader, BCC: all confirmed family contacts</li>
+                          <li><strong>External acts</strong> — To: group contact email, CC: info@</li>
                         </ul>
-                        {/* Per-band time preview */}
+                        {/* Per-act time preview */}
                         <div className="rounded-lg border border-border/40 overflow-hidden">
                           <div className="bg-muted/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Times in emails</div>
                           <div className="divide-y divide-border/30">
-                            {actSlots.filter(s => s.confirmed && !s.confirmationSent && s.bandId).map(s => {
+                            {allActSlots.filter(s => s.confirmed && !s.confirmationSent).map(s => {
                               const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
                               const slotIdx = slots.indexOf(s);
                               const resolvedTime = s.startTime || (slotIdx >= 0 && calcTimes[slotIdx] ? calcTimes[slotIdx] : null);
                               const timeLabel = resolvedTime
                                 ? `${fmt12(resolvedTime)}${s.durationMinutes ? ` (${s.durationMinutes} min)` : ""}`
                                 : s.staffNote ? `Estimated: ${s.staffNote}` : null;
+                              const name = s.bandName ?? s.otherGroupName ?? s.label ?? "Unnamed";
+                              const isOther = s.otherGroupId && !s.bandId;
                               return (
                                 <div key={s.id} className="flex items-center justify-between px-3 py-1.5 gap-3">
-                                  <span className="text-xs text-foreground font-medium truncate">{s.bandName ?? s.label ?? "Unnamed"}</span>
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-xs text-foreground font-medium truncate">{name}</span>
+                                    {isOther && <span className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded bg-violet-500/10 text-violet-400 shrink-0">Ext</span>}
+                                  </div>
                                   {timeLabel
                                     ? <span className="text-xs text-emerald-400 shrink-0">{timeLabel}</span>
                                     : <span className="text-xs text-red-400 shrink-0 font-semibold">No time set</span>}
@@ -1860,7 +1875,7 @@ export function LineupSheet({ event, open, onClose }: {
                             })}
                           </div>
                         </div>
-                        <p className="text-amber-400">Make sure attendance has been reviewed for all bands — anyone marked Not Attending will be excluded. Bands that already have a lock-in sent are skipped automatically.</p>
+                        <p className="text-amber-400">Student bands: make sure attendance is reviewed — anyone marked Not Attending will be excluded. Acts already locked in are skipped automatically.</p>
                       </div>
                       <DialogFooter className="gap-2">
                         <Button variant="outline" size="sm" onClick={() => setBulkLockInConfirmOpen(false)}>Cancel</Button>
@@ -1870,7 +1885,7 @@ export function LineupSheet({ event, open, onClose }: {
                           disabled={bulkLockingIn}
                           onClick={async () => { setBulkLockInConfirmOpen(false); await handleBulkLockIn(); }}
                         >
-                          {bulkLockingIn ? "Sending…" : `Yes, Lock In ${unlockedConfirmedCount} Band${unlockedConfirmedCount !== 1 ? "s" : ""}`}
+                          {bulkLockingIn ? "Sending…" : `Yes, Lock In ${unlockedConfirmedCount} Act${unlockedConfirmedCount !== 1 ? "s" : ""}`}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
