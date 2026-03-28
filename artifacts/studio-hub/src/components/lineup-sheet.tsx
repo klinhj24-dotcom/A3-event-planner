@@ -384,7 +384,9 @@ function SlotRow({
     try {
       await onUpdate(slot.id, {
         label: draft.label || null,
-        startTime: draft.startTime || null,
+        // Act slots: only keep a manual startTime when overlapping; otherwise always auto-cascade.
+        // Group-headers and non-act slots always honour their manual startTime.
+        startTime: slot.type === "act" ? (draft.isOverlapping ? (draft.startTime || null) : null) : (draft.startTime || null),
         durationMinutes: draft.duration ? Number(draft.duration) : null,
         bufferMinutes: Number(draft.buffer) || 15,
         isOverlapping: draft.isOverlapping,
@@ -724,28 +726,43 @@ function SlotRow({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Group-header: show a "Group start time" field for recitals */}
+          {slot.type === "group-header" ? (
             <div className="space-y-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Set time (manual)</label>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Group start time</label>
               <div className="relative">
                 <Input type="time" className="h-8 rounded-lg text-xs pr-6" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} />
                 {draft.startTime && (
-                  <button
-                    type="button"
-                    title="Clear manual time — slot will use auto-calculated time"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setDraft(d => ({ ...d, startTime: "" }))}
-                  >
+                  <button type="button" title="Clear — group will cascade from previous group" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setDraft(d => ({ ...d, startTime: "" }))}>
                     <X className="h-3 w-3" />
                   </button>
                 )}
               </div>
               {draft.startTime
-                ? <p className="text-[10px] text-amber-400">Overrides auto-calc — tap × to clear</p>
-                : <p className="text-[10px] text-muted-foreground/50">Auto from slot above</p>
+                ? <p className="text-[10px] text-amber-400">Fixed group time — individual slots cascade from here</p>
+                : <p className="text-[10px] text-muted-foreground/50">Auto-cascades from previous group</p>
               }
             </div>
-            <div className="grid grid-cols-2 sm:contents gap-3">
+          ) : slot.type === "act" ? (
+            // Act slots: manual time only shown when overlapping; otherwise fully auto-cascaded
+            <div className={`grid grid-cols-1 gap-3 ${draft.isOverlapping ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+              {draft.isOverlapping && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Overlap start time</label>
+                  <div className="relative">
+                    <Input type="time" className="h-8 rounded-lg text-xs pr-6" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} />
+                    {draft.startTime && (
+                      <button type="button" title="Clear — will default to same start as previous act" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setDraft(d => ({ ...d, startTime: "" }))}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  {draft.startTime
+                    ? <p className="text-[10px] text-amber-400">Custom overlap time — tap × to use previous act's time</p>
+                    : <p className="text-[10px] text-muted-foreground/50">Starts same time as previous act</p>
+                  }
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Duration (min)</label>
                 <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.duration} onChange={e => setDraft(d => ({ ...d, duration: e.target.value }))} placeholder="30" />
@@ -755,15 +772,45 @@ function SlotRow({
                 <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.buffer} onChange={e => setDraft(d => ({ ...d, buffer: e.target.value }))} placeholder="15" />
               </div>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-2">
-            <div>
-              <p className="text-xs font-medium">Overlaps with previous act</p>
-              <p className="text-[10px] text-muted-foreground">Runs simultaneously — e.g. dance group while next band sets up</p>
+          ) : (
+            // Announcements, breaks, etc. — keep full manual control
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Set time (manual)</label>
+                <div className="relative">
+                  <Input type="time" className="h-8 rounded-lg text-xs pr-6" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} />
+                  {draft.startTime && (
+                    <button type="button" title="Clear manual time" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setDraft(d => ({ ...d, startTime: "" }))}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                {draft.startTime
+                  ? <p className="text-[10px] text-amber-400">Overrides auto-calc — tap × to clear</p>
+                  : <p className="text-[10px] text-muted-foreground/50">Auto from slot above</p>
+                }
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Duration (min)</label>
+                <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.duration} onChange={e => setDraft(d => ({ ...d, duration: e.target.value }))} placeholder="30" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Buffer after (min)</label>
+                <Input type="number" min="0" className="h-8 rounded-lg text-xs" value={draft.buffer} onChange={e => setDraft(d => ({ ...d, buffer: e.target.value }))} placeholder="15" />
+              </div>
             </div>
-            <Switch checked={draft.isOverlapping} onCheckedChange={v => setDraft(d => ({ ...d, isOverlapping: v }))} />
-          </div>
+          )}
+
+          {/* Overlap toggle — act slots only, not applicable for recitals */}
+          {slot.type === "act" && !isRecital && (
+            <div className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-2">
+              <div>
+                <p className="text-xs font-medium">Overlaps with previous act</p>
+                <p className="text-[10px] text-muted-foreground">Runs simultaneously — e.g. dance group while next band sets up</p>
+              </div>
+              <Switch checked={draft.isOverlapping} onCheckedChange={v => setDraft(d => ({ ...d, isOverlapping: v, startTime: v ? d.startTime : "" }))} />
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Notes / Announcements</label>
