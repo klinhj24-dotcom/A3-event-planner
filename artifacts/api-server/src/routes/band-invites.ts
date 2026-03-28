@@ -2,7 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import { google } from "googleapis";
 import { db, eventsTable, eventLineupTable, bandsTable, bandMembersTable, bandContactsTable, eventBandInvitesTable, eventGuestListTable, usersTable, otherGroupsTable } from "@workspace/db";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { eq, and, or, inArray, isNull } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { format } from "date-fns";
 
@@ -212,21 +212,22 @@ router.post("/events/:eventId/lineup/:slotId/send-invite", async (req, res) => {
     for (const contact of contacts) {
       if (!contact.email) continue;
 
-      // Check for existing invite — skip if already sent (by contactId OR by email address).
-      // Checking by email is critical because invites from the bulk dialog may have contactId=null,
-      // so the contactId check alone would miss them and create a duplicate pending record.
-      const [existing] = await db.select({ id: eventBandInvitesTable.id }).from(eventBandInvitesTable)
-        .where(and(
-          eq(eventBandInvitesTable.lineupSlotId, slotId),
-          or(
-            eq(eventBandInvitesTable.contactId, contact.id),
-            eq(eventBandInvitesTable.contactEmail, contact.email.toLowerCase()),
-          ),
-        ));
-      if (existing) continue;
+      // Skip if THIS contact already has an invite (by contactId — strongest check for known contacts)
+      const [existingById] = await db.select({ id: eventBandInvitesTable.id }).from(eventBandInvitesTable)
+        .where(and(eq(eventBandInvitesTable.lineupSlotId, slotId), eq(eventBandInvitesTable.contactId, contact.id)));
+      if (existingById) continue;
 
-      // Also skip if we already sent to this email address in this batch (deduplication by address)
-      if (sentEmails.has(contact.email.toLowerCase())) continue;
+      // Also skip if there's a legacy record for this email with no contactId
+      // (bulk-dialog invites may have contactId=null, avoid duplicate pending records)
+      const [existingByEmail] = await db.select({ id: eventBandInvitesTable.id, contactId: eventBandInvitesTable.contactId }).from(eventBandInvitesTable)
+        .where(and(eq(eventBandInvitesTable.lineupSlotId, slotId), eq(eventBandInvitesTable.contactEmail, contact.email.toLowerCase()), isNull(eventBandInvitesTable.contactId)));
+      if (existingByEmail) continue;
+
+      // This contact hasn't been invited yet — create their record.
+      // If another contact in this batch already has the same email (e.g. two parents named Erin
+      // sharing a family address), still create the DB record so both get a trackable token,
+      // but skip sending a second email to avoid spamming the same inbox.
+      const emailAlreadySentThisBatch = sentEmails.has(contact.email.toLowerCase());
 
       const token = randomUUID();
       const confirmUrl = `${BASE_URL}/band-confirm/${token}`;
@@ -275,8 +276,7 @@ The Music Space${admissionsLines}`;
         ctaUrl: confirmUrl,
       });
 
-      // Insert invite record FIRST as a reservation — prevents race-condition double-sends
-      // if the button is clicked twice before the first request completes.
+      // Insert invite record as a reservation (prevents race-condition double-sends)
       const [invite] = await db.insert(eventBandInvitesTable).values({
         eventId,
         lineupSlotId: slotId,
@@ -291,16 +291,21 @@ The Music Space${admissionsLines}`;
         sentAt: new Date(),
       }).returning();
 
-      try {
-        const raw = makeHtmlEmail({ to: contact.email, from, subject: `Performance Invite: ${event.title} — ${slot.bandName ?? "Your Band"}`, html, cc: [TMS_CC] });
-        await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+      if (!emailAlreadySentThisBatch) {
+        try {
+          const raw = makeHtmlEmail({ to: contact.email, from, subject: `Performance Invite: ${event.title} — ${slot.bandName ?? "Your Band"}`, html, cc: [TMS_CC] });
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+          sent++;
+          sentEmails.add(contact.email.toLowerCase());
+        } catch (emailErr) {
+          console.error(`[band-invites] Failed to send to ${contact.email}:`, emailErr);
+          // Roll back the reservation so it can be retried
+          await db.delete(eventBandInvitesTable).where(eq(eventBandInvitesTable.id, invite.id));
+          continue;
+        }
+      } else {
+        // Record created, email skipped (shared address) — link is available via dashboard "Copy link"
         sent++;
-        sentEmails.add(contact.email.toLowerCase());
-      } catch (emailErr) {
-        console.error(`[band-invites] Failed to send to ${contact.email}:`, emailErr);
-        // Roll back the reservation so it can be retried
-        await db.delete(eventBandInvitesTable).where(eq(eventBandInvitesTable.id, invite.id));
-        continue;
       }
 
       newInvites.push(invite);

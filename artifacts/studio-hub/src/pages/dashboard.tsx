@@ -52,6 +52,25 @@ export default function Dashboard() {
     return name.trim().split(/\s+/)[0];
   }
 
+  // Returns a short label for each contact link, adding a last-name initial when
+  // two contacts in the same row share the same first name (e.g. "Erin G" / "Erin R").
+  function contactLinkLabel(links: any[], link: any): string {
+    const first = firstWord(link.contactName);
+    const hasDuplicate = links.some(
+      (l: any) => l.inviteId !== link.inviteId && firstWord(l.contactName) === first
+    );
+    if (!hasDuplicate) return first;
+    const parts = (link.contactName ?? "").trim().split(/\s+/);
+    const lastInitial = parts.length > 1 ? ` ${parts[parts.length - 1][0]}.` : "";
+    return `${first}${lastInitial}`;
+  }
+
+  // Same de-dup logic for the "via …" line
+  function contactViaLabel(links: any[]): string {
+    const labels = links.map((l: any) => contactLinkLabel(links, l)).filter(Boolean);
+    return labels.join(" & ");
+  }
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -283,7 +302,7 @@ export default function Dashboard() {
                             {item.memberName && (item.links?.length > 0 || item.contactName) && (
                               <span className="text-muted-foreground/70">
                                 via {item.links && item.links.length > 1
-                                  ? (item.links as any[]).map((l: any) => firstWord(l.contactName)).filter(Boolean).join(" & ")
+                                  ? contactViaLabel(item.links)
                                   : item.contactName}
                               </span>
                             )}
@@ -313,7 +332,7 @@ export default function Dashboard() {
                                   }`}
                                 >
                                   {isLinkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                  {isLinkCopied ? "Copied!" : showName ? firstWord(link.contactName) : "Copy link"}
+                                  {isLinkCopied ? "Copied!" : showName ? contactLinkLabel(item.links, link) : "Copy link"}
                                 </button>
                               );
                             })}
