@@ -131,8 +131,9 @@ async function runOpenMicCron() {
               const from = sender.googleEmail ?? sender.email ?? "";
               const html = buildHtmlEmail({ body });
               const raw = makeHtmlEmail({ to: TMS_INFO, from, subject, html, bcc: mailingList });
-              await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+              // Mark sent BEFORE sending so a crash/restart mid-send can't double-fire
               await db.update(eventsTable).set({ openMicSaveTheDateSent: true }).where(eq(eventsTable.id, event.id));
+              await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
               console.log(`[open-mic-cron] Series ${series.id}: 21-day email sent to ${mailingList.length} recipients`);
             }
           } catch (err) {
@@ -165,8 +166,9 @@ async function runOpenMicCron() {
               const from = sender.googleEmail ?? sender.email ?? "";
               const html = buildHtmlEmail({ body });
               const raw = makeHtmlEmail({ to: TMS_INFO, from, subject, html, bcc: mailingList });
-              await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+              // Mark sent BEFORE sending so a crash/restart mid-send can't double-fire
               await db.update(eventsTable).set({ openMicPerformerListSent: true }).where(eq(eventsTable.id, event.id));
+              await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
               console.log(`[open-mic-cron] Series ${series.id}: 3-day email sent to ${mailingList.length} recipients`);
             }
           } catch (err) {
