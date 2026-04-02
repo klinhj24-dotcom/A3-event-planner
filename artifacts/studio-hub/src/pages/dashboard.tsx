@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout";
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check, ClipboardCheck, Loader2 } from "lucide-react";
+import { Users, Calendar, UserSquare2, ClipboardList, ArrowUpRight, Activity, AlertTriangle, CreditCard, CheckCircle2, Mail, Copy, Check, ClipboardCheck, Loader2, Music } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -136,6 +136,57 @@ export default function Dashboard() {
               : card;
           })}
         </div>
+
+        {/* Your Upcoming Shows — band leader view, only shown to non-admin users with band slots */}
+        {!(stats as any)?.isAdmin && ((stats as any)?.myBandSlots as any[])?.length > 0 && (
+          <Card className="rounded-2xl shadow-md border-[#7250ef]/20 overflow-hidden flex flex-col bg-card">
+            <CardHeader className="flex flex-row items-center justify-between bg-[#7250ef]/5 border-b border-[#7250ef]/15 pb-4">
+              <div className="flex items-center gap-2">
+                <Music className="h-5 w-5 text-[#7250ef]" />
+                <CardTitle className="font-display text-xl">Your Upcoming Shows</CardTitle>
+                <span className="bg-[#7250ef]/15 text-[#7250ef] rounded-full px-2.5 py-0.5 text-xs font-bold border border-[#7250ef]/20">{((stats as any)?.myBandSlots as any[]).length}</span>
+              </div>
+              <Link href="/events" className="text-sm font-medium text-[#7250ef] hover:underline inline-flex items-center">
+                All events <ArrowUpRight className="h-4 w-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/20">
+                {((stats as any)?.myBandSlots as any[]).map((slot: any) => {
+                  const statusColors: Record<string, string> = {
+                    confirmed: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+                    responding: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+                    sent: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+                    not_sent: "bg-muted/30 text-muted-foreground border-border/30",
+                  };
+                  const statusLabel: Record<string, string> = {
+                    confirmed: "Confirmed",
+                    responding: "Responded",
+                    sent: "Invited",
+                    not_sent: "Pending",
+                  };
+                  const statusKey = slot.inviteStatus ?? "not_sent";
+                  return (
+                    <Link key={slot.slotId} href={`/events?open=${slot.eventId}`} className="flex items-center justify-between px-5 py-3.5 hover:bg-black/20 transition-colors group cursor-pointer">
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-sm text-foreground group-hover:text-[#7250ef] transition-colors">{slot.bandName ?? "Your Band"}</p>
+                        <p className="text-xs text-muted-foreground">{slot.eventTitle}</p>
+                        {slot.eventStartDate && (
+                          <p className="text-xs text-muted-foreground/70">
+                            {format(new Date(slot.eventStartDate), "EEE, MMM d · h:mm a")}
+                          </p>
+                        )}
+                      </div>
+                      <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 border shrink-0 ml-4 ${statusColors[statusKey] ?? statusColors.not_sent}`}>
+                        {statusLabel[statusKey] ?? "Pending"}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Pending Debriefs — only shown to the debrief owner when their event is ending */}
         {(stats?.pendingDebriefs ?? 0) > 0 && (
@@ -381,7 +432,7 @@ export default function Dashboard() {
                       <div className="space-y-1">
                         <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{event.title}</p>
                         <div className="flex items-center text-sm text-muted-foreground gap-3">
-                          <span className="flex items-center"><Calendar className="h-3.5 w-3.5 mr-1.5 opacity-70" /> {event.startDate ? format(new Date(event.startDate), "MMM d, yyyy") : "TBD"}</span>
+                          <span className="flex items-center"><Calendar className="h-3.5 w-3.5 mr-1.5 opacity-70" /> {event.startDate ? format(new Date(event.startDate), "MMM d, yyyy · h:mm a") : "TBD"}</span>
                           <span className="capitalize">{event.type.replace('_', ' ')}</span>
                         </div>
                       </div>

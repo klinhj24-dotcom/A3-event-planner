@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, eventLineupTable, bandMembersTable, eventDebriefTable, usersTable } from "@workspace/db";
+import { db, contactsTable, eventsTable, employeesTable, eventSignupsTable, outreachTable, eventTicketRequestsTable, bandsTable, eventBandInvitesTable, eventLineupTable, bandMembersTable, eventDebriefTable, usersTable, bandContactsTable } from "@workspace/db";
 import { count, gte, lte, eq, desc, isNotNull, and, or, isNull, sql, ne, inArray, notInArray } from "drizzle-orm";
 
 const router = Router();
@@ -229,6 +229,45 @@ router.get("/dashboard/stats", async (req, res) => {
       return { ...d, ownerName };
     });
 
+    // My band slots — upcoming lineup slots for bands the current user is a contact of
+    const currentUserEmail = (req.user as any)?.email as string | undefined;
+    const isAdmin = (req.user as any)?.role === "admin";
+    let myBandSlots: { slotId: number; eventId: number; eventTitle: string; eventStartDate: Date | null; bandId: number | null; bandName: string | null; slotStartTime: string | null; inviteStatus: string | null; confirmed: boolean | null; day: number | null }[] = [];
+
+    if (currentUserEmail && !isAdmin) {
+      const myContacts = await db
+        .select({ bandId: bandContactsTable.bandId })
+        .from(bandContactsTable)
+        .where(eq(bandContactsTable.email, currentUserEmail));
+      const myBandIds = [...new Set(myContacts.map(r => r.bandId))];
+
+      if (myBandIds.length > 0) {
+        myBandSlots = await db
+          .select({
+            slotId: eventLineupTable.id,
+            eventId: eventsTable.id,
+            eventTitle: eventsTable.title,
+            eventStartDate: eventsTable.startDate,
+            bandId: eventLineupTable.bandId,
+            bandName: bandsTable.name,
+            slotStartTime: eventLineupTable.startTime,
+            inviteStatus: eventLineupTable.inviteStatus,
+            confirmed: eventLineupTable.confirmed,
+            day: eventLineupTable.day,
+          })
+          .from(eventLineupTable)
+          .innerJoin(eventsTable, eq(eventLineupTable.eventId, eventsTable.id))
+          .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+          .where(and(
+            gte(eventsTable.startDate, now),
+            ne(eventsTable.status, "cancelled"),
+            eq(eventLineupTable.type, "act"),
+            inArray(eventLineupTable.bandId, myBandIds),
+          ))
+          .orderBy(eventsTable.startDate, eventLineupTable.position);
+      }
+    }
+
     res.json({
       totalContacts: totalContactsRow?.count ?? 0,
       upcomingEvents: upcomingEventsRow?.count ?? 0,
@@ -244,6 +283,8 @@ router.get("/dashboard/stats", async (req, res) => {
       pendingDebriefs: pendingDebriefsList.length,
       pendingDebriefsList,
       recentDebriefsList,
+      myBandSlots,
+      isAdmin,
     });
   } catch (err) {
     console.error("getDashboardStats error:", err);
