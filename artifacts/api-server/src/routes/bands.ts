@@ -659,21 +659,38 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
       const constraints: string[] = [];
       for (const s of slots) {
         const label = s.label?.trim() ?? "";
-        // Check slot-level conflict note
-        if (s.scheduleConflict && s.conflictReason) {
-          constraints.push(`"${label}": ${s.conflictReason}`);
+        const labelLower = label.toLowerCase();
+        const slotNotes: string[] = [];
+
+        // 1. Already-resolved conflict flag + reason (from Check Conflicts)
+        if (s.scheduleConflict) {
+          slotNotes.push(s.conflictReason?.trim() ? s.conflictReason.trim() : "has a scheduling conflict");
         }
-        // Check ticket request specialConsiderations
-        const tr = ticketRequests.find(r =>
-          r.studentFirstName && (
-            label.toLowerCase().includes(r.studentFirstName.toLowerCase()) ||
-            label.toLowerCase().includes((r.studentLastName ?? "").toLowerCase())
-          )
-        );
+
+        // 2. Staff note on the slot itself
+        if (s.staffNote?.trim()) {
+          slotNotes.push(s.staffNote.trim());
+        }
+
+        // 3. Ticket request specialConsiderations — same matching logic as check-conflicts
+        const tr = ticketRequests.find(r => {
+          const fn = r.studentFirstName?.toLowerCase().trim() ?? "";
+          const ln = r.studentLastName?.toLowerCase().trim() ?? "";
+          const full = `${fn} ${ln}`.trim();
+          return r.specialConsiderations?.trim() && (
+            (fn && labelLower.includes(fn)) ||
+            (ln && labelLower.includes(ln)) ||
+            (full && full === labelLower)
+          );
+        });
         if (tr?.specialConsiderations?.trim()) {
-          const note = tr.specialConsiderations.trim();
-          const alreadyAdded = constraints.some(c => c.includes(note));
-          if (!alreadyAdded) constraints.push(`"${label}": ${note}`);
+          slotNotes.push(tr.specialConsiderations.trim());
+        }
+
+        // Deduplicate and add to group constraints
+        for (const note of slotNotes) {
+          const entry = `"${label}": ${note}`;
+          if (!constraints.some(c => c === entry)) constraints.push(entry);
         }
       }
       return { teacher: key === "__none__" ? "No teacher" : key, count: slots.length, constraints };
