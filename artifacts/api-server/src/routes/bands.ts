@@ -681,9 +681,18 @@ Rules:
       ],
     });
 
-    const raw = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
-    const parsed = JSON.parse(raw);
-    const sortedIds: number[] = Array.isArray(parsed.sortedIds) ? parsed.sortedIds.map(Number) : [];
+    const rawContent = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
+    // Strip markdown code fences the model sometimes adds
+    const raw = rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    let parsed: { sortedIds?: unknown[] };
+    try {
+      parsed = JSON.parse(raw);
+    } catch (parseErr) {
+      console.error("autoSort JSON parse error:", parseErr, "raw:", raw);
+      // Fallback: keep existing order
+      parsed = { sortedIds: actSlots.map(s => s.id) };
+    }
+    const sortedIds: number[] = Array.isArray(parsed.sortedIds) ? parsed.sortedIds.map(Number) : actSlots.map(s => s.id);
 
     // Fill in any IDs the AI missed (append at end)
     const aiIdSet = new Set(sortedIds);
@@ -738,10 +747,12 @@ Rules:
           label: h.label,
           position: h.position,
           durationMinutes: null,
-          bufferMinutes: null,
+          bufferMinutes: 0,
           startTime: null,
+          isOverlapping: false,
           confirmed: false,
           inviteStatus: "not_sent" as const,
+          eventDay: 1,
         }))
       );
     }
