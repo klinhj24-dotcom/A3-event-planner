@@ -662,17 +662,12 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
         const labelLower = label.toLowerCase();
         const slotNotes: string[] = [];
 
-        // 1. Already-resolved conflict flag + reason (from Check Conflicts)
-        if (s.scheduleConflict) {
-          slotNotes.push(s.conflictReason?.trim() ? s.conflictReason.trim() : "has a scheduling conflict");
-        }
-
-        // 2. Staff note on the slot itself
+        // 1. Staff note on the slot itself (raw — good for AI)
         if (s.staffNote?.trim()) {
           slotNotes.push(s.staffNote.trim());
         }
 
-        // 3. Ticket request specialConsiderations — same matching logic as check-conflicts
+        // 2. Ticket request specialConsiderations (raw original constraint — best signal)
         const tr = ticketRequests.find(r => {
           const fn = r.studentFirstName?.toLowerCase().trim() ?? "";
           const ln = r.studentLastName?.toLowerCase().trim() ?? "";
@@ -685,6 +680,12 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
         });
         if (tr?.specialConsiderations?.trim()) {
           slotNotes.push(tr.specialConsiderations.trim());
+        }
+
+        // 3. Conflict flag fallback — only if no raw note found (avoids sending
+        //    the analysis prose "Assigned time X is before..." which confuses the AI)
+        if (s.scheduleConflict && slotNotes.length === 0) {
+          slotNotes.push("has a scheduling constraint");
         }
 
         // Deduplicate and add to group constraints
@@ -761,15 +762,14 @@ Include every GROUP index. When in doubt, use "neutral".`,
     type NewItem = { id: number; position: number } | { isHeader: true; label: string; position: number };
     const newOrder: NewItem[] = [];
     let pos = 1;
-    let groupNum = 1;
 
     for (const gi of groupOrder) {
       const key = teacherKeys[gi];
       const slots = groupMap.get(key) ?? [];
       if (slots.length === 0) continue;
-      newOrder.push({ isHeader: true, label: `Group ${groupNum}`, position: pos });
+      const headerLabel = key === "__none__" ? "No Teacher" : key;
+      newOrder.push({ isHeader: true, label: headerLabel, position: pos });
       pos++;
-      groupNum++;
       for (const s of slots) {
         newOrder.push({ id: s.id, position: pos });
         pos++;
