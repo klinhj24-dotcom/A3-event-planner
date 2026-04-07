@@ -704,27 +704,33 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
 
     const aiRes = await openai.chat.completions.create({
       model: "gpt-5-mini",
-      max_completion_tokens: 400,
+      max_completion_tokens: 800,
       messages: [
         {
           role: "system",
           content: `You are ordering teacher groups in a music recital.${eventStartTime ? ` Show starts at ${eventStartTime}.` : ""} Each student slot is ~${durationMinutes} minutes.
-Rules:
-- Keep all students from the same teacher together — do NOT split groups.
-- If a group has a student with an early-leave constraint, place that group EARLIER in the show.
-- If a group has a student with a late-arrival constraint, place that group LATER in the show.
-- Groups with no constraints fill in naturally around constrained groups.
+
+CONSTRAINT DIRECTION RULES — follow these strictly:
+- "needs to leave early", "must leave by X", "can only stay until X", "has to leave at X" → EARLY-LEAVE: place this group as EARLY in the show as possible.
+- "needs a later slot", "requested later time", "can't arrive before X", "arriving late", "not available until X", "requested a slot at X PM" (where X is later in the day) → LATE-ARRIVAL: place this group as LATE in the show as possible, toward the END.
+- Conflict reasons like "requested a later slot (X PM) but is assigned earlier" confirm a LATE-ARRIVAL — move this group to the END.
+- Groups with no constraints fill in naturally between the constrained groups.
+- NEVER split a teacher group — all students from the same teacher stay consecutive.
+
+Think through each group's constraint direction first, then output the order.
 Return ONLY valid JSON: { "groupOrder": [0, 2, 1, ...] } — the GROUP_ index numbers in your recommended order, every index exactly once.`,
         },
         {
           role: "user",
-          content: `Here are the teacher groups:\n${groupList}\n\nReturn the group order as JSON { "groupOrder": [...] }.`,
+          content: `Here are the teacher groups:\n${groupList}\n\nAnalyze each group's constraints, then return the group order as JSON { "groupOrder": [...] }.`,
         },
       ],
     });
 
     const rawContent = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
-    const raw = rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    // Extract JSON object from anywhere in the response (model may include reasoning prose)
+    const jsonMatch = rawContent.match(/\{[\s\S]*"groupOrder"[\s\S]*\}/);
+    const raw = jsonMatch ? jsonMatch[0] : rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     let parsed: { groupOrder?: unknown[] };
     try {
       parsed = JSON.parse(raw);
