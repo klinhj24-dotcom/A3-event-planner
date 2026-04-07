@@ -1570,11 +1570,12 @@ export function LineupSheet({ event, open, onClose }: {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
       toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} ordered by time constraints` });
       if (data.unaccommodatable?.length > 0) {
-        const names = (data.unaccommodatable as { teacher: string; constraints: string[] }[])
-          .map(u => u.teacher).join(", ");
+        const names = (data.unaccommodatable as { students: string[]; slotIds: number[]; constraints: string[] }[])
+          .flatMap(u => u.students).join(", ");
+        const count = (data.unaccommodatable as { students: string[] }[]).reduce((s, u) => s + u.students.length, 0);
         setTimeout(() => {
           toast({
-            title: `${data.unaccommodatable.length} group${data.unaccommodatable.length !== 1 ? "s" : ""} can't be fully accommodated`,
+            title: `${count} student${count !== 1 ? "s" : ""} can't be fully accommodated`,
             description: `Placed at end, but show ends before their requested time: ${names}. Consider contacting these families.`,
             variant: "destructive",
             duration: 8000,

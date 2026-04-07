@@ -797,7 +797,7 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
     );
 
     // ── Step 7: Detect "late" groups whose requested time exceeds show end ────
-    type Unaccommodatable = { teacher: string; constraints: string[] };
+    type Unaccommodatable = { students: string[]; slotIds: number[]; constraints: string[] };
     const unaccommodatable: Unaccommodatable[] = [];
 
     if (eventStartTime && lateGroups.length > 0) {
@@ -838,8 +838,20 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
           }
 
           if (requestedMin !== null && requestedMin > showEndMin + 5) {
-            const teacherName = sg.slots[0] ? (sg.slots[0].groupName?.trim() ?? "Unassigned") : "Unassigned";
-            unaccommodatable.push({ teacher: teacherName, constraints: sgConstraints });
+            // Collect student names (slot labels) — not teacher/group names
+            const studentNames = sg.slots.map(s => s.label?.trim() ?? "Unknown").filter(Boolean);
+            const slotIds = sg.slots.map(s => s.id);
+            unaccommodatable.push({ students: studentNames, slotIds, constraints: sgConstraints });
+
+            // Flag each unaccommodatable slot red
+            const reason = `Can't accommodate: show ends before requested time (${sgConstraints.join("; ")})`;
+            await Promise.all(
+              slotIds.map(id =>
+                db.update(eventLineupTable)
+                  .set({ scheduleConflict: true, conflictReason: reason })
+                  .where(eq(eventLineupTable.id, id))
+              )
+            );
           }
         }
       }
