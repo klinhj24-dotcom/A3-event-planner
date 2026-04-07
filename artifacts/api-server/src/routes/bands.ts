@@ -652,108 +652,143 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
     }
     const teacherKeys = [...groupMap.keys()]; // initial order
 
-    // ── Step 2: Build per-group constraint summary for the AI ─────────────────
-    type GroupSummary = { teacher: string; count: number; constraints: string[] };
-    const groupSummaries: GroupSummary[] = teacherKeys.map(key => {
-      const slots = groupMap.get(key)!;
-      const constraints: string[] = [];
-      for (const s of slots) {
-        const label = s.label?.trim() ?? "";
-        const labelLower = label.toLowerCase();
-        const slotNotes: string[] = [];
+    // ── Step 2: Gather per-student constraint notes ───────────────────────────
+    type StudentConstraint = { slotId: number; label: string; teacherKey: string; notes: string[] };
+    const studentConstraints: StudentConstraint[] = [];
 
-        // 1. Staff note on the slot itself (raw — good for AI)
-        if (s.staffNote?.trim()) {
-          slotNotes.push(s.staffNote.trim());
-        }
+    for (const s of actSlots) {
+      const label = s.label?.trim() ?? "";
+      const labelLower = label.toLowerCase();
+      const teacherKey = s.groupName?.trim() || "__none__";
+      const notes: string[] = [];
 
-        // 2. Ticket request specialConsiderations (raw original constraint — best signal)
-        const tr = ticketRequests.find(r => {
-          const fn = r.studentFirstName?.toLowerCase().trim() ?? "";
-          const ln = r.studentLastName?.toLowerCase().trim() ?? "";
-          const full = `${fn} ${ln}`.trim();
-          return r.specialConsiderations?.trim() && (
-            (fn && labelLower.includes(fn)) ||
-            (ln && labelLower.includes(ln)) ||
-            (full && full === labelLower)
-          );
-        });
-        if (tr?.specialConsiderations?.trim()) {
-          slotNotes.push(tr.specialConsiderations.trim());
-        }
+      if (s.staffNote?.trim()) notes.push(s.staffNote.trim());
 
-        // 3. Conflict flag fallback — only if no raw note found (avoids sending
-        //    the analysis prose "Assigned time X is before..." which confuses the AI)
-        if (s.scheduleConflict && slotNotes.length === 0) {
-          slotNotes.push("has a scheduling constraint");
-        }
+      const tr = ticketRequests.find(r => {
+        const fn = r.studentFirstName?.toLowerCase().trim() ?? "";
+        const ln = r.studentLastName?.toLowerCase().trim() ?? "";
+        const full = `${fn} ${ln}`.trim();
+        return r.specialConsiderations?.trim() && (
+          (fn && labelLower.includes(fn)) ||
+          (ln && labelLower.includes(ln)) ||
+          (full && full === labelLower)
+        );
+      });
+      if (tr?.specialConsiderations?.trim()) notes.push(tr.specialConsiderations.trim());
 
-        // Deduplicate and add to group constraints
-        for (const note of slotNotes) {
-          const entry = `"${label}": ${note}`;
-          if (!constraints.some(c => c === entry)) constraints.push(entry);
-        }
-      }
-      return { teacher: key === "__none__" ? "No teacher" : key, count: slots.length, constraints };
-    });
+      // Fallback if conflict flagged but no raw note available
+      if (s.scheduleConflict && notes.length === 0) notes.push("has a scheduling constraint");
 
-    // ── Step 3: AI classifies each GROUP as "early", "late", or "neutral" ───────
-    // Backend then sorts deterministically — AI only decides direction, not order.
-    const groupListForAI = groupSummaries.map((g, i) =>
-      `GROUP_${i}: Teacher "${g.teacher}", ${g.count} student(s)` +
-      (g.constraints.length ? `. Constraints: ${g.constraints.join("; ")}` : ". No constraints.")
-    ).join("\n");
+      studentConstraints.push({ slotId: s.id, label, teacherKey, notes });
+    }
 
-    const aiRes = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      max_completion_tokens: 600,
-      messages: [
-        {
-          role: "system",
-          content: `You classify teacher groups in a music recital by their scheduling direction.
-For each group, read the constraints and classify as exactly one of:
-- "early"  — a student needs to LEAVE EARLY or must perform before a certain time (e.g. "must leave by noon", "has to leave at 1pm", "can only stay until X")
-- "late"   — a student can't arrive until later or requested a later slot (e.g. "after 2pm", "not available until 1pm", "needs a later slot", "requested 3-4pm", "attending something before")
+    // ── Step 3: AI classifies each CONSTRAINED STUDENT individually ──────────
+    const constrainedStudents = studentConstraints.filter(sc => sc.notes.length > 0);
+    let studentClassifications: Record<number, "early" | "late" | "neutral"> = {};
+
+    if (constrainedStudents.length > 0) {
+      const studentList = constrainedStudents.map((sc, i) =>
+        `STUDENT_${i} (slot ${sc.slotId}): "${sc.label}" — ${sc.notes.join("; ")}`
+      ).join("\n");
+
+      const aiRes = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        max_completion_tokens: 600,
+        messages: [
+          {
+            role: "system",
+            content: `Classify each student's scheduling constraint as exactly one of:
+- "early"  — must LEAVE EARLY / perform before a certain time (e.g. "leaving at noon", "has to go by 1pm")
+- "late"   — can't arrive until later / needs a later slot (e.g. "after 2pm", "not available until 1pm", "attending something before", "requested 3-4pm slot")
 - "neutral" — no meaningful time constraint
 
-Return ONLY valid JSON: { "classifications": { "0": "neutral", "1": "late", "2": "early", ... } }
-Include every GROUP index. When in doubt, use "neutral".`,
-        },
-        {
-          role: "user",
-          content: `Classify each group:\n${groupListForAI}`,
-        },
-      ],
-    });
+Return ONLY valid JSON: { "classifications": { "0": "late", "1": "neutral", "2": "early", ... } }
+Key: the STUDENT_ index number (not slot id). Include every student. When in doubt, use "neutral".`,
+          },
+          { role: "user", content: `Classify each student:\n${studentList}` },
+        ],
+      });
 
-    const rawContent = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
-    const jsonMatch = rawContent.match(/\{[\s\S]*"classifications"[\s\S]*\}/);
-    const raw = jsonMatch ? jsonMatch[0] : rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    let classifications: Record<string, "early" | "late" | "neutral"> = {};
-    try {
-      const p = JSON.parse(raw);
-      classifications = p.classifications ?? {};
-    } catch (parseErr) {
-      console.error("autoSort classification parse error:", parseErr, "raw:", raw);
+      const rawContent = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
+      const jsonMatch = rawContent.match(/\{[\s\S]*"classifications"[\s\S]*\}/);
+      const raw = jsonMatch ? jsonMatch[0] : rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      try {
+        const p = JSON.parse(raw);
+        const cls: Record<string, string> = p.classifications ?? {};
+        // Map back from student index → slot id
+        constrainedStudents.forEach((sc, i) => {
+          const dir = cls[String(i)];
+          if (dir === "early" || dir === "late" || dir === "neutral")
+            studentClassifications[sc.slotId] = dir;
+        });
+      } catch (e) {
+        console.error("autoSort student classification parse error:", e, "raw:", raw);
+      }
     }
 
-    // ── Step 4: Sort deterministically — early first, neutral middle, late last ─
-    const earlyGroups  = teacherKeys.map((_, i) => i).filter(i => classifications[String(i)] === "early");
-    const neutralGroups = teacherKeys.map((_, i) => i).filter(i => !classifications[String(i)] || classifications[String(i)] === "neutral");
-    const lateGroups   = teacherKeys.map((_, i) => i).filter(i => classifications[String(i)] === "late");
-    const groupOrder = [...earlyGroups, ...neutralGroups, ...lateGroups];
+    // ── Step 4: Decide per-group direction; split outliers when beneficial ────
+    // A "sortable group" is either a full teacher group or a split-out solo student.
+    type SortableGroup = {
+      label: string;
+      direction: "early" | "late" | "neutral";
+      slots: typeof actSlots;
+    };
+    const sortableGroups: SortableGroup[] = [];
+    const lateGroupsArr: SortableGroup[] = []; // collect for unaccommodatable check
 
-    console.log(`[autoSort] Classifications:`, classifications, `| Order: early[${earlyGroups}] neutral[${neutralGroups}] late[${lateGroups}]`);
+    for (const key of teacherKeys) {
+      const slots = groupMap.get(key)!;
+      const teacherLabel = key === "__none__" ? "No Teacher" : key;
 
-    // ── Step 5: Flatten into final slot order (whole groups stay together) ────
-    const finalSlotIds: number[] = [];
-    for (const gi of groupOrder) {
-      const key = teacherKeys[gi];
-      const slots = groupMap.get(key) ?? [];
-      for (const s of slots) finalSlotIds.push(s.id);
+      // Tally directions for this group's students
+      const dirs = slots.map(s => studentClassifications[s.id] ?? "neutral");
+      const earlyCount = dirs.filter(d => d === "early").length;
+      const lateCount  = dirs.filter(d => d === "late").length;
+
+      // Majority direction (ties → neutral)
+      const majorityDir: "early" | "late" | "neutral" =
+        earlyCount > lateCount && earlyCount > 0 ? "early" :
+        lateCount > earlyCount && lateCount > 0  ? "late"  : "neutral";
+
+      // Find outlier students (their direction differs from majority)
+      const mainSlots: typeof actSlots = [];
+      const outlierGroups = new Map<"early" | "late", typeof actSlots>();
+
+      for (let i = 0; i < slots.length; i++) {
+        const s = slots[i];
+        const sDir = studentClassifications[s.id] ?? "neutral";
+        const isOutlier = sDir !== "neutral" && sDir !== majorityDir && slots.length > 1;
+        if (isOutlier) {
+          if (!outlierGroups.has(sDir)) outlierGroups.set(sDir, []);
+          outlierGroups.get(sDir)!.push(s);
+        } else {
+          mainSlots.push(s);
+        }
+      }
+
+      // Only split if main group still has ≥1 student after removal
+      if (outlierGroups.size > 0 && mainSlots.length >= 1) {
+        sortableGroups.push({ label: teacherLabel, direction: majorityDir, slots: mainSlots });
+        for (const [dir, oSlots] of outlierGroups) {
+          const suffix = dir === "early" ? " (early)" : " (late)";
+          sortableGroups.push({ label: `${teacherLabel}${suffix}`, direction: dir, slots: oSlots });
+        }
+      } else {
+        // Keep whole group together
+        sortableGroups.push({ label: teacherLabel, direction: majorityDir, slots });
+      }
     }
 
-    // ── Step 6: Delete old group-headers, rebuild one per teacher group ───────
+    // ── Step 5: Sort groups — early first, neutral middle, late last ──────────
+    const dirOrder = { early: 0, neutral: 1, late: 2 };
+    sortableGroups.sort((a, b) => dirOrder[a.direction] - dirOrder[b.direction]);
+
+    const lateGroups = sortableGroups.filter(g => g.direction === "late");
+    const finalSlotIds: number[] = sortableGroups.flatMap(g => g.slots.map(s => s.id));
+
+    console.log(`[autoSort] Groups:`, sortableGroups.map(g => `${g.label}(${g.direction})`).join(", "));
+
+    // ── Step 6: Delete old group-headers, rebuild one per sortable group ──────
     const headerIds = allSlots.filter(s => s.type === "group-header").map(s => s.id);
     if (headerIds.length > 0) {
       await db.delete(eventLineupTable).where(inArray(eventLineupTable.id, headerIds));
@@ -763,14 +798,11 @@ Include every GROUP index. When in doubt, use "neutral".`,
     const newOrder: NewItem[] = [];
     let pos = 1;
 
-    for (const gi of groupOrder) {
-      const key = teacherKeys[gi];
-      const slots = groupMap.get(key) ?? [];
-      if (slots.length === 0) continue;
-      const headerLabel = key === "__none__" ? "No Teacher" : key;
-      newOrder.push({ isHeader: true, label: headerLabel, position: pos });
+    for (const sg of sortableGroups) {
+      if (sg.slots.length === 0) continue;
+      newOrder.push({ isHeader: true, label: sg.label, position: pos });
       pos++;
-      for (const s of slots) {
+      for (const s of sg.slots) {
         newOrder.push({ id: s.id, position: pos });
         pos++;
       }
@@ -832,24 +864,28 @@ Include every GROUP index. When in doubt, use "neutral".`,
         );
         const showEndMin = showStartMin + totalSlotMins;
 
-        for (const gi of lateGroups) {
-          const key = teacherKeys[gi];
-          const summary = groupSummaries[gi];
-          if (!summary || summary.constraints.length === 0) continue;
+        for (const sg of lateGroups) {
+          // Gather the raw constraint notes for all students in this sortable group
+          const sgConstraints: string[] = [];
+          for (const s of sg.slots) {
+            const sc = studentConstraints.find(c => c.slotId === s.id);
+            if (sc) for (const n of sc.notes) { if (!sgConstraints.includes(n)) sgConstraints.push(n); }
+          }
+          if (sgConstraints.length === 0) continue;
 
           // Extract all time mentions from constraint strings
-          const constraintText = summary.constraints.join(" ");
+          const constraintText = sgConstraints.join(" ");
           const timeMatches = constraintText.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
           let requestedMin: number | null = null;
           for (const tm of timeMatches) {
             const candidate = parseToMinutes(tm[0]);
             if (candidate !== null && (requestedMin === null || candidate > requestedMin)) {
-              requestedMin = candidate; // use the latest time mentioned
+              requestedMin = candidate;
             }
           }
 
           if (requestedMin !== null && requestedMin > showEndMin + 5) {
-            unaccommodatable.push({ teacher: key === "__none__" ? "Unassigned" : key, constraints: summary.constraints });
+            unaccommodatable.push({ teacher: sg.label, constraints: sgConstraints });
           }
         }
       }
