@@ -1284,7 +1284,7 @@ function DroppableShowOrder({ children, isEmpty, className }: { children: React.
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 overflow-y-auto p-6 space-y-4 transition-colors ${isOver && isEmpty ? "bg-primary/5" : ""} ${className ?? ""}`}
+      className={`flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 transition-colors ${isOver && isEmpty ? "bg-primary/5" : ""} ${className ?? ""}`}
     >
       {children}
     </div>
@@ -1872,7 +1872,7 @@ export function LineupSheet({ event, open, onClose }: {
   return (
     <Sheet open={open} onOpenChange={o => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-full sm:max-w-5xl p-0 flex flex-col overflow-hidden">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/30 shrink-0">
+        <SheetHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-border/30 shrink-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <SheetTitle className="font-display text-xl">
               {isRecital ? "Recital Order" : "Band Lineup"} — <span className="text-muted-foreground font-normal">{event?.title}</span>
@@ -2160,14 +2160,14 @@ export function LineupSheet({ event, open, onClose }: {
 
           {/* ── Right: Lineup panel ───────────────────────────────────────────── */}
           <DroppableShowOrder isEmpty={slots.length === 0} className={!isRecital && mobileTab === "roster" ? "hidden sm:block" : ""}>
-            <div className="flex items-center justify-between mb-2">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="min-w-0">
                 <p className="text-sm font-semibold">{isRecital ? "Performance Order" : "Show Order"}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="hidden sm:block text-xs text-muted-foreground">
                   {isRecital ? "Drag to reorder · Times auto-calculate from duration + buffer" : "Drag bands here or use Add Slot · Drag to reorder"}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {isRecital && rawSlots.filter(s => s.type === "act").length > 1 && (
                   <Button size="sm" variant="outline" className="rounded-xl gap-1.5 text-xs border-[#7250ef]/30 text-[#7250ef] hover:bg-[#7250ef]/10 hover:text-[#7250ef]" onClick={handleAutoSort} disabled={sortingAI}>
                     {sortingAI ? <><Loader2 className="h-3 w-3 animate-spin" /> Sorting…</> : <><Sparkles className="h-3 w-3" /> Smart Sort</>}
@@ -2183,14 +2183,14 @@ export function LineupSheet({ event, open, onClose }: {
                     const existing = rawSlots.filter(s => s.type === "group-header").length;
                     addSlot({ type: "group-header", label: `Group ${existing + 1}`, position: rawSlots.length + 1, bufferMinutes: 0 });
                   }}>
-                    <Layers className="h-3 w-3" /> Add Group
+                    <Layers className="h-3 w-3" /><span className="hidden sm:inline">Add </span>Group
                   </Button>
                 )}
                 <Button size="sm" className="rounded-xl gap-1.5 shadow-sm shadow-primary/20" onClick={() => {
                   setNewSlot(s => ({ ...s, duration: isRecital ? "5" : s.duration, buffer: isRecital ? "2" : s.buffer }));
                   setAddSlotOpen(true);
                 }}>
-                  <Plus className="h-3.5 w-3.5" /> {isRecital ? "Add Performer" : "Add Slot"}
+                  <Plus className="h-3.5 w-3.5" />{isRecital ? <><span className="hidden sm:inline">Add </span>Performer</> : "Add Slot"}
                 </Button>
               </div>
             </div>
