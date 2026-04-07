@@ -712,7 +712,7 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
 
       const aiRes = await openai.chat.completions.create({
         model: "gpt-5-mini",
-        max_completion_tokens: 600,
+        max_completion_tokens: 2000,
         messages: [
           {
             role: "system",
