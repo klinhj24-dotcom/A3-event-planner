@@ -805,7 +805,57 @@ Include every GROUP index. When in doubt, use "neutral".`,
       );
     }
 
-    res.json({ ok: true, sorted: finalSlotIds.length, groups: headers.length });
+    // ── Step 7: Detect "late" groups whose requested time exceeds show end ──────
+    type Unaccommodatable = { teacher: string; constraints: string[] };
+    const unaccommodatable: Unaccommodatable[] = [];
+
+    if (eventStartTime && lateGroups.length > 0) {
+      // Calculate approximate show end time in minutes-since-midnight
+      const parseToMinutes = (t: string): number | null => {
+        const m = t.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+        if (!m) return null;
+        let h = parseInt(m[1]);
+        const min = m[2] ? parseInt(m[2]) : 0;
+        const mer = m[3]?.toLowerCase();
+        if (mer === "pm" && h !== 12) h += 12;
+        if (mer === "am" && h === 12) h = 0;
+        // No meridiem — treat <8 as PM (afternoon context)
+        if (!mer && h < 8) h += 12;
+        return h * 60 + min;
+      };
+
+      const showStartMin = parseToMinutes(eventStartTime);
+      if (showStartMin !== null) {
+        const totalSlotMins = actSlots.reduce(
+          (sum, s) => sum + (s.durationMinutes ?? durationMinutes) + (s.bufferMinutes ?? 0),
+          0
+        );
+        const showEndMin = showStartMin + totalSlotMins;
+
+        for (const gi of lateGroups) {
+          const key = teacherKeys[gi];
+          const summary = groupSummaries[gi];
+          if (!summary || summary.constraints.length === 0) continue;
+
+          // Extract all time mentions from constraint strings
+          const constraintText = summary.constraints.join(" ");
+          const timeMatches = constraintText.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
+          let requestedMin: number | null = null;
+          for (const tm of timeMatches) {
+            const candidate = parseToMinutes(tm[0]);
+            if (candidate !== null && (requestedMin === null || candidate > requestedMin)) {
+              requestedMin = candidate; // use the latest time mentioned
+            }
+          }
+
+          if (requestedMin !== null && requestedMin > showEndMin + 5) {
+            unaccommodatable.push({ teacher: key === "__none__" ? "Unassigned" : key, constraints: summary.constraints });
+          }
+        }
+      }
+    }
+
+    res.json({ ok: true, sorted: finalSlotIds.length, groups: headers.length, unaccommodatable });
   } catch (err) {
     console.error("autoSort error:", err);
     res.status(500).json({ error: "Sort failed" });

@@ -1569,6 +1569,18 @@ export function LineupSheet({ event, open, onClose }: {
       }
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
       toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} sorted into ${data.groups} group${data.groups !== 1 ? "s" : ""}` });
+      if (data.unaccommodatable?.length > 0) {
+        const names = (data.unaccommodatable as { teacher: string; constraints: string[] }[])
+          .map(u => u.teacher).join(", ");
+        setTimeout(() => {
+          toast({
+            title: `${data.unaccommodatable.length} group${data.unaccommodatable.length !== 1 ? "s" : ""} can't be fully accommodated`,
+            description: `Placed at end, but show ends before their requested time: ${names}. Consider contacting these families.`,
+            variant: "destructive",
+            duration: 8000,
+          });
+        }, 600);
+      }
     } catch {
       toast({ title: "Smart Sort failed", variant: "destructive" });
     } finally {
