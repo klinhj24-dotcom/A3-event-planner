@@ -566,7 +566,9 @@ router.post("/events/:id/lineup/check-conflicts", async (req, res) => {
     const slots = await lineupQuery()
       .where(and(eq(eventLineupTable.eventId, eventId), eq(eventLineupTable.type as any, "act")));
 
-    const actSlots = slots.filter(s => s.startTime);
+    // Accept calcStartTimes from frontend for recital slots whose times are auto-calculated
+    const calcStartTimes: Record<number, string> = req.body?.calcStartTimes ?? {};
+    const actSlots = slots.filter(s => s.startTime || calcStartTimes[s.id]);
     if (actSlots.length === 0) { res.json({ checked: 0, conflicts: 0 }); return; }
 
     // Fetch recital ticket requests for this event (for specialConsiderations lookup)
@@ -581,7 +583,7 @@ router.post("/events/:id/lineup/check-conflicts", async (req, res) => {
     let conflicts = 0;
 
     for (const slot of actSlots) {
-      const assignedTime = slot.startTime!;
+      const assignedTime = slot.startTime ?? calcStartTimes[slot.id];
       let notesToCheck: string[] = [];
 
       if (slot.bandId) {

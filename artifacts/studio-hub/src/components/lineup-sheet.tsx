@@ -1494,9 +1494,17 @@ export function LineupSheet({ event, open, onClose }: {
     if (!eventId) return;
     setCheckingConflicts(true);
     try {
+      // Build a slotId → calcTime map so the API can check recital slots
+      // whose times are auto-calculated (not stored as startTime)
+      const calcStartTimes: Record<number, string> = {};
+      slots.forEach((s, i) => {
+        if (s.type === "act" && calcTimes[i]) calcStartTimes[s.id] = calcTimes[i]!;
+      });
       const r = await fetch(`/api/events/${eventId}/lineup/check-conflicts`, {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calcStartTimes }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -1807,7 +1815,7 @@ export function LineupSheet({ event, open, onClose }: {
             </SheetTitle>
             <div className="flex items-center gap-2 flex-wrap">
 
-              {slots.filter(s => s.type === "act" && s.startTime).length > 0 && (
+              {(isRecital ? slots.some(s => s.type === "act") : slots.some(s => s.type === "act" && s.startTime)) && (
                 <Button
                   size="sm"
                   variant="outline"
