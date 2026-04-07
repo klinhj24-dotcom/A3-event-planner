@@ -822,36 +822,39 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
         const showEndMin = showStartMin + totalSlotMins;
 
         for (const sg of lateGroups) {
-          const sgConstraints: string[] = [];
+          // Check each student individually — only flag the ones whose OWN
+          // constraint exceeds the show end. Siblings placed late due to teacher
+          // grouping are NOT flagged unless they themselves have the constraint.
+          const flaggedStudents: string[] = [];
+          const flaggedSlotIds: number[] = [];
+
           for (const s of sg.slots) {
             const sc = studentConstraints.find(c => c.slotId === s.id);
-            if (sc) for (const n of sc.notes) { if (!sgConstraints.includes(n)) sgConstraints.push(n); }
+            if (!sc || sc.notes.length === 0) continue;
+
+            const timeMatches = sc.notes.join(" ").matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
+            let requestedMin: number | null = null;
+            for (const tm of timeMatches) {
+              const candidate = parseToMinutes(tm[0]);
+              if (candidate !== null && (requestedMin === null || candidate > requestedMin))
+                requestedMin = candidate;
+            }
+
+            if (requestedMin !== null && requestedMin > showEndMin + 5) {
+              const studentName = s.label?.trim() ?? "Unknown";
+              flaggedStudents.push(studentName);
+              flaggedSlotIds.push(s.id);
+
+              // Flag only this student's slot red
+              const reason = `Can't accommodate: show ends before requested time (${sc.notes.join("; ")})`;
+              await db.update(eventLineupTable)
+                .set({ scheduleConflict: true, conflictReason: reason })
+                .where(eq(eventLineupTable.id, s.id));
+            }
           }
-          if (sgConstraints.length === 0) continue;
 
-          const timeMatches = sgConstraints.join(" ").matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
-          let requestedMin: number | null = null;
-          for (const tm of timeMatches) {
-            const candidate = parseToMinutes(tm[0]);
-            if (candidate !== null && (requestedMin === null || candidate > requestedMin))
-              requestedMin = candidate;
-          }
-
-          if (requestedMin !== null && requestedMin > showEndMin + 5) {
-            // Collect student names (slot labels) — not teacher/group names
-            const studentNames = sg.slots.map(s => s.label?.trim() ?? "Unknown").filter(Boolean);
-            const slotIds = sg.slots.map(s => s.id);
-            unaccommodatable.push({ students: studentNames, slotIds, constraints: sgConstraints });
-
-            // Flag each unaccommodatable slot red
-            const reason = `Can't accommodate: show ends before requested time (${sgConstraints.join("; ")})`;
-            await Promise.all(
-              slotIds.map(id =>
-                db.update(eventLineupTable)
-                  .set({ scheduleConflict: true, conflictReason: reason })
-                  .where(eq(eventLineupTable.id, id))
-              )
-            );
+          if (flaggedStudents.length > 0) {
+            unaccommodatable.push({ students: flaggedStudents, slotIds: flaggedSlotIds, constraints: flaggedStudents });
           }
         }
       }
