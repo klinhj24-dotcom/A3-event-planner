@@ -1573,7 +1573,7 @@ export function LineupSheet({ event, open, onClose }: {
         return;
       }
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
-      toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} sorted into ${data.groups} teacher group${data.groups !== 1 ? "s" : ""}` });
+      toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} sorted into ${data.groups} group${data.groups !== 1 ? "s" : ""}` });
     } catch {
       toast({ title: "Smart Sort failed", variant: "destructive" });
     } finally {

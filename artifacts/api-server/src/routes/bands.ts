@@ -710,7 +710,7 @@ Rules:
       if (!slot) continue;
       const teacher = slot.groupName?.trim() ?? null;
       if (teacher !== lastTeacher) {
-        newOrder.push({ isHeader: true, label: teacher ? `${teacher}` : `Group ${groupNum}`, position: pos });
+        newOrder.push({ isHeader: true, label: `Group ${groupNum}`, position: pos });
         pos++;
         groupNum++;
         lastTeacher = teacher;
