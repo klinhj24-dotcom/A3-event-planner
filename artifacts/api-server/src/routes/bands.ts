@@ -629,103 +629,132 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
   if (!requireAuth(req, res)) return;
   try {
     const eventId = parseInt(req.params.id);
-    const calcStartTimes: Record<number, string> = req.body?.calcStartTimes ?? {};
     const eventStartTime: string | null = req.body?.eventStartTime ?? null;
     const durationMinutes: number = req.body?.durationMinutes ?? 5;
 
-    // Fetch all slots
-    const allSlots = await lineupQuery().where(eq(eventLineupTable.eventId, eventId));
+    // Fetch all slots ordered by current position
+    const allSlots = await lineupQuery()
+      .where(eq(eventLineupTable.eventId, eventId))
+      .orderBy(asc(eventLineupTable.position));
     const actSlots = allSlots.filter(s => s.type === "act");
-    if (actSlots.length === 0) { res.json({ ok: true, sorted: 0 }); return; }
+    if (actSlots.length === 0) { res.json({ ok: true, sorted: 0, groups: 0 }); return; }
 
     // Fetch ticket requests for specialConsiderations
     const ticketRequests = await db.select().from(eventTicketRequestsTable)
       .where(eq(eventTicketRequestsTable.eventId, eventId));
 
-    // Build a description of each performer for the AI
-    const performers = actSlots.map((s, idx) => {
-      const label = s.label?.trim() ?? `Performer ${idx + 1}`;
-      const teacher = s.groupName?.trim() ?? "Unassigned";
-      const tr = ticketRequests.find(r =>
-        r.studentFirstName && (
-          label.toLowerCase().includes(r.studentFirstName.toLowerCase()) ||
-          label.toLowerCase().includes((r.studentLastName ?? "").toLowerCase())
-        )
-      );
-      const constraint = tr?.specialConsiderations?.trim() ?? null;
-      const hasConflict = s.scheduleConflict ?? false;
-      return { id: s.id, label, teacher, constraint, hasConflict };
+    // ── Step 1: Group act slots by teacher, preserving within-teacher order ───
+    const groupMap = new Map<string, typeof actSlots>();
+    for (const s of actSlots) {
+      const key = s.groupName?.trim() || "__none__";
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(s);
+    }
+    const teacherKeys = [...groupMap.keys()]; // initial order
+
+    // ── Step 2: Build per-group constraint summary for the AI ─────────────────
+    type GroupSummary = { teacher: string; count: number; constraints: string[] };
+    const groupSummaries: GroupSummary[] = teacherKeys.map(key => {
+      const slots = groupMap.get(key)!;
+      const constraints: string[] = [];
+      for (const s of slots) {
+        const label = s.label?.trim() ?? "";
+        // Check slot-level conflict note
+        if (s.scheduleConflict && s.conflictReason) {
+          constraints.push(`"${label}": ${s.conflictReason}`);
+        }
+        // Check ticket request specialConsiderations
+        const tr = ticketRequests.find(r =>
+          r.studentFirstName && (
+            label.toLowerCase().includes(r.studentFirstName.toLowerCase()) ||
+            label.toLowerCase().includes((r.studentLastName ?? "").toLowerCase())
+          )
+        );
+        if (tr?.specialConsiderations?.trim()) {
+          const note = tr.specialConsiderations.trim();
+          const alreadyAdded = constraints.some(c => c.includes(note));
+          if (!alreadyAdded) constraints.push(`"${label}": ${note}`);
+        }
+      }
+      return { teacher: key === "__none__" ? "No teacher" : key, count: slots.length, constraints };
     });
 
-    // Ask AI to sort: honour time constraints, group by teacher
-    const performerList = performers.map(p =>
-      `ID:${p.id} | Student: ${p.label} | Teacher: ${p.teacher}${p.constraint ? ` | Constraint: "${p.constraint}"` : ""}${p.hasConflict ? " | HAS CONFLICT" : ""}`
+    // ── Step 3: Ask AI to sort the GROUPS (not individual students) ───────────
+    const groupList = groupSummaries.map((g, i) =>
+      `GROUP_${i} | Teacher: ${g.teacher} | Students: ${g.count}` +
+      (g.constraints.length ? ` | Constraints: ${g.constraints.join("; ")}` : "")
     ).join("\n");
 
     const aiRes = await openai.chat.completions.create({
       model: "gpt-5-mini",
-      max_completion_tokens: 800,
+      max_completion_tokens: 400,
       messages: [
         {
           role: "system",
-          content: `You are sorting a music recital program. 
+          content: `You are ordering teacher groups in a music recital.${eventStartTime ? ` Show starts at ${eventStartTime}.` : ""} Each student slot is ~${durationMinutes} minutes.
 Rules:
-1. Students who have schedule constraints (e.g. "must leave by noon", "can't be there before 2pm") must be placed in an appropriate position given the show runs sequentially — each slot is approximately ${durationMinutes} minutes.${eventStartTime ? ` The show starts at ${eventStartTime}.` : ""}
-2. After honouring time constraints, group all remaining students by teacher so students from the same teacher appear consecutively.
-3. Return ONLY valid JSON: { "sortedIds": [id1, id2, ...] } — include ALL IDs exactly once, in your recommended order.`,
+- Keep all students from the same teacher together — do NOT split groups.
+- If a group has a student with an early-leave constraint, place that group EARLIER in the show.
+- If a group has a student with a late-arrival constraint, place that group LATER in the show.
+- Groups with no constraints fill in naturally around constrained groups.
+Return ONLY valid JSON: { "groupOrder": [0, 2, 1, ...] } — the GROUP_ index numbers in your recommended order, every index exactly once.`,
         },
         {
           role: "user",
-          content: `Here are the performers:\n${performerList}\n\nReturn the sorted order as JSON { "sortedIds": [...] }.`,
+          content: `Here are the teacher groups:\n${groupList}\n\nReturn the group order as JSON { "groupOrder": [...] }.`,
         },
       ],
     });
 
     const rawContent = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
-    // Strip markdown code fences the model sometimes adds
     const raw = rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    let parsed: { sortedIds?: unknown[] };
+    let parsed: { groupOrder?: unknown[] };
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
       console.error("autoSort JSON parse error:", parseErr, "raw:", raw);
-      // Fallback: keep existing order
-      parsed = { sortedIds: actSlots.map(s => s.id) };
+      parsed = { groupOrder: teacherKeys.map((_, i) => i) };
     }
-    const sortedIds: number[] = Array.isArray(parsed.sortedIds) ? parsed.sortedIds.map(Number) : actSlots.map(s => s.id);
+    let groupOrder: number[] = Array.isArray(parsed.groupOrder)
+      ? parsed.groupOrder.map(Number).filter(n => n >= 0 && n < teacherKeys.length)
+      : teacherKeys.map((_, i) => i);
 
-    // Fill in any IDs the AI missed (append at end)
-    const aiIdSet = new Set(sortedIds);
-    for (const s of actSlots) {
-      if (!aiIdSet.has(s.id)) sortedIds.push(s.id);
+    // Fill in any groups the AI missed
+    const seen = new Set(groupOrder);
+    for (let i = 0; i < teacherKeys.length; i++) {
+      if (!seen.has(i)) groupOrder.push(i);
     }
 
-    // Delete all existing group-header slots so we can rebuild them
+    // ── Step 4: Flatten into final slot order (whole groups stay together) ────
+    const finalSlotIds: number[] = [];
+    for (const gi of groupOrder) {
+      const key = teacherKeys[gi];
+      const slots = groupMap.get(key) ?? [];
+      for (const s of slots) finalSlotIds.push(s.id);
+    }
+
+    // ── Step 5: Delete old group-headers, rebuild one per teacher group ───────
     const headerIds = allSlots.filter(s => s.type === "group-header").map(s => s.id);
     if (headerIds.length > 0) {
       await db.delete(eventLineupTable).where(inArray(eventLineupTable.id, headerIds));
     }
 
-    // Build new slot order: insert group-header at teacher boundaries
-    const slotMap = new Map(actSlots.map(s => [s.id, s]));
     type NewItem = { id: number; position: number } | { isHeader: true; label: string; position: number };
     const newOrder: NewItem[] = [];
     let pos = 1;
-    let lastTeacher: string | null = null;
     let groupNum = 1;
 
-    for (const id of sortedIds) {
-      const slot = slotMap.get(id);
-      if (!slot) continue;
-      const teacher = slot.groupName?.trim() ?? null;
-      if (teacher !== lastTeacher) {
-        newOrder.push({ isHeader: true, label: `Group ${groupNum}`, position: pos });
-        pos++;
-        groupNum++;
-        lastTeacher = teacher;
-      }
-      newOrder.push({ id, position: pos });
+    for (const gi of groupOrder) {
+      const key = teacherKeys[gi];
+      const slots = groupMap.get(key) ?? [];
+      if (slots.length === 0) continue;
+      newOrder.push({ isHeader: true, label: `Group ${groupNum}`, position: pos });
       pos++;
+      groupNum++;
+      for (const s of slots) {
+        newOrder.push({ id: s.id, position: pos });
+        pos++;
+      }
     }
 
     // Apply positions to existing act slots
@@ -757,7 +786,7 @@ Rules:
       );
     }
 
-    res.json({ ok: true, sorted: sortedIds.length, groups: headers.length });
+    res.json({ ok: true, sorted: finalSlotIds.length, groups: headers.length });
   } catch (err) {
     console.error("autoSort error:", err);
     res.status(500).json({ error: "Sort failed" });

@@ -1552,20 +1552,15 @@ export function LineupSheet({ event, open, onClose }: {
     if (!eventId) return;
     setSortingAI(true);
     try {
-      const calcStartTimes: Record<number, string> = {};
-      slots.forEach((s, i) => {
-        if (s.type === "act" && calcTimes[i]) calcStartTimes[s.id] = calcTimes[i]!;
-      });
-      // Typical recital slot duration (minutes) — use first act slot's value or fallback to 5
       const firstAct = slots.find(s => s.type === "act");
       const slotDuration = firstAct?.durationMinutes ?? 5;
-      // Show start time from first calculated time
-      const firstTime = calcTimes[slots.findIndex(s => s.type === "act")];
+      const firstActIdx = slots.findIndex(s => s.type === "act");
+      const firstTime = firstActIdx >= 0 ? calcTimes[firstActIdx] : null;
       const r = await fetch(`/api/events/${eventId}/lineup/auto-sort`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ calcStartTimes, eventStartTime: firstTime ?? null, durationMinutes: slotDuration }),
+        body: JSON.stringify({ eventStartTime: firstTime ?? null, durationMinutes: slotDuration }),
       });
       const data = await r.json();
       if (!r.ok) {
