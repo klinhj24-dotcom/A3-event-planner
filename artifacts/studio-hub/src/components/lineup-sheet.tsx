@@ -287,11 +287,11 @@ function InviteRow({ group, onUpdateAttendance }: { group: InviteGroup; onUpdate
 
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
-  slot, calcTime, bands, otherGroups, eventId, isRecital, isTwoDay, isFirstGroupHeader,
+  slot, calcTime, bands, otherGroups, eventId, isRecital, isTwoDay, isFirstGroupHeader, isFirstAct,
   onUpdate, onDelete, onSendInvite, onSendConfirmation, onSendTimeUpdate, onClearConflict,
   ticketRequests,
 }: {
-  slot: LineupSlot; calcTime: string | null; bands: Band[]; otherGroups: OtherGroup[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean;
+  slot: LineupSlot; calcTime: string | null; bands: Band[]; otherGroups: OtherGroup[]; eventId: number; isRecital?: boolean; isTwoDay?: boolean; isFirstGroupHeader?: boolean; isFirstAct?: boolean;
   onUpdate: (id: number, data: Partial<LineupSlot>) => Promise<void>;
   onDelete: (id: number) => void;
   onSendInvite: (slotId: number, staffNote: string, calcStartTime: string | null) => void;
@@ -386,7 +386,8 @@ function SlotRow({
         label: draft.label || null,
         // Act slots: only keep a manual startTime when overlapping; otherwise always auto-cascade.
         // Group-headers and non-act slots always honour their manual startTime.
-        startTime: slot.type === "act" ? (draft.isOverlapping ? (draft.startTime || null) : null) : (draft.startTime || null),
+        // First act in the lineup can also have a manual start (drives the whole cascade).
+        startTime: slot.type === "act" ? ((draft.isOverlapping || isFirstAct) ? (draft.startTime || null) : null) : (draft.startTime || null),
         durationMinutes: draft.duration ? Number(draft.duration) : null,
         bufferMinutes: Number(draft.buffer) || 15,
         isOverlapping: draft.isOverlapping,
@@ -697,8 +698,8 @@ function SlotRow({
               }
             </div>
           ) : slot.type === "act" ? (
-            // Act slots: manual time only shown when overlapping; otherwise fully auto-cascaded
-            <div className={`grid grid-cols-1 gap-3 ${draft.isOverlapping ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            // Act slots: manual time shown when overlapping or this is the first act in the lineup
+            <div className={`grid grid-cols-1 gap-3 ${(draft.isOverlapping || isFirstAct) ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
               {draft.isOverlapping && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Overlap start time</label>
@@ -713,6 +714,23 @@ function SlotRow({
                   {draft.startTime
                     ? <p className="text-[10px] text-amber-400">Custom overlap time — tap × to use previous act's time</p>
                     : <p className="text-[10px] text-muted-foreground/50">Starts same time as previous act</p>
+                  }
+                </div>
+              )}
+              {!draft.isOverlapping && isFirstAct && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">First act start time</label>
+                  <div className="relative">
+                    <Input type="time" className="h-8 rounded-lg text-xs pr-6" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} />
+                    {draft.startTime && (
+                      <button type="button" title="Clear — will default to show start time" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setDraft(d => ({ ...d, startTime: "" }))}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  {draft.startTime
+                    ? <p className="text-[10px] text-amber-400">Custom start — all other acts cascade from here</p>
+                    : <p className="text-[10px] text-muted-foreground/50">Defaults to show start time</p>
                   }
                 </div>
               )}
@@ -2143,6 +2161,7 @@ export function LineupSheet({ event, open, onClose }: {
                                 isRecital={isRecital}
                                 isTwoDay={true}
                                 isFirstGroupHeader={slot.type === "group-header" && !daySlots.slice(0, di).some(s => s.type === "group-header")}
+                                isFirstAct={slot.type === "act" && !daySlots.slice(0, di).some(s => s.type === "act")}
                                 onUpdate={handleUpdate}
                                 onDelete={handleDelete}
                                 onSendInvite={handleSendInvite}
@@ -2171,6 +2190,7 @@ export function LineupSheet({ event, open, onClose }: {
                       isRecital={isRecital}
                       isTwoDay={false}
                       isFirstGroupHeader={slot.type === "group-header" && !slots.slice(0, i).some(s => s.type === "group-header")}
+                      isFirstAct={slot.type === "act" && !slots.slice(0, i).some(s => s.type === "act")}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
                       onSendInvite={handleSendInvite}
