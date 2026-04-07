@@ -740,6 +740,9 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
           if (dir === "early" || dir === "late" || dir === "neutral")
             studentClassifications[sc.slotId] = dir;
         });
+        console.log(`[autoSort] Per-student classifications:`, constrainedStudents.map((sc, i) =>
+          `"${sc.label}"(${studentClassifications[sc.slotId] ?? "unset"})`
+        ).join(", "));
       } catch (e) {
         console.error("autoSort student classification parse error:", e, "raw:", raw);
       }
@@ -788,7 +791,7 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
     await Promise.all(
       sortedActs.map((s, i) =>
         db.update(eventLineupTable)
-          .set({ position: actPositions[i] })
+          .set({ position: actPositions[i], scheduleConflict: false, conflictReason: null })
           .where(eq(eventLineupTable.id, s.id))
       )
     );
