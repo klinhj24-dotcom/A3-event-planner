@@ -1568,7 +1568,7 @@ export function LineupSheet({ event, open, onClose }: {
         return;
       }
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
-      toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} sorted into ${data.groups} teacher group${data.groups !== 1 ? "s" : ""}` });
+      toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} ordered by time constraints` });
       if (data.unaccommodatable?.length > 0) {
         const names = (data.unaccommodatable as { teacher: string; constraints: string[] }[])
           .map(u => u.teacher).join(", ");

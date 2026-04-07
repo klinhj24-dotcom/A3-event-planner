@@ -726,123 +726,54 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
       }
     }
 
-    // ── Step 4: Decide per-group direction; split outliers when beneficial ────
-    // A "sortable group" is either a full teacher group or a split-out solo student.
-    type SortableGroup = {
-      label: string;
-      direction: "early" | "late" | "neutral";
-      slots: typeof actSlots;
-    };
-    const sortableGroups: SortableGroup[] = [];
-    const lateGroupsArr: SortableGroup[] = []; // collect for unaccommodatable check
-
-    for (const key of teacherKeys) {
+    // ── Step 4: Determine per-teacher-group direction (majority vote) ────────
+    type SortableGroup = { direction: "early" | "late" | "neutral"; slots: typeof actSlots };
+    const sortableGroups: SortableGroup[] = teacherKeys.map(key => {
       const slots = groupMap.get(key)!;
-      const teacherLabel = key === "__none__" ? "No Teacher" : key;
-
-      // Tally directions for this group's students
       const dirs = slots.map(s => studentClassifications[s.id] ?? "neutral");
       const earlyCount = dirs.filter(d => d === "early").length;
       const lateCount  = dirs.filter(d => d === "late").length;
-
-      // Majority direction (ties → neutral)
-      const majorityDir: "early" | "late" | "neutral" =
+      const direction: "early" | "late" | "neutral" =
         earlyCount > lateCount && earlyCount > 0 ? "early" :
         lateCount > earlyCount && lateCount > 0  ? "late"  : "neutral";
-
-      // Find outlier students (their direction differs from majority)
-      const mainSlots: typeof actSlots = [];
-      const outlierGroups = new Map<"early" | "late", typeof actSlots>();
-
-      for (let i = 0; i < slots.length; i++) {
-        const s = slots[i];
-        const sDir = studentClassifications[s.id] ?? "neutral";
-        const isOutlier = sDir !== "neutral" && sDir !== majorityDir && slots.length > 1;
-        if (isOutlier) {
-          if (!outlierGroups.has(sDir)) outlierGroups.set(sDir, []);
-          outlierGroups.get(sDir)!.push(s);
-        } else {
-          mainSlots.push(s);
-        }
-      }
-
-      // Only split if main group still has ≥1 student after removal
-      if (outlierGroups.size > 0 && mainSlots.length >= 1) {
-        sortableGroups.push({ label: teacherLabel, direction: majorityDir, slots: mainSlots });
-        for (const [dir, oSlots] of outlierGroups) {
-          const suffix = dir === "early" ? " (early)" : " (late)";
-          sortableGroups.push({ label: `${teacherLabel}${suffix}`, direction: dir, slots: oSlots });
-        }
-      } else {
-        // Keep whole group together
-        sortableGroups.push({ label: teacherLabel, direction: majorityDir, slots });
-      }
-    }
+      return { direction, slots };
+    });
 
     // ── Step 5: Sort groups — early first, neutral middle, late last ──────────
+    // Within each bucket, preserve the original relative order of teacher groups.
     const dirOrder = { early: 0, neutral: 1, late: 2 };
     sortableGroups.sort((a, b) => dirOrder[a.direction] - dirOrder[b.direction]);
 
     const lateGroups = sortableGroups.filter(g => g.direction === "late");
-    const finalSlotIds: number[] = sortableGroups.flatMap(g => g.slots.map(s => s.id));
 
-    console.log(`[autoSort] Groups:`, sortableGroups.map(g => `${g.label}(${g.direction})`).join(", "));
+    console.log(`[autoSort] Teacher groups:`, sortableGroups.map(g =>
+      `${teacherKeys[sortableGroups.indexOf(g)] ?? "?"}(${g.direction})`
+    ).join(", "));
 
-    // ── Step 6: Delete old group-headers, rebuild one per sortable group ──────
-    const headerIds = allSlots.filter(s => s.type === "group-header").map(s => s.id);
-    if (headerIds.length > 0) {
-      await db.delete(eventLineupTable).where(inArray(eventLineupTable.id, headerIds));
-    }
+    // ── Step 6: Reassign positions to act slots only — no headers touched ────
+    // Take the position values the act slots currently occupy and redistribute
+    // them to the sorted acts. All non-act rows (headers, breaks, etc.) are
+    // completely untouched — the desk manages those manually.
+    const actPositions = actSlots
+      .map(s => s.position)
+      .filter((p): p is number => p !== null)
+      .sort((a, b) => a - b);
 
-    type NewItem = { id: number; position: number } | { isHeader: true; label: string; position: number };
-    const newOrder: NewItem[] = [];
-    let pos = 1;
+    const sortedActs = sortableGroups.flatMap(g => g.slots);
 
-    for (const sg of sortableGroups) {
-      if (sg.slots.length === 0) continue;
-      newOrder.push({ isHeader: true, label: sg.label, position: pos });
-      pos++;
-      for (const s of sg.slots) {
-        newOrder.push({ id: s.id, position: pos });
-        pos++;
-      }
-    }
-
-    // Apply positions to existing act slots
     await Promise.all(
-      newOrder
-        .filter((item): item is { id: number; position: number } => "id" in item)
-        .map(({ id, position }) =>
-          db.update(eventLineupTable).set({ position }).where(eq(eventLineupTable.id, id))
-        )
+      sortedActs.map((s, i) =>
+        db.update(eventLineupTable)
+          .set({ position: actPositions[i] })
+          .where(eq(eventLineupTable.id, s.id))
+      )
     );
 
-    // Insert new group-header slots
-    const headers = newOrder.filter((item): item is { isHeader: true; label: string; position: number } => "isHeader" in item);
-    if (headers.length > 0) {
-      await db.insert(eventLineupTable).values(
-        headers.map(h => ({
-          eventId,
-          type: "group-header" as const,
-          label: h.label,
-          position: h.position,
-          durationMinutes: null,
-          bufferMinutes: 0,
-          startTime: null,
-          isOverlapping: false,
-          confirmed: false,
-          inviteStatus: "not_sent" as const,
-          eventDay: 1,
-        }))
-      );
-    }
-
-    // ── Step 7: Detect "late" groups whose requested time exceeds show end ──────
+    // ── Step 7: Detect "late" groups whose requested time exceeds show end ────
     type Unaccommodatable = { teacher: string; constraints: string[] };
     const unaccommodatable: Unaccommodatable[] = [];
 
     if (eventStartTime && lateGroups.length > 0) {
-      // Calculate approximate show end time in minutes-since-midnight
       const parseToMinutes = (t: string): number | null => {
         const m = t.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
         if (!m) return null;
@@ -851,7 +782,6 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
         const mer = m[3]?.toLowerCase();
         if (mer === "pm" && h !== 12) h += 12;
         if (mer === "am" && h === 12) h = 0;
-        // No meridiem — treat <8 as PM (afternoon context)
         if (!mer && h < 8) h += 12;
         return h * 60 + min;
       };
@@ -865,7 +795,6 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
         const showEndMin = showStartMin + totalSlotMins;
 
         for (const sg of lateGroups) {
-          // Gather the raw constraint notes for all students in this sortable group
           const sgConstraints: string[] = [];
           for (const s of sg.slots) {
             const sc = studentConstraints.find(c => c.slotId === s.id);
@@ -873,25 +802,23 @@ Key: the STUDENT_ index number (not slot id). Include every student. When in dou
           }
           if (sgConstraints.length === 0) continue;
 
-          // Extract all time mentions from constraint strings
-          const constraintText = sgConstraints.join(" ");
-          const timeMatches = constraintText.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
+          const timeMatches = sgConstraints.join(" ").matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
           let requestedMin: number | null = null;
           for (const tm of timeMatches) {
             const candidate = parseToMinutes(tm[0]);
-            if (candidate !== null && (requestedMin === null || candidate > requestedMin)) {
+            if (candidate !== null && (requestedMin === null || candidate > requestedMin))
               requestedMin = candidate;
-            }
           }
 
           if (requestedMin !== null && requestedMin > showEndMin + 5) {
-            unaccommodatable.push({ teacher: sg.label, constraints: sgConstraints });
+            const teacherName = sg.slots[0] ? (sg.slots[0].groupName?.trim() ?? "Unassigned") : "Unassigned";
+            unaccommodatable.push({ teacher: teacherName, constraints: sgConstraints });
           }
         }
       }
     }
 
-    res.json({ ok: true, sorted: finalSlotIds.length, groups: headers.length, unaccommodatable });
+    res.json({ ok: true, sorted: sortedActs.length, unaccommodatable });
   } catch (err) {
     console.error("autoSort error:", err);
     res.status(500).json({ error: "Sort failed" });
