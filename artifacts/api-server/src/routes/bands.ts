@@ -624,6 +624,135 @@ router.post("/events/:id/lineup/check-conflicts", async (req, res) => {
   }
 });
 
+// POST /events/:id/lineup/auto-sort — AI-powered recital sort: conflicts first, then grouped by teacher
+router.post("/events/:id/lineup/auto-sort", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  try {
+    const eventId = parseInt(req.params.id);
+    const calcStartTimes: Record<number, string> = req.body?.calcStartTimes ?? {};
+    const eventStartTime: string | null = req.body?.eventStartTime ?? null;
+    const durationMinutes: number = req.body?.durationMinutes ?? 5;
+
+    // Fetch all slots
+    const allSlots = await lineupQuery().where(eq(eventLineupTable.eventId, eventId));
+    const actSlots = allSlots.filter(s => s.type === "act");
+    if (actSlots.length === 0) { res.json({ ok: true, sorted: 0 }); return; }
+
+    // Fetch ticket requests for specialConsiderations
+    const ticketRequests = await db.select().from(eventTicketRequestsTable)
+      .where(eq(eventTicketRequestsTable.eventId, eventId));
+
+    // Build a description of each performer for the AI
+    const performers = actSlots.map((s, idx) => {
+      const label = s.label?.trim() ?? `Performer ${idx + 1}`;
+      const teacher = s.groupName?.trim() ?? "Unassigned";
+      const tr = ticketRequests.find(r =>
+        r.studentFirstName && (
+          label.toLowerCase().includes(r.studentFirstName.toLowerCase()) ||
+          label.toLowerCase().includes((r.studentLastName ?? "").toLowerCase())
+        )
+      );
+      const constraint = tr?.specialConsiderations?.trim() ?? null;
+      const hasConflict = s.scheduleConflict ?? false;
+      return { id: s.id, label, teacher, constraint, hasConflict };
+    });
+
+    // Ask AI to sort: honour time constraints, group by teacher
+    const performerList = performers.map(p =>
+      `ID:${p.id} | Student: ${p.label} | Teacher: ${p.teacher}${p.constraint ? ` | Constraint: "${p.constraint}"` : ""}${p.hasConflict ? " | HAS CONFLICT" : ""}`
+    ).join("\n");
+
+    const aiRes = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      max_completion_tokens: 800,
+      messages: [
+        {
+          role: "system",
+          content: `You are sorting a music recital program. 
+Rules:
+1. Students who have schedule constraints (e.g. "must leave by noon", "can't be there before 2pm") must be placed in an appropriate position given the show runs sequentially — each slot is approximately ${durationMinutes} minutes.${eventStartTime ? ` The show starts at ${eventStartTime}.` : ""}
+2. After honouring time constraints, group all remaining students by teacher so students from the same teacher appear consecutively.
+3. Return ONLY valid JSON: { "sortedIds": [id1, id2, ...] } — include ALL IDs exactly once, in your recommended order.`,
+        },
+        {
+          role: "user",
+          content: `Here are the performers:\n${performerList}\n\nReturn the sorted order as JSON { "sortedIds": [...] }.`,
+        },
+      ],
+    });
+
+    const raw = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
+    const parsed = JSON.parse(raw);
+    const sortedIds: number[] = Array.isArray(parsed.sortedIds) ? parsed.sortedIds.map(Number) : [];
+
+    // Fill in any IDs the AI missed (append at end)
+    const aiIdSet = new Set(sortedIds);
+    for (const s of actSlots) {
+      if (!aiIdSet.has(s.id)) sortedIds.push(s.id);
+    }
+
+    // Delete all existing group-header slots so we can rebuild them
+    const headerIds = allSlots.filter(s => s.type === "group-header").map(s => s.id);
+    if (headerIds.length > 0) {
+      await db.delete(eventLineupTable).where(inArray(eventLineupTable.id, headerIds));
+    }
+
+    // Build new slot order: insert group-header at teacher boundaries
+    const slotMap = new Map(actSlots.map(s => [s.id, s]));
+    type NewItem = { id: number; position: number } | { isHeader: true; label: string; position: number };
+    const newOrder: NewItem[] = [];
+    let pos = 1;
+    let lastTeacher: string | null = null;
+    let groupNum = 1;
+
+    for (const id of sortedIds) {
+      const slot = slotMap.get(id);
+      if (!slot) continue;
+      const teacher = slot.groupName?.trim() ?? null;
+      if (teacher !== lastTeacher) {
+        newOrder.push({ isHeader: true, label: teacher ? `${teacher}` : `Group ${groupNum}`, position: pos });
+        pos++;
+        groupNum++;
+        lastTeacher = teacher;
+      }
+      newOrder.push({ id, position: pos });
+      pos++;
+    }
+
+    // Apply positions to existing act slots
+    await Promise.all(
+      newOrder
+        .filter((item): item is { id: number; position: number } => "id" in item)
+        .map(({ id, position }) =>
+          db.update(eventLineupTable).set({ position }).where(eq(eventLineupTable.id, id))
+        )
+    );
+
+    // Insert new group-header slots
+    const headers = newOrder.filter((item): item is { isHeader: true; label: string; position: number } => "isHeader" in item);
+    if (headers.length > 0) {
+      await db.insert(eventLineupTable).values(
+        headers.map(h => ({
+          eventId,
+          type: "group-header" as const,
+          label: h.label,
+          position: h.position,
+          durationMinutes: null,
+          bufferMinutes: null,
+          startTime: null,
+          confirmed: false,
+          inviteStatus: "not_sent" as const,
+        }))
+      );
+    }
+
+    res.json({ ok: true, sorted: sortedIds.length, groups: headers.length });
+  } catch (err) {
+    console.error("autoSort error:", err);
+    res.status(500).json({ error: "Sort failed" });
+  }
+});
+
 // DELETE /events/:id/lineup/:slotId/conflict — clears the conflict flag manually
 router.delete("/events/:id/lineup/:slotId/conflict", async (req, res) => {
   if (!requireAuth(req, res)) return;

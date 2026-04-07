@@ -22,7 +22,7 @@ import {
   GripVertical, Plus, Trash2, Music, Megaphone, Coffee, ChevronDown, ChevronUp,
   Clock, Timer, Save, Pencil, X, Users, Layers, CheckCircle2, Circle, Printer,
   Send, Mail, Users2, UserCheck, AlertCircle, RefreshCw, Info, Phone, Globe, Loader2,
-  Copy, Check, TriangleAlert, ShieldCheck, Download,
+  Copy, Check, TriangleAlert, ShieldCheck, Download, Sparkles,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1512,6 +1512,7 @@ export function LineupSheet({ event, open, onClose }: {
 
   // ── Conflict detection ─────────────────────────────────────────────────────
   const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [sortingAI, setSortingAI] = useState(false);
 
   async function handleCheckConflicts() {
     if (!eventId) return;
@@ -1544,6 +1545,39 @@ export function LineupSheet({ event, open, onClose }: {
       toast({ title: "Conflict check failed", variant: "destructive" });
     } finally {
       setCheckingConflicts(false);
+    }
+  }
+
+  async function handleAutoSort() {
+    if (!eventId) return;
+    setSortingAI(true);
+    try {
+      const calcStartTimes: Record<number, string> = {};
+      slots.forEach((s, i) => {
+        if (s.type === "act" && calcTimes[i]) calcStartTimes[s.id] = calcTimes[i]!;
+      });
+      // Typical recital slot duration (minutes) — use first act slot's value or fallback to 5
+      const firstAct = slots.find(s => s.type === "act");
+      const slotDuration = firstAct?.durationMinutes ?? 5;
+      // Show start time from first calculated time
+      const firstTime = calcTimes[slots.findIndex(s => s.type === "act")];
+      const r = await fetch(`/api/events/${eventId}/lineup/auto-sort`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calcStartTimes, eventStartTime: firstTime ?? null, durationMinutes: slotDuration }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Smart Sort failed", description: data.error, variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventId}/lineup`] });
+      toast({ title: "Smart Sort complete", description: `${data.sorted} performer${data.sorted !== 1 ? "s" : ""} sorted into ${data.groups} teacher group${data.groups !== 1 ? "s" : ""}` });
+    } catch {
+      toast({ title: "Smart Sort failed", variant: "destructive" });
+    } finally {
+      setSortingAI(false);
     }
   }
 
@@ -2127,6 +2161,11 @@ export function LineupSheet({ event, open, onClose }: {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {isRecital && rawSlots.filter(s => s.type === "act").length > 1 && (
+                  <Button size="sm" variant="outline" className="rounded-xl gap-1.5 text-xs border-[#7250ef]/30 text-[#7250ef] hover:bg-[#7250ef]/10 hover:text-[#7250ef]" onClick={handleAutoSort} disabled={sortingAI}>
+                    {sortingAI ? <><Loader2 className="h-3 w-3 animate-spin" /> Sorting…</> : <><Sparkles className="h-3 w-3" /> Smart Sort</>}
+                  </Button>
+                )}
                 {isRecital && ticketRequests.length > 0 && (
                   <Button size="sm" variant="outline" className="rounded-xl gap-1.5 text-xs" onClick={syncRegistrationsToLineup} disabled={syncing}>
                     {syncing ? <><RefreshCw className="h-3 w-3 animate-spin" /> Syncing…</> : <><RefreshCw className="h-3 w-3" /> Sync</>}
