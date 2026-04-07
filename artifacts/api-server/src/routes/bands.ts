@@ -696,59 +696,55 @@ router.post("/events/:id/lineup/auto-sort", async (req, res) => {
       return { teacher: key === "__none__" ? "No teacher" : key, count: slots.length, constraints };
     });
 
-    // ── Step 3: Ask AI to sort the GROUPS (not individual students) ───────────
-    const groupList = groupSummaries.map((g, i) =>
-      `GROUP_${i} | Teacher: ${g.teacher} | Students: ${g.count}` +
-      (g.constraints.length ? ` | Constraints: ${g.constraints.join("; ")}` : "")
+    // ── Step 3: AI classifies each GROUP as "early", "late", or "neutral" ───────
+    // Backend then sorts deterministically — AI only decides direction, not order.
+    const groupListForAI = groupSummaries.map((g, i) =>
+      `GROUP_${i}: Teacher "${g.teacher}", ${g.count} student(s)` +
+      (g.constraints.length ? `. Constraints: ${g.constraints.join("; ")}` : ". No constraints.")
     ).join("\n");
 
     const aiRes = await openai.chat.completions.create({
       model: "gpt-5-mini",
-      max_completion_tokens: 800,
+      max_completion_tokens: 600,
       messages: [
         {
           role: "system",
-          content: `You are ordering teacher groups in a music recital.${eventStartTime ? ` Show starts at ${eventStartTime}.` : ""} Each student slot is ~${durationMinutes} minutes.
+          content: `You classify teacher groups in a music recital by their scheduling direction.
+For each group, read the constraints and classify as exactly one of:
+- "early"  — a student needs to LEAVE EARLY or must perform before a certain time (e.g. "must leave by noon", "has to leave at 1pm", "can only stay until X")
+- "late"   — a student can't arrive until later or requested a later slot (e.g. "after 2pm", "not available until 1pm", "needs a later slot", "requested 3-4pm", "attending something before")
+- "neutral" — no meaningful time constraint
 
-CONSTRAINT DIRECTION RULES — follow these strictly:
-- "needs to leave early", "must leave by X", "can only stay until X", "has to leave at X" → EARLY-LEAVE: place this group as EARLY in the show as possible.
-- "needs a later slot", "requested later time", "can't arrive before X", "arriving late", "not available until X", "requested a slot at X PM" (where X is later in the day) → LATE-ARRIVAL: place this group as LATE in the show as possible, toward the END.
-- Conflict reasons like "requested a later slot (X PM) but is assigned earlier" confirm a LATE-ARRIVAL — move this group to the END.
-- Groups with no constraints fill in naturally between the constrained groups.
-- NEVER split a teacher group — all students from the same teacher stay consecutive.
-
-Think through each group's constraint direction first, then output the order.
-Return ONLY valid JSON: { "groupOrder": [0, 2, 1, ...] } — the GROUP_ index numbers in your recommended order, every index exactly once.`,
+Return ONLY valid JSON: { "classifications": { "0": "neutral", "1": "late", "2": "early", ... } }
+Include every GROUP index. When in doubt, use "neutral".`,
         },
         {
           role: "user",
-          content: `Here are the teacher groups:\n${groupList}\n\nAnalyze each group's constraints, then return the group order as JSON { "groupOrder": [...] }.`,
+          content: `Classify each group:\n${groupListForAI}`,
         },
       ],
     });
 
     const rawContent = aiRes.choices[0]?.message?.content?.trim() ?? "{}";
-    // Extract JSON object from anywhere in the response (model may include reasoning prose)
-    const jsonMatch = rawContent.match(/\{[\s\S]*"groupOrder"[\s\S]*\}/);
+    const jsonMatch = rawContent.match(/\{[\s\S]*"classifications"[\s\S]*\}/);
     const raw = jsonMatch ? jsonMatch[0] : rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    let parsed: { groupOrder?: unknown[] };
+    let classifications: Record<string, "early" | "late" | "neutral"> = {};
     try {
-      parsed = JSON.parse(raw);
+      const p = JSON.parse(raw);
+      classifications = p.classifications ?? {};
     } catch (parseErr) {
-      console.error("autoSort JSON parse error:", parseErr, "raw:", raw);
-      parsed = { groupOrder: teacherKeys.map((_, i) => i) };
-    }
-    let groupOrder: number[] = Array.isArray(parsed.groupOrder)
-      ? parsed.groupOrder.map(Number).filter(n => n >= 0 && n < teacherKeys.length)
-      : teacherKeys.map((_, i) => i);
-
-    // Fill in any groups the AI missed
-    const seen = new Set(groupOrder);
-    for (let i = 0; i < teacherKeys.length; i++) {
-      if (!seen.has(i)) groupOrder.push(i);
+      console.error("autoSort classification parse error:", parseErr, "raw:", raw);
     }
 
-    // ── Step 4: Flatten into final slot order (whole groups stay together) ────
+    // ── Step 4: Sort deterministically — early first, neutral middle, late last ─
+    const earlyGroups  = teacherKeys.map((_, i) => i).filter(i => classifications[String(i)] === "early");
+    const neutralGroups = teacherKeys.map((_, i) => i).filter(i => !classifications[String(i)] || classifications[String(i)] === "neutral");
+    const lateGroups   = teacherKeys.map((_, i) => i).filter(i => classifications[String(i)] === "late");
+    const groupOrder = [...earlyGroups, ...neutralGroups, ...lateGroups];
+
+    console.log(`[autoSort] Classifications:`, classifications, `| Order: early[${earlyGroups}] neutral[${neutralGroups}] late[${lateGroups}]`);
+
+    // ── Step 5: Flatten into final slot order (whole groups stay together) ────
     const finalSlotIds: number[] = [];
     for (const gi of groupOrder) {
       const key = teacherKeys[gi];
@@ -756,7 +752,7 @@ Return ONLY valid JSON: { "groupOrder": [0, 2, 1, ...] } — the GROUP_ index nu
       for (const s of slots) finalSlotIds.push(s.id);
     }
 
-    // ── Step 5: Delete old group-headers, rebuild one per teacher group ───────
+    // ── Step 6: Delete old group-headers, rebuild one per teacher group ───────
     const headerIds = allSlots.filter(s => s.type === "group-header").map(s => s.id);
     if (headerIds.length > 0) {
       await db.delete(eventLineupTable).where(inArray(eventLineupTable.id, headerIds));
