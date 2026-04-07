@@ -285,6 +285,25 @@ function InviteRow({ group, onUpdateAttendance }: { group: InviteGroup; onUpdate
   );
 }
 
+// ── Teacher color coding (recital only) ────────────────────────────────────────
+const TEACHER_COLORS = [
+  "bg-sky-500/15 text-sky-300 border-sky-500/25",
+  "bg-violet-500/15 text-violet-300 border-violet-500/25",
+  "bg-amber-500/15 text-amber-300 border-amber-500/25",
+  "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
+  "bg-rose-500/15 text-rose-300 border-rose-500/25",
+  "bg-orange-500/15 text-orange-300 border-orange-500/25",
+  "bg-cyan-500/15 text-cyan-300 border-cyan-500/25",
+  "bg-pink-500/15 text-pink-300 border-pink-500/25",
+  "bg-indigo-500/15 text-indigo-300 border-indigo-500/25",
+  "bg-[#00b199]/15 text-[#00b199] border-[#00b199]/25",
+];
+function teacherColorClass(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return TEACHER_COLORS[hash % TEACHER_COLORS.length];
+}
+
 // ── Sortable slot row ──────────────────────────────────────────────────────────
 function SlotRow({
   slot, calcTime, bands, otherGroups, eventId, isRecital, isTwoDay, isFirstGroupHeader, isFirstAct,
@@ -534,7 +553,11 @@ function SlotRow({
             )}
           </div>
           {slot.otherGroupDescription && <span className="text-[10px] text-muted-foreground truncate block">{slot.otherGroupDescription}</span>}
-          {!slot.otherGroupDescription && slot.groupName && <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>}
+          {!slot.otherGroupDescription && slot.groupName && (
+            isRecital
+              ? <span className={`inline-block mt-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${teacherColorClass(slot.groupName)}`}>{slot.groupName}</span>
+              : <span className="text-[10px] text-muted-foreground truncate block">{slot.groupName}</span>
+          )}
           {slot.isOverlapping && <span className="text-[10px] text-[#00b199] font-medium">↪ overlaps</span>}
           {/* Mobile-only secondary info line */}
           <div className="flex items-center gap-1.5 sm:hidden mt-0.5 flex-wrap">
