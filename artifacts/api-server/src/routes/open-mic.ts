@@ -753,6 +753,16 @@ router.get("/open-mic/events/:eventId/performers", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to fetch performers" }); }
 });
 
+// ── Admin: delete a single signup ─────────────────────────────────────────────
+router.delete("/open-mic/signups/:id", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(openMicSignupsTable).where(eq(openMicSignupsTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: "Failed to delete signup" }); }
+});
+
 // ── Admin: get events for a series ────────────────────────────────────────────
 router.get("/open-mic/series/:id/events", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }

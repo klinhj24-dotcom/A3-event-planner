@@ -192,6 +192,17 @@ export default function OpenMicSeriesPage() {
     } catch { toast({ title: "Failed to remove", variant: "destructive" }); }
   }
 
+  async function handleDeletePerformer(signupId: number, eventId: number) {
+    try {
+      await apiFetch(`/open-mic/signups/${signupId}`, { method: "DELETE" });
+      setEvents(prev => prev.map(ev =>
+        ev.id === eventId
+          ? { ...ev, performers: ev.performers.filter(p => p.id !== signupId), performerCount: ev.performerCount - 1 }
+          : ev
+      ));
+    } catch { toast({ title: "Failed to remove performer", variant: "destructive" }); }
+  }
+
   function handleExportCSV() {
     if (!selected) return;
     window.open(`/api/open-mic/series/${selected.id}/mailing-list/export.csv`, "_blank");
@@ -607,14 +618,21 @@ export default function OpenMicSeriesPage() {
                                       {past && <span className="ml-2 text-[10px] text-[#555]">past</span>}
                                     </TableCell>
                                     <TableCell>
-                                      <div className="flex items-center gap-1.5">
-                                        <Users className="h-3.5 w-3.5 text-[#555]" />
-                                        <span className="text-sm">{ev.performerCount}</span>
-                                        {ev.performers.length > 0 && (
-                                          <span className="text-xs text-[#555] truncate max-w-[160px]">
-                                            {ev.performers.map(p => p.name).join(", ")}
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Users className="h-3.5 w-3.5 text-[#555] shrink-0" />
+                                        <span className="text-sm shrink-0">{ev.performerCount}</span>
+                                        {ev.performers.map(p => (
+                                          <span key={p.id} className="inline-flex items-center gap-1 text-xs bg-[#7250ef]/10 text-[#a88ef5] border border-[#7250ef]/20 rounded-full px-2 py-0.5">
+                                            {p.name}
+                                            <button
+                                              onClick={() => handleDeletePerformer(p.id, ev.id)}
+                                              className="text-[#7250ef]/50 hover:text-red-400 transition-colors ml-0.5"
+                                              title="Remove performer"
+                                            >
+                                              <X className="h-2.5 w-2.5" />
+                                            </button>
                                           </span>
-                                        )}
+                                        ))}
                                       </div>
                                     </TableCell>
                                     <TableCell>
