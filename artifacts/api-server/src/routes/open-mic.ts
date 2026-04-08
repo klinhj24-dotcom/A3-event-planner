@@ -468,12 +468,45 @@ router.post("/open-mic/signup", async (req, res) => {
     if (!name?.trim()) { res.status(400).json({ error: "Name is required" }); return; }
     if (!email?.trim()) { res.status(400).json({ error: "Email is required" }); return; }
     if (!instrument?.trim()) { res.status(400).json({ error: "Instrument is required" }); return; }
-    const ff = getNextOpenMicDate();
+
+    // Resolve date/time/location from the database (same logic as /info endpoint)
+    const [series] = await db.select().from(openMicSeriesTable).orderBy(openMicSeriesTable.id);
+    const now = new Date();
+    let dateLabel = "";
+    let monthKey = "";
+    let timeLabel = "6:00 PM";
+    let locationLabel = "CVP Towson";
+    let nextEventId: number | null = null;
+    let seriesId: number | null = null;
+
+    if (series) {
+      seriesId = series.id;
+      timeLabel = series.eventTime ?? timeLabel;
+      locationLabel = series.location ?? locationLabel;
+      const events = await db.select().from(eventsTable)
+        .where(and(eq(eventsTable.openMicSeriesId, series.id), isNotNull(eventsTable.startDate)))
+        .orderBy(eventsTable.startDate);
+      const nextEvent = events.find(e => e.startDate && e.startDate >= now);
+      if (nextEvent?.startDate) {
+        const d = nextEvent.startDate;
+        const dow = d.getUTCDay();
+        dateLabel = `${WEEKDAY_NAMES[dow]}, ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+        monthKey = nextEvent.openMicMonth ?? "";
+        nextEventId = nextEvent.id;
+      }
+    }
+    if (!dateLabel) {
+      const ff = getNextOpenMicDate();
+      dateLabel = ff.label;
+      monthKey = ff.monthKey;
+    }
+
     const [signup] = await db.insert(openMicSignupsTable).values({
       name: name.trim(), email: email.trim().toLowerCase(), instrument: instrument.trim(),
       artistWebsite: artistWebsite?.trim() || null, musicLink: musicLink?.trim() || null,
-      eventMonth: ff.monthKey,
+      eventMonth: monthKey, seriesId, eventId: nextEventId,
     }).returning();
+
     (async () => {
       try {
         const sender = await getSenderUser();
@@ -483,7 +516,7 @@ router.post("/open-mic/signup", async (req, res) => {
         const from = sender.googleEmail ?? sender.email ?? "";
         const body = `Hi ${name.split(" ")[0]},
 
-You're on the list! We've got you signed up for the Music Space Open Mic on ${ff.label} at ${ff.date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}.
+You're on the list! We've got you signed up for the Music Space Open Mic on ${dateLabel} at ${timeLabel}.
 
 Show up early for a better performance slot — order is based on arrival time.
 
@@ -496,11 +529,11 @@ A couple quick notes & promos:
 
 The Music Space Team`;
         const html = buildHtmlEmail({ body });
-        const raw = makeHtmlEmail({ to: email.trim(), from, subject: `You're on the list! Open Mic – ${ff.label}`, html, cc: [TMS_INFO] });
+        const raw = makeHtmlEmail({ to: email.trim(), from, subject: `You're on the list! Open Mic – ${dateLabel}`, html, cc: [TMS_INFO] });
         await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
       } catch (err) { console.error("[open-mic] Confirmation email failed:", err); }
     })();
-    res.json({ ok: true, id: signup.id, eventMonth: ff.monthKey, dateLabel: ff.label });
+    res.json({ ok: true, id: signup.id, eventMonth: monthKey, dateLabel });
   } catch (err) {
     res.status(500).json({ error: "Failed to save signup" });
   }
