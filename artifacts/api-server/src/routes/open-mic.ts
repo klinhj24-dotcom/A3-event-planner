@@ -300,17 +300,54 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
 }
 
 // ── Public: get next open mic info (generic) ──────────────────────────────────
-router.get("/open-mic/info", (_req, res) => {
-  const next = getNextOpenMicDate();
-  res.json({
-    date: next.date,
-    dateLabel: next.label,
-    monthKey: next.monthKey,
-    location: "CVP Towson",
-    time: "6:00 PM",
-    signupUrl: `${BASE_URL}/open-mic`,
-    instruments: INSTRUMENTS,
-  });
+router.get("/open-mic/info", async (_req, res) => {
+  try {
+    // Look up the first series in the DB and find its next upcoming event
+    const [series] = await db.select().from(openMicSeriesTable).orderBy(openMicSeriesTable.id);
+    const now = new Date();
+    let dateLabel = "Coming Soon";
+    let monthKey = "";
+    let location = "CVP Towson";
+    let time = "6:00 PM";
+    let nextEventId: number | null = null;
+
+    if (series) {
+      location = series.location ?? location;
+      time = series.eventTime ?? time;
+      const events = await db.select().from(eventsTable)
+        .where(and(eq(eventsTable.openMicSeriesId, series.id), isNotNull(eventsTable.startDate)))
+        .orderBy(eventsTable.startDate);
+      const nextEvent = events.find(e => e.startDate && e.startDate >= now);
+      if (nextEvent?.startDate) {
+        const d = nextEvent.startDate;
+        const dow = d.getUTCDay();
+        dateLabel = `${WEEKDAY_NAMES[dow]}, ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+        monthKey = nextEvent.openMicMonth ?? "";
+        nextEventId = nextEvent.id;
+      } else {
+        const ff = getNextOpenMicDate();
+        dateLabel = ff.label;
+        monthKey = ff.monthKey;
+      }
+    } else {
+      const ff = getNextOpenMicDate();
+      dateLabel = ff.label;
+      monthKey = ff.monthKey;
+    }
+
+    res.json({
+      dateLabel,
+      monthKey,
+      location,
+      time,
+      signupUrl: `${BASE_URL}/open-mic`,
+      instruments: INSTRUMENTS,
+      nextEventId,
+    });
+  } catch {
+    const next = getNextOpenMicDate();
+    res.json({ dateLabel: next.label, monthKey: next.monthKey, location: "CVP Towson", time: "6:00 PM", signupUrl: `${BASE_URL}/open-mic`, instruments: INSTRUMENTS });
+  }
 });
 
 // ── Public: get series info by slug ───────────────────────────────────────────
