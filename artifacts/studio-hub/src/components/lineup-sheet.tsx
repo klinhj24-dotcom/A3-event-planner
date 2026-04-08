@@ -138,7 +138,7 @@ function addMinutes(t: string, mins: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (string | null)[] {
+function computeTimesLinear(slots: LineupSlot[], baseTime: string | null = null): (string | null)[] {
   const out: (string | null)[] = [];
   for (let i = 0; i < slots.length; i++) {
     const s = slots[i];
@@ -146,11 +146,9 @@ function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (str
     if (s.type === "group-header") {
       const isFirstGroup = !slots.slice(0, i).some(p => p.type === "group-header");
       if (isFirstGroup) {
-        // Group 1: performers cascade from baseTime; the header itself gets no time
         out.push(null);
         continue;
       }
-      // Group 2+: end of previous group's last slot + inter-group break (bufferMinutes on this header)
       let prevActualIdx = i - 1;
       while (prevActualIdx >= 0 && slots[prevActualIdx].type === "group-header") prevActualIdx--;
       if (prevActualIdx < 0) { out.push(baseTime); continue; }
@@ -163,9 +161,7 @@ function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (str
       continue;
     }
 
-    // Manual override on a regular slot
     if (s.startTime) { out.push(s.startTime); continue; }
-    // No predecessor at all → use baseTime
     if (i === 0) { out.push(baseTime); continue; }
     if (s.isOverlapping) { out.push(out[i - 1]); continue; }
 
@@ -173,14 +169,31 @@ function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (str
     const prevT = out[i - 1];
 
     if (prev.type === "group-header") {
-      // First slot in this group: start at the group header's computed time (null for Group 1 → baseTime)
       out.push(prevT ?? baseTime);
       continue;
     }
 
-    // Normal slot-to-slot chain
     if (!prevT || !prev.durationMinutes) { out.push(null); continue; }
     out.push(addMinutes(prevT, prev.durationMinutes + (prev.bufferMinutes ?? 0)));
+  }
+  return out;
+}
+
+function computeTimes(slots: LineupSlot[], baseTime: string | null = null): (string | null)[] {
+  const isTwoDay = slots.some(s => s.eventDay === 2);
+  if (!isTwoDay) return computeTimesLinear(slots, baseTime);
+
+  // Two-day event: compute each day's cascade independently so Day 2 slots
+  // don't break the Day 1 cascade when positions are interleaved.
+  const out: (string | null)[] = new Array(slots.length).fill(null);
+  for (const day of [1, 2]) {
+    // Get this day's slots with their original indices, sorted by position
+    const indexed = slots
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => (s.eventDay ?? 1) === day)
+      .sort((a, b) => (a.s.position ?? 0) - (b.s.position ?? 0));
+    const dayTimes = computeTimesLinear(indexed.map(({ s }) => s), baseTime);
+    indexed.forEach(({ i }, di) => { out[i] = dayTimes[di]; });
   }
   return out;
 }
