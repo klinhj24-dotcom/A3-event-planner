@@ -274,8 +274,10 @@ export async function ensureUpcomingEvents(series: any, count = 3) {
     if (existing.some(e => e.openMicSkipped)) continue;
 
     if (existing.length) {
+      // Event already exists for this month — update config fields only,
+      // never overwrite startDate/endDate so manual date edits are preserved.
       await db.update(eventsTable)
-        .set({ startDate, endDate, ...OPEN_MIC_DEFAULTS })
+        .set({ ...OPEN_MIC_DEFAULTS })
         .where(eq(eventsTable.id, existing[0].id));
       continue;
     }
