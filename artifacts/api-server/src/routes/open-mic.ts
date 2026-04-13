@@ -3,7 +3,7 @@ import { db, openMicSignupsTable, openMicSeriesTable, openMicMailingListTable, e
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { google } from "googleapis";
-import { tryAutoGenerateAndPushComms } from "./events";
+import { tryAutoGenerateAndPushComms, trySyncToCalendar } from "./events";
 
 const router = Router();
 const TMS_INFO = "info@themusicspace.com";
@@ -807,6 +807,20 @@ router.post("/open-mic/series/:id/create-upcoming", async (req, res) => {
     const [series] = await db.select().from(openMicSeriesTable).where(eq(openMicSeriesTable.id, id));
     if (!series) { res.status(404).json({ error: "Series not found" }); return; }
     const created = await ensureUpcomingEvents(series, 3);
+
+    // Immediately push each newly created event to Google Calendar
+    const userId = (req.user as any)?.id as string;
+    if (userId && created.length) {
+      for (const ev of created) {
+        try {
+          const gcalId = await trySyncToCalendar(userId, ev);
+          if (gcalId && !ev.googleCalendarEventId) {
+            await db.update(eventsTable).set({ googleCalendarEventId: gcalId }).where(eq(eventsTable.id, ev.id));
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+
     res.json({ created: created.length, events: created });
   } catch (err) { res.status(500).json({ error: "Failed to create upcoming events" }); }
 });

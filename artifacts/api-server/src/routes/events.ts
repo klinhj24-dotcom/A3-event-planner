@@ -63,7 +63,7 @@ function buildTicketUrl(signupToken: string) {
 }
 
 /** Push/update an event to Google Calendar. Returns the gcal event ID (new or existing). */
-async function trySyncToCalendar(userId: string, event: typeof eventsTable.$inferSelect): Promise<string | null> {
+export async function trySyncToCalendar(userId: string, event: typeof eventsTable.$inferSelect): Promise<string | null> {
   try {
     // Only push confirmed events to Google Calendar
     if (event.status !== "confirmed") return null;
