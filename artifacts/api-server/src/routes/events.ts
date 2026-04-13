@@ -68,10 +68,16 @@ export async function trySyncToCalendar(userId: string, event: typeof eventsTabl
     // Only push confirmed events to Google Calendar
     if (event.status !== "confirmed") return null;
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    let [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    // If this user has no Google tokens, fall back to any user that does
     if (!user?.googleAccessToken || !user?.googleRefreshToken) {
-      console.warn(`[calendar] trySyncToCalendar: user ${userId} has no Google tokens — skipping`);
-      return null;
+      const allUsers = await db.select().from(usersTable);
+      const fallback = allUsers.find(u => u.googleAccessToken && u.googleRefreshToken);
+      if (!fallback) {
+        console.warn(`[calendar] trySyncToCalendar: no Google-authenticated user found — skipping`);
+        return null;
+      }
+      user = fallback;
     }
     const auth = createAuthedClient(user.googleAccessToken, user.googleRefreshToken, user.googleTokenExpiry);
     // Save refreshed tokens back to DB so they don't go stale
