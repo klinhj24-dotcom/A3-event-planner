@@ -2115,6 +2115,7 @@ export default function Events() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"list" | "calendar">("list");
   const [showCancelled, setShowCancelled] = useState(false);
+  const [eventTab, setEventTab] = useState<"upcoming" | "past">("upcoming");
   const { data: events, isLoading } = useListEvents();
   const { data: cancelledEvents, isLoading: loadingCancelled } = useQuery<any[]>({
     queryKey: ["/api/events", "cancelled"],
@@ -2395,13 +2396,29 @@ export default function Events() {
     });
   })();
 
-  const filteredEvents = mergedEvents.filter(e => {
-    if (!showCancelled && e.status === "cancelled") return false;
-    return (
-      e.title.toLowerCase().includes(search.toLowerCase()) ||
-      (e.location?.toLowerCase().includes(search.toLowerCase()) ?? false)
-    );
-  });
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const filteredEvents = mergedEvents
+    .filter(e => {
+      if (!showCancelled && e.status === "cancelled") return false;
+      // Tab split: upcoming = today or future (or no date), past = strictly before today
+      if (eventTab === "upcoming") {
+        if (e.startDate && new Date(e.startDate) < now) return false;
+      } else {
+        if (!e.startDate || new Date(e.startDate) >= now) return false;
+      }
+      return (
+        e.title.toLowerCase().includes(search.toLowerCase()) ||
+        (e.location?.toLowerCase().includes(search.toLowerCase()) ?? false)
+      );
+    })
+    .sort((a, b) => {
+      const da = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+      const db = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+      // Past tab: newest first; upcoming tab: soonest first
+      return eventTab === "past" ? db - da : da - db;
+    });
 
   return (
     <AppLayout>
@@ -3016,6 +3033,29 @@ export default function Events() {
           )
         ) : (
           <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
+            {/* Upcoming / Past tabs */}
+            <div className="px-4 pt-4 pb-0 flex items-center gap-2 border-b border-border/50">
+              <button
+                onClick={() => setEventTab("upcoming")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                  eventTab === "upcoming"
+                    ? "border-[#7250ef] text-[#7250ef]"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Upcoming
+              </button>
+              <button
+                onClick={() => setEventTab("past")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                  eventTab === "past"
+                    ? "border-[#7250ef] text-[#7250ef]"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Past Events
+              </button>
+            </div>
             <div className="p-4 border-b border-border/50 bg-muted/10 flex items-center gap-3">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
