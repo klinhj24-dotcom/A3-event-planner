@@ -1,7 +1,94 @@
 import { db, eventBandInvitesTable, eventLineupTable, bandsTable, eventsTable, usersTable, eventGuestListTable } from "@workspace/db";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, asc } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
+
+// ── Cascade time computation (mirrors frontend computeTimes) ──────────────────
+
+function addMinutes(t: string, mins: number): string {
+  const [h, m] = t.split(":").map(Number);
+  const total = h * 60 + m + mins;
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+type SlimSlot = {
+  id: number;
+  type: string;
+  startTime: string | null;
+  durationMinutes: number | null;
+  bufferMinutes: number | null;
+  isOverlapping: boolean;
+  eventDay: number | null;
+  position: number | null;
+};
+
+function computeTimesLinear(slots: SlimSlot[], baseTime: string | null): (string | null)[] {
+  const out: (string | null)[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    if (s.type === "group-header") {
+      const isFirstGroup = !slots.slice(0, i).some(p => p.type === "group-header");
+      if (isFirstGroup) { out.push(null); continue; }
+      let prevActualIdx = i - 1;
+      while (prevActualIdx >= 0 && slots[prevActualIdx].type === "group-header") prevActualIdx--;
+      if (prevActualIdx < 0) { out.push(baseTime); continue; }
+      const prevActual = slots[prevActualIdx];
+      const prevActualT = out[prevActualIdx];
+      if (!prevActualT || !prevActual.durationMinutes) { out.push(null); continue; }
+      const prevGroupEnd = addMinutes(prevActualT, prevActual.durationMinutes + (prevActual.bufferMinutes ?? 0));
+      const gap = s.bufferMinutes ?? 0;
+      out.push(gap > 0 ? addMinutes(prevGroupEnd, gap) : prevGroupEnd);
+      continue;
+    }
+    if (s.startTime) { out.push(s.startTime); continue; }
+    if (i === 0) { out.push(baseTime); continue; }
+    if (s.isOverlapping) { out.push(out[i - 1]); continue; }
+    const prev = slots[i - 1];
+    const prevT = out[i - 1];
+    if (prev.type === "group-header") { out.push(prevT ?? baseTime); continue; }
+    if (!prevT || !prev.durationMinutes) { out.push(null); continue; }
+    out.push(addMinutes(prevT, prev.durationMinutes + (prev.bufferMinutes ?? 0)));
+  }
+  return out;
+}
+
+function computeCalcTimes(slots: SlimSlot[], baseTime: string | null): (string | null)[] {
+  const isTwoDay = slots.some(s => s.eventDay === 2);
+  if (!isTwoDay) return computeTimesLinear(slots, baseTime);
+  const out: (string | null)[] = new Array(slots.length).fill(null);
+  for (const day of [1, 2]) {
+    const indexed = slots
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => (s.eventDay ?? 1) === day)
+      .sort((a, b) => (a.s.position ?? 0) - (b.s.position ?? 0));
+    const dayTimes = computeTimesLinear(indexed.map(({ s }) => s), baseTime);
+    indexed.forEach(({ i }, di) => { out[i] = dayTimes[di]; });
+  }
+  return out;
+}
+
+/** Returns a map of slot ID → computed cascade time (HH:MM string) */
+async function getCalcTimesForEvent(eventId: number, baseTime: string | null): Promise<Map<number, string | null>> {
+  const allSlots = await db
+    .select({
+      id: eventLineupTable.id,
+      type: eventLineupTable.type,
+      startTime: eventLineupTable.startTime,
+      durationMinutes: eventLineupTable.durationMinutes,
+      bufferMinutes: eventLineupTable.bufferMinutes,
+      isOverlapping: eventLineupTable.isOverlapping,
+      eventDay: eventLineupTable.eventDay,
+      position: eventLineupTable.position,
+    })
+    .from(eventLineupTable)
+    .where(eq(eventLineupTable.eventId, eventId))
+    .orderBy(asc(eventLineupTable.position));
+
+  const times = computeCalcTimes(allSlots, baseTime);
+  const map = new Map<number, string | null>();
+  allSlots.forEach((s, i) => map.set(s.id, times[i]));
+  return map;
+}
 
 const TMS_CC = "info@themusicspace.com";
 
@@ -63,6 +150,24 @@ export async function runBandReminders() {
     const gmail = google.gmail({ version: "v1", auth });
     const from = sender.googleEmail ?? sender.email ?? "";
 
+    // Pre-compute cascade times for each unique event so cascaded slots get real times
+    const calcTimesByEvent = new Map<number, Map<number, string | null>>();
+    const uniqueEventIds = [...new Set(candidates.map(c => c.event.id))];
+    for (const eventId of uniqueEventIds) {
+      const ev = candidates.find(c => c.event.id === eventId)!.event;
+      // Derive base time from event startDate (HH:MM in ET)
+      let baseTime: string | null = null;
+      if (ev.startDate) {
+        const d = new Date(ev.startDate);
+        const hhmm = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/New_York" });
+        baseTime = hhmm === "00:00" ? null : hhmm;
+        if (ev.lineupPreBufferMinutes && baseTime) {
+          baseTime = addMinutes(baseTime, -(ev.lineupPreBufferMinutes));
+        }
+      }
+      calcTimesByEvent.set(eventId, await getCalcTimesForEvent(eventId, baseTime));
+    }
+
     const sentSlots = new Set<number>();
 
     for (const { invite, event, slot, bandName } of candidates) {
@@ -82,8 +187,10 @@ export async function runBandReminders() {
         eventDate = fmtDate(new Date(event.startDate));
       }
 
-      const slotLine = slot.startTime
-        ? `\nYour Set Time: ${fmt12(slot.startTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
+      // Use manual startTime if set, otherwise fall back to cascade-computed time
+      const effectiveTime = slot.startTime ?? (calcTimesByEvent.get(event.id)?.get(slot.id) ?? null);
+      const slotLine = effectiveTime
+        ? `\nYour Set Time: ${fmt12(effectiveTime)}${slot.durationMinutes ? ` (${slot.durationMinutes} min)` : ""}`
         : slot.staffNote
         ? `\nEstimated Slot: ${slot.staffNote}`
         : "";
