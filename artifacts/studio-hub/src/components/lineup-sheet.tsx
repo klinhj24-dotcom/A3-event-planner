@@ -339,6 +339,7 @@ function SlotRow({
 
   const [expanded, setExpanded] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   const initActType = slot.otherGroupId ? "other" : "band";
   const [draft, setDraft] = useState({
@@ -622,6 +623,36 @@ function SlotRow({
           ) : null
         )}
 
+        {slot.type === "act" && (slot.bandId || slot.otherGroupId) && (
+          <button
+            title={copiedEmail ? "Copied!" : "Copy contact email(s)"}
+            className={`transition-colors p-0.5 ${copiedEmail ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={async e => {
+              e.stopPropagation();
+              let emails: string[] = [];
+              if (slot.otherGroupContactEmail) {
+                emails = [slot.otherGroupContactEmail];
+              } else if (slot.bandId) {
+                // Prefer legacy contactEmail if set; otherwise fetch from contacts
+                if (slot.contactEmail) {
+                  emails = [slot.contactEmail];
+                } else {
+                  try {
+                    const data = await fetch(`/api/bands/${slot.bandId}`, { credentials: "include" }).then(r => r.json());
+                    emails = (data?.membersWithContacts ?? [])
+                      .flatMap((m: any) => m.contacts.map((c: any) => c.email).filter(Boolean));
+                  } catch {}
+                }
+              }
+              if (emails.length === 0) return;
+              navigator.clipboard.writeText(emails.join(", "));
+              setCopiedEmail(true);
+              setTimeout(() => setCopiedEmail(false), 2000);
+            }}
+          >
+            {copiedEmail ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        )}
         <button onClick={() => setExpanded(e => !e)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>

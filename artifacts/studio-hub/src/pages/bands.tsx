@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Music2, Plus, Search, ChevronDown, ChevronUp, Mail, Phone, Globe, Instagram,
   Users, Send, Trash2, Pencil, UserPlus, MailCheck, Megaphone, X, Info, Loader2, User, ArrowLeft, Building2,
+  Copy, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1131,6 +1132,7 @@ export default function Bands() {
   const [activeTab, setActiveTab] = useState<"bands" | "other">("bands");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [copiedBand, setCopiedBand] = useState<number | null>(null);
   const [bandDlg, setBandDlg] = useState<Band | null | "new">(null);
   const [inviteDlg, setInviteDlg] = useState<Band | null>(null);
   const [broadcastOpen, setBroadcastOpen] = useState(false);
@@ -1332,6 +1334,40 @@ export default function Bands() {
                           <TooltipContent><p className="text-xs">Send a lineup invite to this band</p></TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
+                      {cnt.withEmail > 0 && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm" variant="ghost"
+                                className={`h-8 w-8 p-0 transition-colors ${copiedBand === band.id ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}
+                                onClick={async () => {
+                                  // Use already-loaded detail data if available, otherwise fetch
+                                  let source = isOpen && expandedBand?.id === band.id ? expandedBand : null;
+                                  if (!source) {
+                                    try {
+                                      source = await fetch(`/api/bands/${band.id}`, { credentials: "include" }).then(r => r.json());
+                                    } catch { return; }
+                                  }
+                                  const emails = (source?.membersWithContacts ?? [])
+                                    .flatMap((m: any) => m.contacts.map((c: any) => c.email).filter(Boolean));
+                                  if (emails.length === 0) return;
+                                  navigator.clipboard.writeText(emails.join(", "));
+                                  setCopiedBand(band.id);
+                                  setTimeout(() => setCopiedBand(null), 2000);
+                                }}
+                              >
+                                {copiedBand === band.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">
+                                {copiedBand === band.id ? "Copied!" : `Copy ${cnt.withEmail} contact email${cnt.withEmail !== 1 ? "s" : ""}`}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => setBandDlg(band)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
