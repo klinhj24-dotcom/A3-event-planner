@@ -6,7 +6,7 @@ import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, makeRawEmail, buildHtmlEmail } from "../lib/google";
 import { pushToEmployeeCalendar, removeFromEmployeeCalendar } from "../lib/employee-calendar";
-import { notifyAllStaffSlotsForEvent, notifyAllStaffEventDateChange } from "./event-staffing";
+import { notifyAllStaffSlotsForEvent, notifyAllStaffEventDateChange, shiftStaffSlotTimes } from "./event-staffing";
 
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
 
@@ -562,7 +562,11 @@ router.put("/events/:id", async (req, res) => {
         }
         // Email all assigned staff when the event date changed on an already-confirmed event
         if (wasConfirmed && eventDateChanged) {
-          notifyAllStaffEventDateChange(event.id).catch(() => {});
+          // Shift slot times first, then notify — must be sequential so emails show the updated times
+          (async () => {
+            await shiftStaffSlotTimes(event.id, existing.startDate!, event.startDate!);
+            await notifyAllStaffEventDateChange(event.id);
+          })().catch(() => {});
         }
       }
       res.json(finalEvent);

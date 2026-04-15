@@ -155,7 +155,21 @@ export async function notifyAllStaffSlotsForEvent(eventId: number) {
   }
 }
 
-/** Notify all assigned staff that the event date/time has changed. */
+/** Shift all staff slot startTime/endTime by the same delta as the event date change. */
+export async function shiftStaffSlotTimes(eventId: number, oldStart: Date, newStart: Date) {
+  const deltaMs = newStart.getTime() - oldStart.getTime();
+  if (!deltaMs) return;
+  const slots = await db.select({ id: eventStaffSlotsTable.id, startTime: eventStaffSlotsTable.startTime, endTime: eventStaffSlotsTable.endTime })
+    .from(eventStaffSlotsTable)
+    .where(eq(eventStaffSlotsTable.eventId, eventId));
+  for (const slot of slots) {
+    await db.update(eventStaffSlotsTable).set({
+      startTime: slot.startTime ? new Date(slot.startTime.getTime() + deltaMs) : null,
+      endTime: slot.endTime ? new Date(slot.endTime.getTime() + deltaMs) : null,
+    }).where(eq(eventStaffSlotsTable.id, slot.id));
+  }
+}
+
 export async function notifyAllStaffEventDateChange(eventId: number) {
   try {
     const slots = await db.select({
