@@ -1928,7 +1928,7 @@ function EventOverviewSheet({
                           const name = isRecitalEntry
                             ? `${r.studentFirstName} ${r.studentLastName ?? ""}`.trim()
                             : `${r.contactFirstName} ${r.contactLastName ?? ""}`.trim();
-                          if (window.confirm(`Remove ${name}'s registration? This will also remove them from the performance order if present.`)) {
+                          if (window.confirm(isRecitalEntry ? `Remove ${name}'s registration? This will also remove them from the performance order if present.` : `Remove ${name}'s ticket request?`)) {
                             deleteTicketRequest(r.id);
                           }
                         }}
