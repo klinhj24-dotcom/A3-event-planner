@@ -114,7 +114,8 @@ type GeneralForm = z.infer<typeof generalSchema>;
 
 function GeneralTicketForm({ event, token }: { event: any; token: string }) {
   const [submitted, setSubmitted] = useState(false);
-  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [existingRequest, setExistingRequest] = useState<{ ticketCount: number | null; ticketType: string | null } | null>(null);
+  const [pendingData, setPendingData] = useState<GeneralForm | null>(null);
 
   const isTwoDay = !!event?.isTwoDay;
   const form = useForm<GeneralForm>({
@@ -133,7 +134,7 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
   const recitalFee = event?.ticketPrice ? parseFloat(event.ticketPrice) : 30;
 
   const { mutate: submit, isPending } = useMutation({
-    mutationFn: async (data: GeneralForm) => {
+    mutationFn: async (data: GeneralForm & { force?: boolean }) => {
       const res = await fetch(`/api/ticket/${token}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,13 +143,66 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
       if (!res.ok) throw new Error("Submission failed");
       return res.json();
     },
-    onSuccess: (data) => {
-      if (data?.alreadySubmitted) setAlreadySubmitted(true);
-      else setSubmitted(true);
+    onSuccess: (data, variables) => {
+      if (data?.alreadySubmitted && data.existingRequest) {
+        setPendingData(variables);
+        setExistingRequest(data.existingRequest);
+      } else {
+        setSubmitted(true);
+      }
     },
   });
 
-  if (alreadySubmitted) return <AlreadySubmittedCard />;
+  // ── Duplicate confirmation screen ──────────────────────────────────────────
+  if (existingRequest && pendingData) {
+    const existingTypeLabel = isTwoDay
+      ? existingRequest.ticketType === "day1" ? "Day 1" : existingRequest.ticketType === "day2" ? "Day 2" : "Both Days"
+      : null;
+    const existingSummary = [
+      existingRequest.ticketCount ? `${existingRequest.ticketCount} ticket${existingRequest.ticketCount !== 1 ? "s" : ""}` : null,
+      existingTypeLabel,
+    ].filter(Boolean).join(" · ");
+    const newTypeLabel = isTwoDay
+      ? pendingData.ticketType === "day1" ? "Day 1" : pendingData.ticketType === "day2" ? "Day 2" : "Both Days"
+      : null;
+    const newCount = parseInt(pendingData.ticketCount as any) || 0;
+    const newSummary = [
+      newCount ? `${newCount} ticket${newCount !== 1 ? "s" : ""}` : null,
+      newTypeLabel,
+    ].filter(Boolean).join(" · ");
+    return (
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-1">
+          <p className="text-sm font-semibold text-amber-400">You already have a ticket request on file</p>
+          <p className="text-sm text-muted-foreground">
+            Your existing request: <span className="text-foreground font-medium">{existingSummary || "on file"}</span>
+          </p>
+        </div>
+        <div className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">New additional request</p>
+          <p className="text-sm text-foreground font-medium">{newSummary || `${newCount} ticket${newCount !== 1 ? "s" : ""}`}</p>
+          <p className="text-xs text-muted-foreground">This will be added as a separate order for {pendingData.contactFirstName}.</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => { setExistingRequest(null); setPendingData(null); }}
+            className="flex-1 rounded-xl border border-border/40 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Go Back
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => submit({ ...pendingData, force: true })}
+            className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {isPending ? "Submitting…" : "Yes, Add More Tickets"}
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   if (submitted) {
     const dayLabel = isTwoDay

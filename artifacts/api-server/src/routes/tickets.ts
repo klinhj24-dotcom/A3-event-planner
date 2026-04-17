@@ -181,19 +181,33 @@ router.post("/ticket/:token/submit", async (req, res) => {
         return;
       }
     } else {
-      // Non-recital: block on email alone
-      const [existing] = await db
-        .select({ id: eventTicketRequestsTable.id })
-        .from(eventTicketRequestsTable)
-        .where(and(
-          eq(eventTicketRequestsTable.eventId, event.id),
-          eq(eventTicketRequestsTable.contactEmail, contactEmail.toLowerCase().trim()),
-          ne(eventTicketRequestsTable.status, "cancelled"),
-        ))
-        .limit(1);
-      if (existing) {
-        res.json({ alreadySubmitted: true, eventTitle: event.title });
-        return;
+      // Non-recital: block on email alone (unless force flag bypasses for additional order)
+      const force = req.body?.force === true;
+      if (!force) {
+        const [existing] = await db
+          .select({
+            id: eventTicketRequestsTable.id,
+            ticketCount: eventTicketRequestsTable.ticketCount,
+            ticketType: eventTicketRequestsTable.ticketType,
+          })
+          .from(eventTicketRequestsTable)
+          .where(and(
+            eq(eventTicketRequestsTable.eventId, event.id),
+            eq(eventTicketRequestsTable.contactEmail, contactEmail.toLowerCase().trim()),
+            ne(eventTicketRequestsTable.status, "cancelled"),
+          ))
+          .limit(1);
+        if (existing) {
+          res.json({
+            alreadySubmitted: true,
+            eventTitle: event.title,
+            existingRequest: {
+              ticketCount: existing.ticketCount,
+              ticketType: existing.ticketType,
+            },
+          });
+          return;
+        }
       }
     }
 
