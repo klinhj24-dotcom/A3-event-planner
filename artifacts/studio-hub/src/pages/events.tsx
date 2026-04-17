@@ -1844,7 +1844,7 @@ function EventOverviewSheet({
                             </div>
                           )}
                           {r.charged && (
-                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}` : ""}</div>
                           )}
                         </>
                       ) : (
@@ -1863,7 +1863,7 @@ function EventOverviewSheet({
                             </div>
                           )}
                           {r.charged && (
-                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleDateString()}` : ""}</div>
+                            <div className="text-emerald-500 text-[10px] font-medium mt-0.5">✓ Charged{r.chargedAt ? ` ${new Date(r.chargedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}` : ""}</div>
                           )}
                         </>
                       )}
