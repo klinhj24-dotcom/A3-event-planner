@@ -1433,6 +1433,44 @@ function EventOverviewSheet({
     win.document.close();
   }
 
+  function exportGuestListCsv() {
+    if (!event || guestListEntries.length === 0) return;
+    const isTwoDay = !!event.isTwoDay;
+    const plusOne = event.guestListPolicy === "plus_one" || event.guestListPolicy === "plus_two";
+    const plusTwo = event.guestListPolicy === "plus_two";
+    const esc = (v: any) => {
+      const s = String(v ?? "");
+      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = [
+      ...(isTwoDay ? ["Day"] : []),
+      "Student", "Band", "Contact Name", "Contact Email",
+      ...(plusOne ? ["Guest 1"] : []),
+      ...(plusTwo ? ["Guest 2"] : []),
+      "Submitted", "Student Check-in",
+      ...(plusOne ? ["Guest 1 Check-in"] : []),
+      ...(plusTwo ? ["Guest 2 Check-in"] : []),
+    ];
+    const rows = (guestListEntries as any[]).map(e => [
+      ...(isTwoDay ? [e.eventDay ?? 1] : []),
+      e.studentName ?? "", e.bandName ?? "", e.contactName ?? "", e.contactEmail ?? "",
+      ...(plusOne ? [e.guestOneName ?? ""] : []),
+      ...(plusTwo ? [e.guestTwoName ?? ""] : []),
+      e.submitted ? "Yes" : "No",
+      e.studentCheckedIn ? "Yes" : "No",
+      ...(plusOne ? [e.guestOneCheckedIn ? "Yes" : "No"] : []),
+      ...(plusTwo ? [e.guestTwoCheckedIn ? "Yes" : "No"] : []),
+    ].map(esc).join(","));
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `guest-list-${event.title.replace(/[^a-zA-Z0-9]/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (!event) return null;
 
   const startDate = event.startDate ? new Date(event.startDate) : null;
@@ -1944,12 +1982,20 @@ function EventOverviewSheet({
                   <Plus className="h-3 w-3" /> Add Manual
                 </button>
                 {guestListEntries.length > 0 && (
-                  <button
-                    onClick={() => printGuestList()}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
-                  >
-                    <Printer className="h-3 w-3" /> Print
-                  </button>
+                  <>
+                    <button
+                      onClick={() => printGuestList()}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
+                    >
+                      <Printer className="h-3 w-3" /> Print
+                    </button>
+                    <button
+                      onClick={() => exportGuestListCsv()}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-lg px-2.5 py-1"
+                    >
+                      <Download className="h-3 w-3" /> Export CSV
+                    </button>
+                  </>
                 )}
               </div>
 
