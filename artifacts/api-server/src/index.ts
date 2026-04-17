@@ -169,6 +169,8 @@ async function runMigrations() {
     `ALTER TABLE event_band_invites ADD COLUMN IF NOT EXISTS attendance_status TEXT NOT NULL DEFAULT 'invited'`,
     `ALTER TABLE event_lineup ADD COLUMN IF NOT EXISTS locked_in_start_time TEXT`,
     `ALTER TABLE event_guest_list ADD COLUMN IF NOT EXISTS event_day INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS ticket_cutoff_date TIMESTAMPTZ`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS is_sold_out BOOLEAN NOT NULL DEFAULT FALSE`,
     // ── Staff tasks — manually entered tasks per slot ────────────────────────
     `CREATE TABLE IF NOT EXISTS event_staff_tasks (
       id SERIAL PRIMARY KEY,

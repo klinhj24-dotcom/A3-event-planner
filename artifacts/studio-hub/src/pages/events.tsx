@@ -842,6 +842,8 @@ const eventSchema = z.object({
   ticketPrice: z.coerce.number().min(0).optional(),
   day1Price: z.coerce.number().min(0).optional(),
   day2Price: z.coerce.number().min(0).optional(),
+  ticketCutoffDate: z.string().optional(),
+  isSoldOut: z.boolean().default(false),
   externalTicketSales: z.coerce.number().min(0).optional(),
   revenueSharePercent: z.coerce.number().min(0).max(100).optional(),
   perTicketVenueFee: z.coerce.number().min(0).optional(),
@@ -2363,12 +2365,12 @@ export default function Events() {
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null, revenueSharePercent: 100 }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", isSoldOut: false, hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null, revenueSharePercent: 100 }
   });
 
   const editForm = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null, revenueSharePercent: 100 }
+    defaultValues: { title: "", type: "Recital", status: "planning", isPaid: false, isTwoDay: false, ctaLabel: "", ticketFormType: "none", isSoldOut: false, hasBandLineup: false, hasStaffSchedule: false, hasCallSheet: false, hasPackingList: false, allowGuestList: false, isLeadGenerating: false, hasDebrief: false, guestListPolicy: "students_only", hasPoc: false, pocName: "", pocEmail: "", pocPhone: "", primaryStaffId: null, revenueSharePercent: 100 }
   });
 
   const { data: teamMembers = [] } = useTeamMembers();
@@ -2459,6 +2461,8 @@ export default function Events() {
       pocEmail: ev.pocEmail ?? "",
       pocPhone: ev.pocPhone ?? "",
       primaryStaffId: (ev as any).primaryStaffId ?? null,
+      ticketCutoffDate: (ev as any).ticketCutoffDate ? new Date((ev as any).ticketCutoffDate).toISOString().split("T")[0] : "",
+      isSoldOut: (ev as any).isSoldOut ?? false,
     });
     // Seed ref so auto-fill effect doesn't trigger on load
     prevEditStart.current = ev.startDate ? toDatetimeLocal(new Date(ev.startDate)) : "";
@@ -3008,6 +3012,32 @@ export default function Events() {
                             )
                           )}
                           <p className="text-[10px] text-muted-foreground">A shareable registration link will be created automatically. The website calendar will show a REGISTER button pointing to it.</p>
+                        </div>
+                      )}
+
+                      {/* Pre-sale cutoff & sold out */}
+                      {(form.watch("ticketFormType") === "general" || form.watch("ticketFormType") === "recital") && (
+                        <div className="space-y-3 pt-1 border-t border-border/30">
+                          <FormField control={form.control} name="ticketCutoffDate" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Pre-sale cutoff date <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                              <FormControl>
+                                <Input type="date" className="rounded-xl h-9 text-xs" {...field} value={field.value ?? ""} />
+                              </FormControl>
+                              <p className="text-[10px] text-muted-foreground">After this date the ticket page will say pre-sale has ended — purchase at the venue.</p>
+                            </FormItem>
+                          )} />
+                          <FormField control={form.control} name="isSoldOut" render={({ field }) => (
+                            <FormItem>
+                              <div className="flex items-center gap-2.5">
+                                <button type="button" onClick={() => field.onChange(!field.value)} className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${field.value ? "bg-destructive" : "bg-input"}`}>
+                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${field.value ? "translate-x-4" : "translate-x-0"}`} />
+                                </button>
+                                <FormLabel className="text-xs font-medium cursor-pointer" onClick={() => field.onChange(!field.value)}>Mark as sold out</FormLabel>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground ml-11">Ticket page will show a sold-out message instead of the request form.</p>
+                            </FormItem>
+                          )} />
                         </div>
                       )}
 
@@ -3782,6 +3812,32 @@ export default function Events() {
                       )
                     )}
                     <p className="text-[10px] text-muted-foreground">The website calendar will show a REGISTER button linking to your registration form automatically.</p>
+                  </div>
+                )}
+
+                {/* Pre-sale cutoff & sold out — edit form */}
+                {(editForm.watch("ticketFormType") === "general" || editForm.watch("ticketFormType") === "recital") && (
+                  <div className="space-y-3 pt-1 border-t border-border/30">
+                    <FormField control={editForm.control} name="ticketCutoffDate" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Pre-sale cutoff date <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input type="date" className="rounded-xl h-9 text-xs" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <p className="text-[10px] text-muted-foreground">After this date the ticket page will say pre-sale has ended — purchase at the venue.</p>
+                      </FormItem>
+                    )} />
+                    <FormField control={editForm.control} name="isSoldOut" render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2.5">
+                          <button type="button" onClick={() => field.onChange(!field.value)} className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${field.value ? "bg-destructive" : "bg-input"}`}>
+                            <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${field.value ? "translate-x-4" : "translate-x-0"}`} />
+                          </button>
+                          <FormLabel className="text-xs font-medium cursor-pointer" onClick={() => field.onChange(!field.value)}>Mark as sold out</FormLabel>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground ml-11">Ticket page will show a sold-out message instead of the request form.</p>
+                      </FormItem>
+                    )} />
                   </div>
                 )}
 

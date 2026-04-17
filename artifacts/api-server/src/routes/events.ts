@@ -364,7 +364,7 @@ router.post("/events", async (req, res) => {
     return;
   }
   try {
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee, ticketCutoffDate, isSoldOut } = req.body;
     if (!title || !type || !status) {
       res.status(400).json({ error: "title, type, and status are required" });
       return;
@@ -412,6 +412,8 @@ router.post("/events", async (req, res) => {
         primaryStaffId: primaryStaffId ?? null,
         revenueSharePercent: revenueSharePercent != null ? Number(revenueSharePercent) : 100,
         perTicketVenueFee: perTicketVenueFee != null ? perTicketVenueFee.toString() : null,
+        ticketCutoffDate: ticketCutoffDate ? new Date(ticketCutoffDate) : null,
+        isSoldOut: isSoldOut ?? false,
       })
       .returning();
 
@@ -466,7 +468,7 @@ router.put("/events/:id", async (req, res) => {
   }
   try {
     const id = parseInt(req.params.id);
-    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee, lineupPreBufferMinutes } = req.body;
+    const { title, type, status, description, location, startDate, endDate, googleCalendarEventId, calendarTag, isPaid, cost, revenue, externalTicketSales, notes, signupDeadline, imageUrl, flyerUrl, ticketsUrl, ctaLabel, ticketFormType, ticketPrice, day1Price, day2Price, isTwoDay, day1EndTime, day2StartTime, hasBandLineup, hasStaffSchedule, hasCallSheet, hasPackingList, allowGuestList, guestListPolicy, pocName, pocEmail, pocPhone, isLeadGenerating, hasDebrief, primaryStaffId, revenueSharePercent, perTicketVenueFee, lineupPreBufferMinutes, ticketCutoffDate, isSoldOut } = req.body;
 
     // Fetch existing to get signupToken for internal form URL
     const [existing] = await db.select().from(eventsTable).where(eq(eventsTable.id, id));
@@ -519,6 +521,8 @@ router.put("/events/:id", async (req, res) => {
         revenueSharePercent: revenueSharePercent !== undefined ? Number(revenueSharePercent) : undefined,
         perTicketVenueFee: perTicketVenueFee !== undefined ? (perTicketVenueFee != null ? perTicketVenueFee.toString() : null) : undefined,
         lineupPreBufferMinutes: lineupPreBufferMinutes !== undefined ? Number(lineupPreBufferMinutes) : undefined,
+        ticketCutoffDate: ticketCutoffDate !== undefined ? (ticketCutoffDate ? new Date(ticketCutoffDate) : null) : undefined,
+        isSoldOut: isSoldOut !== undefined ? isSoldOut : undefined,
         updatedAt: new Date(),
       })
       .where(eq(eventsTable.id, id))

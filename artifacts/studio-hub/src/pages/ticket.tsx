@@ -528,13 +528,34 @@ export default function TicketForm() {
 
             {/* Form card */}
             <div className="rounded-2xl border border-border/60 bg-card p-6">
-              <h2 className="font-display font-semibold text-lg mb-5">
-                {event.ticketFormType === "recital" ? "🌼 Recital Registration" : "🎟 Request Tickets"}
-              </h2>
-              {event.ticketFormType === "recital" ? (
-                <RecitalRegistrationForm event={event} token={token} />
+              {event.isSoldOut ? (
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center text-center gap-4 py-6">
+                  <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center text-3xl">🎟</div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">This Event is Sold Out</h2>
+                    <p className="text-muted-foreground mt-2 text-sm">We're sorry — all tickets for {event.title} have been claimed. If you have questions, reach us at <a href="mailto:info@themusicspace.com" className="underline">info@themusicspace.com</a>.</p>
+                  </div>
+                </motion.div>
+              ) : event.ticketCutoffDate && new Date() > new Date(event.ticketCutoffDate) ? (
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center text-center gap-4 py-6">
+                  <div className="h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center text-3xl">🎟</div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Pre-Sale Has Ended</h2>
+                    <p className="text-muted-foreground mt-2 text-sm">Sorry — the deadline for pre-purchasing tickets has passed. Tickets are available for purchase at the venue. See you there!</p>
+                    <p className="text-muted-foreground mt-2 text-sm">Questions? Email us at <a href="mailto:info@themusicspace.com" className="underline">info@themusicspace.com</a>.</p>
+                  </div>
+                </motion.div>
               ) : (
-                <GeneralTicketForm event={event} token={token} />
+                <>
+                  <h2 className="font-display font-semibold text-lg mb-5">
+                    {event.ticketFormType === "recital" ? "🌼 Recital Registration" : "🎟 Request Tickets"}
+                  </h2>
+                  {event.ticketFormType === "recital" ? (
+                    <RecitalRegistrationForm event={event} token={token} />
+                  ) : (
+                    <GeneralTicketForm event={event} token={token} />
+                  )}
+                </>
               )}
             </div>
           </motion.div>

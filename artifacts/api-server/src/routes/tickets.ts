@@ -86,6 +86,8 @@ router.get("/ticket/:token", async (req, res) => {
         isTwoDay: eventsTable.isTwoDay,
         day1EndTime: eventsTable.day1EndTime,
         day2StartTime: eventsTable.day2StartTime,
+        ticketCutoffDate: eventsTable.ticketCutoffDate,
+        isSoldOut: eventsTable.isSoldOut,
       })
       .from(eventsTable)
       .where(eq(eventsTable.signupToken, req.params.token));
@@ -99,6 +101,7 @@ router.get("/ticket/:token", async (req, res) => {
       return;
     }
 
+    // Sold out / cutoff checks are handled on the frontend; API just returns the flags.
     // Return teachers list so the public form can populate the dropdown live
     const teachers = await db
       .select({ id: employeesTable.id, name: employeesTable.name, email: employeesTable.email })
@@ -126,6 +129,14 @@ router.post("/ticket/:token/submit", async (req, res) => {
     }
     if (!event.ticketFormType || event.ticketFormType === "none") {
       res.status(400).json({ error: "This event does not accept ticket requests" });
+      return;
+    }
+    if (event.isSoldOut) {
+      res.status(409).json({ soldOut: true });
+      return;
+    }
+    if (event.ticketCutoffDate && new Date() > new Date(event.ticketCutoffDate)) {
+      res.status(409).json({ pastCutoff: true });
       return;
     }
 
