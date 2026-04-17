@@ -148,6 +148,8 @@ function GeneralTicketForm({ event, token }: { event: any; token: string }) {
         setPendingData(variables);
         setExistingRequest(data.existingRequest);
       } else {
+        setExistingRequest(null);
+        setPendingData(null);
         setSubmitted(true);
       }
     },
