@@ -1088,7 +1088,7 @@ function EditTicketRequestDialog({
   open, ticket, eventId, isTwoDay, onClose, onSaved,
 }: { open: boolean; ticket: any | null; eventId: number; isTwoDay: boolean; onClose: () => void; onSaved: () => void }) {
   const { toast } = useToast();
-  const [form, setForm] = useState({ ticketCount: "", ticketType: "", adminNotes: "" });
+  const [form, setForm] = useState({ ticketCount: "", ticketType: "", adminNotes: "", contactEmail: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1097,6 +1097,7 @@ function EditTicketRequestDialog({
       ticketCount: ticket.ticketCount != null ? String(ticket.ticketCount) : "",
       ticketType: ticket.ticketType ?? "",
       adminNotes: ticket.adminNotes ?? "",
+      contactEmail: ticket.contactEmail ?? "",
     });
   }, [open, ticket]);
 
@@ -1118,6 +1119,7 @@ function EditTicketRequestDialog({
           ticketCount: form.ticketCount ? count : null,
           ticketType: isTwoDay ? (form.ticketType || null) : null,
           adminNotes: form.adminNotes,
+          contactEmail: form.contactEmail.trim() || null,
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
@@ -1152,7 +1154,7 @@ function EditTicketRequestDialog({
         <DialogHeader>
           <DialogTitle>Edit Ticket Info</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            {ticket?.contactFirstName} {ticket?.contactLastName} · {ticket?.contactEmail}
+            {ticket?.contactFirstName} {ticket?.contactLastName}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
@@ -1161,6 +1163,15 @@ function EditTicketRequestDialog({
               This ticket has already been charged. Saving will automatically resend the confirmation email to the parent with the updated details.
             </div>
           )}
+          <div>
+            <Label className="text-xs mb-1.5 block">Contact Email</Label>
+            <Input
+              type="email"
+              value={form.contactEmail}
+              onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))}
+              placeholder="parent@example.com"
+            />
+          </div>
           <div>
             <Label className="text-xs mb-1.5 block">Number of Tickets</Label>
             <Input

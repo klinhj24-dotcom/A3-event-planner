@@ -552,7 +552,7 @@ router.put("/events/:id/ticket-requests/:requestId", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const requestId = parseInt(req.params.requestId);
-    const { studentFirstName, studentLastName, instrument, recitalSong, teacher, specialConsiderations, adminNotes, ticketCount, ticketType } = req.body;
+    const { studentFirstName, studentLastName, instrument, recitalSong, teacher, specialConsiderations, adminNotes, ticketCount, ticketType, contactEmail } = req.body;
 
     const [before] = await db.select().from(eventTicketRequestsTable).where(eq(eventTicketRequestsTable.id, requestId));
     if (!before) { res.status(404).json({ error: "Not found" }); return; }
@@ -570,6 +570,7 @@ router.put("/events/:id/ticket-requests/:requestId", async (req, res) => {
         ...(adminNotes !== undefined ? { adminNotes: adminNotes || null } : {}),
         ...(ticketCount !== undefined ? { ticketCount: ticketCount ? parseInt(ticketCount) : null } : {}),
         ...(ticketType !== undefined ? { ticketType: ticketType || null } : {}),
+        ...(contactEmail !== undefined ? { contactEmail: (contactEmail || "").trim() || null } : {}),
       })
       .where(eq(eventTicketRequestsTable.id, requestId))
       .returning();
