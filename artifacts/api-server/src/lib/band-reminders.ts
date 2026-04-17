@@ -1,4 +1,4 @@
-import { db, eventBandInvitesTable, eventLineupTable, bandsTable, eventsTable, usersTable, eventGuestListTable } from "@workspace/db";
+import { db, eventBandInvitesTable, eventLineupTable, bandsTable, eventsTable, usersTable, eventGuestListTable, bandContactsTable } from "@workspace/db";
 import { and, eq, gte, lte, asc } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
@@ -121,11 +121,13 @@ export async function runBandReminders() {
         event: eventsTable,
         slot: eventLineupTable,
         bandName: bandsTable.name,
+        contactRelationship: bandContactsTable.relationship,
       })
       .from(eventBandInvitesTable)
       .innerJoin(eventsTable, eq(eventBandInvitesTable.eventId, eventsTable.id))
       .innerJoin(eventLineupTable, eq(eventBandInvitesTable.lineupSlotId, eventLineupTable.id))
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
+      .leftJoin(bandContactsTable, eq(eventBandInvitesTable.contactId, bandContactsTable.id))
       .where(
         and(
           eq(eventBandInvitesTable.status, "confirmed"),
@@ -170,7 +172,7 @@ export async function runBandReminders() {
 
     const sentSlots = new Set<number>();
 
-    for (const { invite, event, slot, bandName } of candidates) {
+    for (const { invite, event, slot, bandName, contactRelationship } of candidates) {
       if (!invite.contactEmail) continue;
 
       const fmt12 = (t: string) => {
@@ -218,7 +220,11 @@ export async function runBandReminders() {
         guestListSection = `\n\nTICKETS\nIf additional tickets are needed for family and friends, use this link:\n${event.ticketsUrl}`;
       }
 
-      const emailBody = `Hi ${invite.contactName ?? "there"},
+      // Use the contact's name unless they are the student themselves ("Self") — in that case use a generic greeting
+      const isSelfContact = contactRelationship?.toLowerCase() === "self";
+      const greeting = !isSelfContact && invite.contactName ? invite.contactName : "there";
+
+      const emailBody = `Hi ${greeting},
 
 This is a 3-day reminder that ${bandName ?? "your band"} is confirmed to perform at ${event.title}!
 
@@ -234,7 +240,7 @@ See you there!
 
 The Music Space`;
 
-      const html = buildHtmlEmail({ recipientName: invite.contactName ?? "there", body: emailBody });
+      const html = buildHtmlEmail({ recipientName: greeting, body: emailBody });
 
       try {
         const raw = makeHtmlEmail({
