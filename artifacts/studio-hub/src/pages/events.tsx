@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type CSSProperties } from "react";
+import React, { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSearch } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { useListEvents, useListEmployees } from "@workspace/api-client-react";
@@ -1341,6 +1341,44 @@ function EventOverviewSheet({
     onError: (e: any) => toast({ title: e.message || "Failed to send guest list links", variant: "destructive" }),
   });
 
+  function exportTicketsCsv() {
+    if (!event || !ticketRequests || ticketRequests.length === 0) return;
+    const isRecitalSection = event.ticketFormType === "recital";
+    const headers = isRecitalSection
+      ? ["First Name", "Last Name", "Email", "Student", "Instrument", "Song", "Teacher", "Status", "Charged"]
+      : ["First Name", "Last Name", "Email", "Tickets", "Ticket Type", "Status", "Charged", "Amount"];
+    const esc = (v: any) => {
+      const s = String(v ?? "");
+      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = (ticketRequests as any[]).map(r => {
+      if (isRecitalSection) {
+        return [r.contactFirstName, r.contactLastName, r.contactEmail,
+          `${r.studentFirstName ?? ""} ${r.studentLastName ?? ""}`.trim(),
+          r.instrument ?? "", r.recitalSong ?? "", r.teacher ?? "",
+          r.status, r.charged ? "Yes" : "No"].map(esc).join(",");
+      }
+      const resolvedPrice = (event as any).isTwoDay && r.ticketType
+        ? r.ticketType === "day1" ? (event as any).day1Price
+        : r.ticketType === "day2" ? (event as any).day2Price
+        : event.ticketPrice : event.ticketPrice;
+      const price = resolvedPrice ? parseFloat(resolvedPrice) : (event.ticketPrice ? parseFloat(event.ticketPrice) : 0);
+      const count = r.ticketCount ?? 0;
+      const amount = price && count ? `$${(price * count).toFixed(2)}` : "";
+      const ticketTypeLabel = r.ticketType === "day1" ? "Day 1" : r.ticketType === "day2" ? "Day 2" : r.ticketType === "both" ? "Both Days" : "";
+      return [r.contactFirstName, r.contactLastName, r.contactEmail,
+        count, ticketTypeLabel, r.status, r.charged ? "Yes" : "No", amount].map(esc).join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tickets-${event.title.replace(/[^a-zA-Z0-9]/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function printGuestList() {
     if (!event || guestListEntries.length === 0) return;
     const eventTitle = event.title;
@@ -1692,17 +1730,26 @@ function EventOverviewSheet({
             }, 0);
             return (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                <Ticket className="h-3.5 w-3.5" /> {isRecitalSection ? "Recital Signups" : "Ticket Requests"}
-                <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
-                {sectionUnitPrice != null && (
-                  <span className="text-muted-foreground/60 text-[10px]">${sectionUnitPrice.toFixed(2)}/{isRecitalSection ? "performer" : "ticket"}</span>
-                )}
-                <span className="text-emerald-500/80 text-[10px] font-medium">
-                  {(ticketRequests as any[]).filter(r => r.charged).length}/{ticketRequests.length} charged
-                  {chargedDollarTotal > 0 && ` · $${chargedDollarTotal.toFixed(2)}`}
-                </span>
-              </h4>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  <Ticket className="h-3.5 w-3.5" /> {isRecitalSection ? "Recital Signups" : "Ticket Requests"}
+                  <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold">{ticketRequests.length}</span>
+                  {sectionUnitPrice != null && (
+                    <span className="text-muted-foreground/60 text-[10px]">${sectionUnitPrice.toFixed(2)}/{isRecitalSection ? "performer" : "ticket"}</span>
+                  )}
+                  <span className="text-emerald-500/80 text-[10px] font-medium">
+                    {(ticketRequests as any[]).filter(r => r.charged).length}/{ticketRequests.length} charged
+                    {chargedDollarTotal > 0 && ` · $${chargedDollarTotal.toFixed(2)}`}
+                  </span>
+                </h4>
+                <button
+                  onClick={() => exportTicketsCsv()}
+                  className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded-md px-2 py-0.5"
+                  title="Export ticket list as CSV"
+                >
+                  <Download className="h-3 w-3" /> Export CSV
+                </button>
+              </div>
               {/* Table header */}
               <div className="grid grid-cols-[44px_1fr_auto] gap-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-2 pb-1 border-b border-border/20">
                 <span className="text-center">Chrgd</span>
@@ -1936,12 +1983,20 @@ function EventOverviewSheet({
               {/* Entries list */}
               {guestListEntries.length > 0 && (
                 <div className="space-y-1.5 max-h-80 overflow-y-auto">
-                  {guestListEntries.map((entry: any) => {
+                  {guestListEntries.map((entry: any, idx: number) => {
                     const domain = window.location.origin;
                     const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
                     const guestLink = `${domain}${base}/guest-list/${entry.token}`;
+                    const prevEntry = guestListEntries[idx - 1] as any;
+                    const showDayHeader = event.isTwoDay && (idx === 0 || (entry.eventDay ?? 1) !== (prevEntry?.eventDay ?? 1));
                     return (
-                      <div key={entry.id} className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${entry.submitted ? "bg-emerald-500/5 border-emerald-500/15" : "bg-muted/30 border-border/40"}`}>
+                      <React.Fragment key={entry.id}>
+                      {showDayHeader && (
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 pt-1 pb-0.5 border-b border-border/20">
+                          Day {entry.eventDay ?? 1}
+                        </div>
+                      )}
+                      <div className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${entry.submitted ? "bg-emerald-500/5 border-emerald-500/15" : "bg-muted/30 border-border/40"}`}>
                         <div className="flex items-start gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-foreground flex items-center gap-1.5">
@@ -1989,6 +2044,7 @@ function EventOverviewSheet({
                           )}
                         </div>
                       </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>

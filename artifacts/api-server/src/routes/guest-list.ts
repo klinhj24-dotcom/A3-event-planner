@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { db, eventsTable, eventGuestListTable, eventLineupTable, bandMembersTable, bandContactsTable, bandsTable, usersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 
 const router = Router();
@@ -90,7 +90,11 @@ router.get("/events/:eventId/guest-list", async (req, res) => {
       .select()
       .from(eventGuestListTable)
       .where(eq(eventGuestListTable.eventId, eventId))
-      .orderBy(eventGuestListTable.createdAt);
+      .orderBy(
+        asc(eventGuestListTable.eventDay),
+        sql`lower(${eventGuestListTable.bandName}) ASC NULLS LAST`,
+        sql`lower(${eventGuestListTable.studentName}) ASC`,
+      );
     res.json(entries);
   } catch (err) {
     console.error("listGuestList error:", err);
@@ -114,6 +118,7 @@ router.post("/events/:eventId/guest-list/generate", async (req, res) => {
         slotId: eventLineupTable.id,
         bandId: eventLineupTable.bandId,
         bandName: bandsTable.name,
+        eventDay: eventLineupTable.eventDay,
       })
       .from(eventLineupTable)
       .leftJoin(bandsTable, eq(eventLineupTable.bandId, bandsTable.id))
@@ -155,6 +160,7 @@ router.post("/events/:eventId/guest-list/generate", async (req, res) => {
           bandMemberId: member.id,
           studentName: member.name,
           bandName: slot.bandName ?? null,
+          eventDay: slot.eventDay ?? 1,
           token: randomUUID(),
           contactEmail: primary?.email ?? null,
           contactName: primary ? `${primary.name}` : null,

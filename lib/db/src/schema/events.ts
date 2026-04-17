@@ -155,6 +155,8 @@ export const eventGuestListTable = pgTable("event_guest_list", {
   studentCheckedIn: boolean("student_checked_in").default(false),
   guestOneCheckedIn: boolean("guest_one_checked_in").default(false),
   guestTwoCheckedIn: boolean("guest_two_checked_in").default(false),
+  // Which event day this performer is on (1 = Day 1, 2 = Day 2)
+  eventDay: integer("event_day").default(1),
   // Misc
   isManual: boolean("is_manual").default(false),
   notes: text("notes"),
