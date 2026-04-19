@@ -1341,20 +1341,13 @@ export default function Bands() {
                               <Button
                                 size="sm" variant="ghost"
                                 className={`h-8 w-8 p-0 transition-colors ${copiedBand === band.id ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}
-                                onClick={async () => {
-                                  // Use already-loaded detail data if available, otherwise fetch
-                                  let source = isOpen && expandedBand?.id === band.id ? expandedBand : null;
-                                  if (!source) {
-                                    try {
-                                      source = await fetch(`/api/bands/${band.id}`, { credentials: "include" }).then(r => r.json());
-                                    } catch { return; }
-                                  }
-                                  const emails = (source?.membersWithContacts ?? [])
-                                    .flatMap((m: any) => m.contacts.map((c: any) => c.email).filter(Boolean));
+                                onClick={() => {
+                                  // Emails are included in the list response — no async fetch needed
+                                  const emails: string[] = (band as any).contactEmails ?? [];
                                   if (emails.length === 0) return;
                                   const text = emails.join(", ");
                                   try {
-                                    await navigator.clipboard.writeText(text);
+                                    navigator.clipboard.writeText(text);
                                   } catch {
                                     // Fallback for browsers that block Clipboard API
                                     const ta = document.createElement("textarea");

@@ -26,32 +26,42 @@ router.get("/bands", async (req, res) => {
     const bandIds = bands.map(b => b.id);
     const leaderIds = bands.map(b => b.leaderEmployeeId).filter(Boolean) as number[];
 
-    const [memberCounts, contactCounts, leaders] = await Promise.all([
+    const [memberCounts, contactRows, leaders] = await Promise.all([
       db.select({
         bandId: bandMembersTable.bandId,
         count: sql<number>`COUNT(*)::int`.as("count"),
       }).from(bandMembersTable).where(inArray(bandMembersTable.bandId, bandIds)).groupBy(bandMembersTable.bandId),
       db.select({
         bandId: bandContactsTable.bandId,
-        total: sql<number>`COUNT(*)::int`.as("total"),
-        withEmail: sql<number>`COUNT(*) FILTER (WHERE email IS NOT NULL)::int`.as("with_email"),
-      }).from(bandContactsTable).where(inArray(bandContactsTable.bandId, bandIds)).groupBy(bandContactsTable.bandId),
+        email: bandContactsTable.email,
+      }).from(bandContactsTable).where(inArray(bandContactsTable.bandId, bandIds)),
       leaderIds.length
         ? db.select({ id: employeesTable.id, name: employeesTable.name }).from(employeesTable).where(inArray(employeesTable.id, leaderIds))
         : Promise.resolve([]),
     ]);
 
     const memberMap = Object.fromEntries(memberCounts.map(m => [m.bandId, m.count]));
-    const contactMap = Object.fromEntries(contactCounts.map(c => [c.bandId, c]));
     const leaderMap = Object.fromEntries(leaders.map(l => [l.id, l.name]));
 
-    res.json(bands.map(b => ({
-      ...b,
-      leaderName: b.leaderEmployeeId ? (leaderMap[b.leaderEmployeeId] ?? null) : null,
-      memberCount: memberMap[b.id] ?? 0,
-      contactEmailCount: contactMap[b.id]?.withEmail ?? 0,
-      contactTotalCount: contactMap[b.id]?.total ?? 0,
-    })));
+    // Group contact emails per band
+    const emailsByBand: Record<number, string[]> = {};
+    for (const row of contactRows) {
+      if (!emailsByBand[row.bandId]) emailsByBand[row.bandId] = [];
+      if (row.email) emailsByBand[row.bandId].push(row.email);
+    }
+
+    res.json(bands.map(b => {
+      const emails = emailsByBand[b.id] ?? [];
+      const allContacts = contactRows.filter(r => r.bandId === b.id);
+      return {
+        ...b,
+        leaderName: b.leaderEmployeeId ? (leaderMap[b.leaderEmployeeId] ?? null) : null,
+        memberCount: memberMap[b.id] ?? 0,
+        contactEmailCount: emails.length,
+        contactTotalCount: allContacts.length,
+        contactEmails: emails,
+      };
+    }));
   } catch (err) {
     console.error("listBands error:", err);
     res.status(500).json({ error: "Internal server error" });
