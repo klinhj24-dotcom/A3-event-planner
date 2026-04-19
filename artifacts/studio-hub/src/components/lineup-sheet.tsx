@@ -645,7 +645,20 @@ function SlotRow({
                 }
               }
               if (emails.length === 0) return;
-              navigator.clipboard.writeText(emails.join(", "));
+              const text = emails.join(", ");
+              try {
+                await navigator.clipboard.writeText(text);
+              } catch {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+              }
               setCopiedEmail(true);
               setTimeout(() => setCopiedEmail(false), 2000);
             }}
