@@ -10,6 +10,7 @@ import { startBandReminderCron } from "./lib/band-reminders";
 import { startDebriefReminderCron } from "./lib/debrief-reminders";
 import { startOpenMicCron } from "./lib/open-mic-cron";
 import { startEventReminderCron } from "./lib/event-reminders";
+import { startAutoEmailCalSyncCron } from "./lib/auto-email-cal-sync";
 
 const rawPort = process.env["PORT"];
 
@@ -459,5 +460,6 @@ runMigrations().then(() => runOneTimeFixes()).then(() => initDb()).then(async ()
     startDebriefReminderCron();
     startOpenMicCron();
     startEventReminderCron();
+    startAutoEmailCalSyncCron();
   });
 });
