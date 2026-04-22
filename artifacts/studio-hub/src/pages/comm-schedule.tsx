@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2, Search, CalendarDays, Radio, Mail, Instagram, Printer, Globe,
   Plus, Pencil, Trash2, EyeOff, Eye, Receipt, ChevronDown, CheckCircle2,
-  Clock, AlertTriangle, LayoutGrid
+  Clock, AlertTriangle, LayoutGrid, Zap, CheckCheck, Users, UserCheck,
 } from "lucide-react";
 import {
   useCommRules, useCreateCommRule, useUpdateCommRule, useDeleteCommRule,
@@ -313,6 +313,16 @@ export default function CommSchedule() {
     enabled: tab === "board",
   });
 
+  const { data: autoEmails = [], isLoading: autoLoading } = useQuery<any[]>({
+    queryKey: ["/api/comm-schedule/auto-emails"],
+    queryFn: async () => {
+      const res = await fetch("/api/comm-schedule/auto-emails", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: tab === "auto",
+  });
+
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<CommRule | undefined>(undefined);
   const [newRuleEventType, setNewRuleEventType] = useState<string | undefined>(undefined);
@@ -431,6 +441,9 @@ export default function CommSchedule() {
             </TabsTrigger>
             <TabsTrigger value="board" className="rounded-lg text-sm">
               <LayoutGrid className="h-3.5 w-3.5 mr-1.5" /> Task Board
+            </TabsTrigger>
+            <TabsTrigger value="auto" className="rounded-lg text-sm">
+              <Zap className="h-3.5 w-3.5 mr-1.5" /> Auto Emails
             </TabsTrigger>
           </TabsList>
 
@@ -714,6 +727,116 @@ export default function CommSchedule() {
                   ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* ── Auto Emails tab ── */}
+          <TabsContent value="auto" className="mt-5 space-y-4">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-3">
+              <Zap className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                These emails are sent <span className="text-foreground font-medium">automatically</span> by the system — no action needed. This view shows what has gone out and what's scheduled to go out in the next 60 days.
+              </p>
+            </div>
+
+            {autoLoading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : autoEmails.length === 0 ? (
+              <div className="text-center py-16 bg-muted/20 rounded-2xl border border-border/50 border-dashed">
+                <Zap className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-muted-foreground">No automated emails scheduled in this window.</p>
+              </div>
+            ) : (() => {
+              const TYPE_META: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+                band_reminder: { label: "Band 3-Day Reminder", cls: "bg-teal-500/10 text-teal-400 border-teal-500/20", icon: <UserCheck className="h-3 w-3" /> },
+                staff_week:    { label: "Staff 1-Week Reminder", cls: "bg-purple-500/10 text-purple-400 border-purple-500/20", icon: <Users className="h-3 w-3" /> },
+                staff_day:     { label: "Staff Day-Before Reminder", cls: "bg-purple-500/10 text-purple-400 border-purple-500/20", icon: <Users className="h-3 w-3" /> },
+                ticket_week:   { label: "Ticket 7-Day Reminder", cls: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: <Mail className="h-3 w-3" /> },
+                ticket_day:    { label: "Ticket Day-Before Reminder", cls: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: <Mail className="h-3 w-3" /> },
+                signup_week:   { label: "Signup 7-Day Reminder", cls: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: <Mail className="h-3 w-3" /> },
+                signup_day:    { label: "Signup Day-Before Reminder", cls: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: <Mail className="h-3 w-3" /> },
+                debrief:       { label: "Debrief Nudge", cls: "bg-amber-500/10 text-amber-400 border-amber-500/20", icon: <CheckCheck className="h-3 w-3" /> },
+              };
+
+              const now = new Date();
+              const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+              function dayLabel(dateStr: string) {
+                const d = new Date(dateStr);
+                const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                const diffDays = Math.round((dayStart.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+                if (diffDays < -1) return format(d, "EEEE, MMMM d");
+                if (diffDays === -1) return "Yesterday";
+                if (diffDays === 0) return "Today";
+                if (diffDays === 1) return "Tomorrow";
+                return format(d, "EEEE, MMMM d");
+              }
+
+              // Group by calendar date (YYYY-MM-DD)
+              const grouped: Record<string, any[]> = {};
+              for (const e of autoEmails) {
+                const key = e.scheduledDate.slice(0, 10);
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(e);
+              }
+
+              return (
+                <div className="space-y-4">
+                  {Object.entries(grouped).map(([dateKey, items]) => {
+                    const isPast = dateKey < startOfToday.toISOString().slice(0, 10);
+                    const isToday = dateKey === startOfToday.toISOString().slice(0, 10);
+                    return (
+                      <div key={dateKey}>
+                        <div className={`flex items-center gap-2 mb-2 ${isPast ? "opacity-50" : ""}`}>
+                          <span className={`text-xs font-semibold tracking-wide uppercase ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                            {dayLabel(dateKey)}
+                          </span>
+                          <div className="flex-1 h-px bg-border/40" />
+                        </div>
+                        <div className={`bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm divide-y divide-border/30 ${isPast ? "opacity-60" : ""}`}>
+                          {items.map((entry: any) => {
+                            const meta = TYPE_META[entry.type] ?? { label: entry.label, cls: "bg-muted/40 text-muted-foreground border-border/50", icon: <Zap className="h-3 w-3" /> };
+                            return (
+                              <div key={entry.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors">
+                                {entry.sent ? (
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                ) : (
+                                  <Clock className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge variant="outline" className={`text-[10px] rounded-lg gap-1 ${meta.cls}`}>
+                                      {meta.icon}
+                                      {meta.label}
+                                    </Badge>
+                                    <span className="text-[11px] text-muted-foreground/60 italic">auto</span>
+                                  </div>
+                                  <p className="text-sm font-medium text-foreground/90 truncate mt-0.5">{entry.eventTitle}</p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {entry.recipient}
+                                    {entry.total != null && entry.pending != null && !entry.sent && (
+                                      <span className="ml-1 text-amber-400">· {entry.pending} pending</span>
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  {entry.sent ? (
+                                    <Badge variant="outline" className="text-[10px] rounded-lg bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Sent</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[10px] rounded-lg bg-muted/40 text-muted-foreground border-border/50">Scheduled</Badge>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </div>
