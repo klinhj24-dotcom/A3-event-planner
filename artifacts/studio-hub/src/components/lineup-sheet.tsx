@@ -2000,7 +2000,9 @@ export function LineupSheet({ event, open, onClose }: {
                         </ul>
                         {/* Per-act time preview */}
                         <div className="rounded-lg border border-border/40 overflow-hidden">
-                          <div className="bg-muted/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Times in emails</div>
+                          <div className="bg-muted/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                            {event?.isTwoDay ? "Day · Act · Time in email (ET)" : "Act · Time in email (ET)"}
+                          </div>
                           <div className="divide-y divide-border/30">
                             {allActSlots.filter(isReadyToLockIn).map(s => {
                               const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
@@ -2011,9 +2013,15 @@ export function LineupSheet({ event, open, onClose }: {
                                 : s.staffNote ? `Estimated: ${s.staffNote}` : null;
                               const name = s.bandName ?? s.otherGroupName ?? s.label ?? "Unnamed";
                               const isOther = s.otherGroupId && !s.bandId;
+                              const day = s.eventDay ?? 1;
                               return (
                                 <div key={s.id} className="flex items-center justify-between px-3 py-1.5 gap-3">
                                   <div className="flex items-center gap-1.5 min-w-0">
+                                    {event?.isTwoDay && (
+                                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0 ${day === 2 ? "bg-orange-500/15 text-orange-400 border-orange-500/20" : "bg-sky-500/15 text-sky-400 border-sky-500/20"}`}>
+                                        Day {day}
+                                      </span>
+                                    )}
                                     <span className="text-xs text-foreground font-medium truncate">{name}</span>
                                     {isOther && <span className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded bg-violet-500/10 text-violet-400 shrink-0">Ext</span>}
                                   </div>
