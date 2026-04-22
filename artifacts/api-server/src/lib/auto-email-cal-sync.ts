@@ -282,23 +282,11 @@ function buildCalDescription(entry: AutoEmailEntry): string {
   return lines.join("\n");
 }
 
-// Returns a Google Calendar dateTime object for 9:00 AM ET on the given date.
-// Emails go out whenever the cron fires after the trigger date; 9 AM ET is a
-// conventional "scheduled send time" shown on the calendar.
-function calStartET(date: Date) {
-  const dateStr = new Intl.DateTimeFormat("en-CA", {
+function calDateStr(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/New_York",
     year: "numeric", month: "2-digit", day: "2-digit",
   }).format(date);
-  return { dateTime: `${dateStr}T09:00:00`, timeZone: "America/New_York" };
-}
-
-function calEndET(date: Date) {
-  const dateStr = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(date);
-  return { dateTime: `${dateStr}T09:30:00`, timeZone: "America/New_York" };
 }
 
 export async function syncAutoEmailsToCalendar(): Promise<void> {
@@ -351,24 +339,25 @@ export async function syncAutoEmailsToCalendar(): Promise<void> {
   let updated = 0;
 
   for (const entry of entries) {
+    const dateStr = calDateStr(entry.scheduledDate);
     const summary = buildCalSummary(entry);
     const description = buildCalDescription(entry);
     const colorId = colorIdForType(entry.type);
-    const start = calStartET(entry.scheduledDate);
-    const end = calEndET(entry.scheduledDate);
+    const allDayStart = { date: dateStr };
+    const allDayEnd = { date: dateStr };
     const rec = existing.get(entry.id);
 
     if (!rec) {
-      // Create new timed calendar event
+      // Create new all-day calendar event
       try {
         const result = await calendar.events.insert({
           calendarId: TMS_COMMS_CALENDAR_ID,
-          requestBody: { summary, description, colorId, start, end },
+          requestBody: { summary, description, colorId, start: allDayStart, end: allDayEnd },
         });
         if (result.data.id) {
           await db.execute(sql`
             INSERT INTO auto_email_cal_events (auto_email_id, calendar_event_id, was_sent, is_timed)
-            VALUES (${entry.id}, ${result.data.id}, ${entry.sent}, true)
+            VALUES (${entry.id}, ${result.data.id}, ${entry.sent}, false)
             ON CONFLICT (auto_email_id) DO NOTHING
           `);
           created++;
@@ -376,17 +365,17 @@ export async function syncAutoEmailsToCalendar(): Promise<void> {
       } catch (err: any) {
         console.warn(`[auto-email-cal] Failed to create event for ${entry.id}:`, err?.message ?? err);
       }
-    } else if (!rec.isTimed || rec.wasSent !== entry.sent) {
-      // Either still an old all-day event (upgrade it) or sent status changed — patch both
+    } else if (rec.isTimed || rec.wasSent !== entry.sent) {
+      // Patch if: still a timed event (convert back to all-day) OR sent status changed
       try {
         await calendar.events.patch({
           calendarId: TMS_COMMS_CALENDAR_ID,
           eventId: rec.calEventId,
-          requestBody: { summary, description, start, end },
+          requestBody: { summary, description, start: allDayStart, end: allDayEnd },
         });
         await db.execute(sql`
           UPDATE auto_email_cal_events
-          SET was_sent = ${entry.sent}, is_timed = true
+          SET was_sent = ${entry.sent}, is_timed = false
           WHERE auto_email_id = ${entry.id}
         `);
         updated++;

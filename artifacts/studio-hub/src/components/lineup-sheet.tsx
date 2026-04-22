@@ -1907,9 +1907,11 @@ export function LineupSheet({ event, open, onClose }: {
   const invitedCount = actSlots.filter(s => s.inviteStatus !== "not_sent").length;
   const confirmedCount = actSlots.filter(s => s.inviteStatus === "confirmed").length;
   const uninvitedCount = actSlots.filter(s => s.inviteStatus === "not_sent").length;
-  // Count all confirmed acts that haven't been locked in — includes student bands + other groups
   const allActSlots = slots.filter(s => s.type === "act");
-  const unlockedConfirmedCount = allActSlots.filter(s => s.confirmed && !s.confirmationSent).length;
+  // External acts (otherGroupId) are confirmed by virtue of being in the lineup — no invite flow needed
+  const isReadyToLockIn = (s: LineupSlot) =>
+    !s.confirmationSent && (s.confirmed || (!!s.otherGroupId && !s.bandId && !!s.otherGroupContactEmail));
+  const unlockedConfirmedCount = allActSlots.filter(isReadyToLockIn).length;
 
   function submitAddSlot() {
     addSlot({
@@ -2000,7 +2002,7 @@ export function LineupSheet({ event, open, onClose }: {
                         <div className="rounded-lg border border-border/40 overflow-hidden">
                           <div className="bg-muted/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Times in emails</div>
                           <div className="divide-y divide-border/30">
-                            {allActSlots.filter(s => s.confirmed && !s.confirmationSent).map(s => {
+                            {allActSlots.filter(isReadyToLockIn).map(s => {
                               const fmt12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
                               const slotIdx = slots.indexOf(s);
                               const resolvedTime = s.startTime || (slotIdx >= 0 && calcTimes[slotIdx] ? calcTimes[slotIdx] : null);

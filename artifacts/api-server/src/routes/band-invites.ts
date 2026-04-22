@@ -847,8 +847,8 @@ router.post("/events/:eventId/lineup/send-confirmation-bulk", async (req, res) =
 
     // Student bands: must be confirmed via invite flow
     const toSendBands = slots.filter(s => s.bandId && !s.confirmationSent && (s.inviteStatus === "confirmed" || s.confirmed));
-    // Other groups: confirmed=true and has a contact email
-    const toSendOther = slots.filter(s => s.otherGroupId && !s.bandId && !s.confirmationSent && s.confirmed && s.otherGroupContactEmail);
+    // Other groups: confirmed by virtue of being in the lineup — no invite flow needed, just needs contact email
+    const toSendOther = slots.filter(s => s.otherGroupId && !s.bandId && !s.confirmationSent && s.otherGroupContactEmail);
 
     const toSend = [...toSendBands, ...toSendOther];
     const skipped = slots.filter(s => s.confirmationSent).length;
