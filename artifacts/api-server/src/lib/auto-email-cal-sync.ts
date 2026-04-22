@@ -4,6 +4,11 @@ import { addDays, subDays } from "date-fns";
 import { google } from "googleapis";
 import { createAuthedClient } from "./google";
 
+async function getSenderUser() {
+  const users = await db.select().from(usersTable);
+  return users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
+}
+
 const TMS_COMMS_CALENDAR_ID = "c_baf2effccc257a0302e1f91b4cda68d646e2b8945ec402036d03d687bca00df8@group.calendar.google.com";
 
 export type AutoEmailEntry = {
@@ -276,11 +281,22 @@ function buildCalDescription(entry: AutoEmailEntry): string {
 }
 
 export async function syncAutoEmailsToCalendar(): Promise<void> {
-  const auth = await createAuthedClient().catch(() => null);
-  if (!auth) {
-    console.log("[auto-email-cal] No auth available — skipping calendar sync");
+  const sender = await getSenderUser();
+  if (!sender) {
+    console.log("[auto-email-cal] No Google-authenticated user — skipping calendar sync");
     return;
   }
+
+  const auth = createAuthedClient(sender.googleAccessToken!, sender.googleRefreshToken!, sender.googleTokenExpiry);
+  auth.on("tokens", async (tokens) => {
+    if (tokens.access_token) {
+      await db.update(usersTable).set({
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token ?? sender.googleRefreshToken,
+        googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      }).where(eq(usersTable.id, sender.id));
+    }
+  });
 
   const calendar = google.calendar({ version: "v3", auth });
   const now = new Date();
