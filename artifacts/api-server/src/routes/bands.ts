@@ -540,8 +540,15 @@ router.delete("/events/:id/lineup/:slotId", async (req, res) => {
 
 // ── Schedule Conflict Detection ───────────────────────────────────────────────
 
+function toAmPm(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return hhmm;
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
 async function analyzeConflict(conflictNote: string, assignedTime: string): Promise<{ conflict: boolean; reason: string }> {
   try {
+    const assignedTimeAmPm = toAmPm(assignedTime);
     const response = await openai.chat.completions.create({
       model: "gpt-5-mini",
       max_completion_tokens: 200,
@@ -550,11 +557,12 @@ async function analyzeConflict(conflictNote: string, assignedTime: string): Prom
           role: "system",
           content: `You analyze schedule conflict notes and determine if a person can make their assigned performance time.
 Return ONLY valid JSON in this exact format: {"conflict": true/false, "reason": "brief explanation"}
-Be concise. If no time constraint is mentioned, return conflict: false.`,
+Be concise. If no time constraint is mentioned, return conflict: false.
+IMPORTANT: Always write times in 12-hour AM/PM format (e.g. "2:30 PM", "11:00 AM"). Never use 24-hour/military time.`,
         },
         {
           role: "user",
-          content: `Assigned performance time: ${assignedTime}\nSchedule conflict note: "${conflictNote}"\n\nIs there a conflict?`,
+          content: `Assigned performance time: ${assignedTimeAmPm}\nSchedule conflict note: "${conflictNote}"\n\nIs there a conflict?`,
         },
       ],
     });
