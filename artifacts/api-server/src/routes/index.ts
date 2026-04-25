@@ -23,6 +23,7 @@ import eventStaffingRouter from "./event-staffing";
 import ticketsRouter from "./tickets";
 import guestListRouter from "./guest-list";
 import openMicRouter from "./open-mic";
+import cronRouter from "./cron";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(eventStaffingRouter);
 router.use(ticketsRouter);
 router.use(guestListRouter);
 router.use(openMicRouter);
+router.use(cronRouter);
 
 export default router;

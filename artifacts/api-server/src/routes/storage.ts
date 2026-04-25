@@ -1,6 +1,10 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+  StorageNotConfiguredError,
+} from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
 
 // Simple manual validation — avoids zod dependency
@@ -36,6 +40,10 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
 
     res.json({ uploadURL, objectPath, metadata: { name, size, contentType } });
   } catch (error) {
+    if (error instanceof StorageNotConfiguredError) {
+      res.status(501).json({ error: error.message });
+      return;
+    }
     console.error("Error generating upload URL:", error);
     res.status(500).json({ error: "Failed to generate upload URL" });
   }

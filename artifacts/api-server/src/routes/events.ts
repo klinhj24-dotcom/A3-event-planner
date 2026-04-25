@@ -49,17 +49,10 @@ async function upsertPocContact(eventId: number, pocName: string | null | undefi
   }
 }
 
-function getAppDomain() {
-  if (process.env.PUBLIC_BASE_URL) {
-    return process.env.PUBLIC_BASE_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  }
-  // Prefer the stable REPLIT_DOMAINS (works in both dev and deployed) over the
-  // ephemeral REPLIT_DEV_DOMAIN which can change between restarts
-  return process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "localhost";
-}
+import { getBaseUrl } from "../lib/baseUrl";
 
 function buildTicketUrl(signupToken: string) {
-  return `https://${getAppDomain()}/ticket/${signupToken}`;
+  return `${getBaseUrl()}/ticket/${signupToken}`;
 }
 
 /** Push/update an event to Google Calendar. Returns the gcal event ID (new or existing). */
@@ -899,8 +892,7 @@ router.post("/events/:id/notify", async (req, res) => {
       res.status(404).json({ error: "Event not found" });
       return;
     }
-    const domain = getAppDomain();
-    const signupUrl = `https://${domain}/signup/${event.signupToken}`;
+    const signupUrl = `${getBaseUrl()}/signup/${event.signupToken}`;
     res.json({
       success: true,
       message: `Share this link with interns and staff to sign up for "${event.title}"`,
@@ -945,13 +937,13 @@ router.post("/events/:id/send-invite", async (req, res) => {
     const bandConfirmToken = isBandInvite ? randomBytes(16).toString("hex") : null;
 
     // Build event variables
-    const domain = getAppDomain();
+    const baseUrl = getBaseUrl();
     const signupParams = new URLSearchParams();
     if (recipientName) signupParams.set("name", recipientName);
     if (recipientEmail) signupParams.set("email", recipientEmail);
     if (recipientPhone) signupParams.set("phone", recipientPhone);
-    const signupUrl = `https://${domain}/signup/${event.signupToken}?${signupParams.toString()}`;
-    const bandConfirmUrl = bandConfirmToken ? `https://${domain}/band-confirm/${bandConfirmToken}` : null;
+    const signupUrl = `${baseUrl}/signup/${event.signupToken}?${signupParams.toString()}`;
+    const bandConfirmUrl = bandConfirmToken ? `${baseUrl}/band-confirm/${bandConfirmToken}` : null;
     const ctaUrl = bandConfirmUrl ?? signupUrl;
     const eventDate = event.startDate
       ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(event.startDate))

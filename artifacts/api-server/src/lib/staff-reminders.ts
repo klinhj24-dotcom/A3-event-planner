@@ -2,10 +2,9 @@ import { db, eventStaffSlotsTable, employeesTable, eventsTable, staffRoleTypesTa
 import { and, eq, isNotNull, lte, gte, sql } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
+import { getBaseUrl } from "./baseUrl";
 
-const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-  : "https://event-mgmt.replit.app";
+const BASE_URL = getBaseUrl();
 
 async function getSenderUser() {
   const users = await db.select().from(usersTable);
