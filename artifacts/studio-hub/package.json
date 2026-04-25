@@ -69,9 +69,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@replit/vite-plugin-cartographer": "catalog:",
-    "@replit/vite-plugin-dev-banner": "catalog:",
-    "@replit/vite-plugin-runtime-error-modal": "catalog:",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",

@@ -1,5 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm -C artifacts/api-server run build",
-  "installCommand": "pnpm install --frozen-lockfile=false"
+  "buildCommand": "pnpm run build:vercel",
+  "installCommand": "pnpm install --frozen-lockfile=false",
+  "outputDirectory": "artifacts/studio-hub/dist/public",
+  "framework": null,
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/staff-reminders",      "schedule": "0 * * * *"      },
+    { "path": "/api/cron/debrief-reminders",    "schedule": "0 * * * *"      },
+    { "path": "/api/cron/event-reminders",      "schedule": "0 * * * *"      },
+    { "path": "/api/cron/band-reminders",       "schedule": "0 */6 * * *"    },
+    { "path": "/api/cron/open-mic",             "schedule": "0 */12 * * *"   },
+    { "path": "/api/cron/auto-email-cal-sync",  "schedule": "0 */4 * * *"    }
+  ]
 }

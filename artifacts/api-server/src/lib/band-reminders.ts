@@ -92,9 +92,8 @@ async function getCalcTimesForEvent(eventId: number, baseTime: string | null): P
 
 const TMS_CC = "info@themusicspace.com";
 
-const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-  : "https://event-mgmt.replit.app";
+import { getBaseUrl } from "./baseUrl";
+const BASE_URL = getBaseUrl();
 
 async function getSenderUser() {
   const users = await db.select().from(usersTable);

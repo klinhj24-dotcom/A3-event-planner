@@ -156,9 +156,8 @@ router.post("/users", async (req: Request, res: Response) => {
         if (!gmailSender) return;
 
         const displayName = firstName ? `${firstName}${lastName ? " " + lastName : ""}` : email;
-        const appUrl = process.env.REPLIT_DEPLOYMENT === "1"
-          ? `https://${process.env.APP_DOMAIN ?? "event-mgmt.replit.app"}`
-          : `https://${process.env.REPLIT_DEV_DOMAIN}`;
+        const { getBaseUrl } = await import("../lib/baseUrl");
+        const appUrl = getBaseUrl();
 
         const html = buildHtmlEmail({
           recipientName: displayName,

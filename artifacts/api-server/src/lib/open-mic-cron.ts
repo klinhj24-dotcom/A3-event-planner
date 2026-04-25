@@ -3,6 +3,7 @@ import { and, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { google } from "googleapis";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "./google";
 import { ensureUpcomingEvents, getUpcomingFirstFridays } from "../routes/open-mic";
+import { getBaseUrl } from "./baseUrl";
 
 const TMS_INFO = "info@themusicspace.com";
 const TMS_CALENDAR_ID = "c_c53ed28c8af993bc255012beb93c84da0d9189120e4fa1eddf0bde823393d26b@group.calendar.google.com";
@@ -18,7 +19,7 @@ async function getSenderUser() {
   return users.find(u => u.googleAccessToken && u.googleRefreshToken) ?? null;
 }
 
-async function runOpenMicCron() {
+export async function runOpenMicCron() {
   try {
     const sender = await getSenderUser();
     if (!sender) {
@@ -110,10 +111,7 @@ async function runOpenMicCron() {
         // 21-day window: 20.5 – 21.5 days out
         if (!event.openMicSaveTheDateSent && daysUntil >= 20.5 && daysUntil <= 21.5) {
           try {
-            const BASE_URL = process.env.REPLIT_DOMAINS?.split(",")[0]
-              ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-              : "http://localhost:3000";
-            const signupUrl = `${BASE_URL}/open-mic/${series.slug}`;
+            const signupUrl = `${getBaseUrl()}/open-mic/${series.slug}`;
             const mlEntries = await db.select().from(openMicMailingListTable).where(eq(openMicMailingListTable.seriesId, series.id));
             const mailingList = mlEntries.map(e => e.email);
             if (!mailingList.length) {

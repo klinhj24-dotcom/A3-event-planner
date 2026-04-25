@@ -6,12 +6,11 @@ import { eq, and, or, inArray, isNull } from "drizzle-orm";
 import { createAuthedClient, makeHtmlEmail, buildHtmlEmail } from "../lib/google";
 import { format } from "date-fns";
 
+import { getBaseUrl } from "../lib/baseUrl";
+
 const router = Router();
 
-const BASE_URL = process.env.PUBLIC_BASE_URL
-  || (process.env.REPLIT_DOMAINS?.split(",")[0]
-    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-    : "https://event-mgmt.replit.app");
+const BASE_URL = getBaseUrl();
 
 const TMS_CC = "info@themusicspace.com";
 
