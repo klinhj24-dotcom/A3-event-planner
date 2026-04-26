@@ -5,6 +5,19 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Robustness fix (auth middleware)
+
+- **Auth middleware no longer takes down the whole app when the
+  database isn't ready yet.** Previously, every incoming request
+  with an `Authorization: Bearer ...` header (or a session cookie)
+  triggered a database lookup against the `sessions` table. On a
+  fresh deployment where the schema hadn't been pushed yet, that
+  table didn't exist — so the lookup threw, Express returned a
+  blank 500, and unauthenticated endpoints like `/api/bootstrap`
+  and `/api/health` were unreachable too. Now a failed session
+  lookup is logged and treated as "unauthenticated request,"
+  letting the response continue normally.
+
 ### Robustness fix
 
 - **OpenAI integration no longer crashes the entire app at startup
