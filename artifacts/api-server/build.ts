@@ -68,6 +68,26 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // Vercel serverless bundle: same Express app, but standalone (no app.listen)
+  // and with every dependency inlined so the function file is the only thing
+  // Vercel needs to ship. Avoids both the workspace `.ts` exports problem and
+  // the api-server's NodeNext extension-less imports tripping Vercel's tsc.
+  console.log("building serverless app bundle...");
+  await esbuild({
+    entryPoints: [path.resolve(__dirname, "src/app.ts")],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: path.resolve(distDir, "app.cjs"),
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+    target: "node20",
+    // pg-native is an optional native binding that pg tries to require dynamically
+    external: ["pg-native"],
+    logLevel: "info",
+  });
 }
 
 buildAll().catch((err) => {
