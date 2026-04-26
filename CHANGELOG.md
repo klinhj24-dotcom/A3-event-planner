@@ -5,6 +5,20 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### API routing fix
+
+- **API endpoints with nested URL paths (like `/api/auth/user`) were
+  returning 404.** Single-segment paths (`/api/login`,
+  `/api/bootstrap`) worked, but anything with a slash inside the
+  `/api/` portion silently fell through to Vercel's static handler.
+  Manifested as: login API call succeeded, but the immediate
+  follow-up "who am I?" check failed, so the frontend kept showing
+  the login page even though authentication had worked. Switched
+  from Vercel's `[...path].js` catch-all filename convention to a
+  single `api/index.js` function plus an explicit `/api/(.*)`
+  rewrite in `vercel.json`. Funnels every API request through one
+  function, which is what Express was already designed for.
+
 ### Database SSL fix (take 2)
 
 - **Actually disabled strict TLS cert verification on the Postgres
