@@ -5,6 +5,18 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Admin bootstrap
+
+- **Added a one-shot script for creating (or resetting) an admin
+  user:** `scripts/src/create-admin.ts`. Reads the email and password
+  from environment variables so credentials never end up in commit
+  logs or chat history. If a user with that email already exists, it
+  updates their password instead of failing — handy for password
+  resets too. Run with `pnpm -C scripts exec tsx ./src/create-admin.ts`
+  after setting `EMAIL` and `PASSWORD`. Needed because the app has no
+  public signup — only admins can create portal users from inside the
+  UI, so the very first admin has to be seeded directly into the DB.
+
 ### Database
 
 - **Database connection now accepts the env var names that Vercel's
