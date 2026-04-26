@@ -5,6 +5,17 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Database SSL fix
+
+- **Disabled strict TLS cert verification on the Postgres connection.**
+  Supabase's pooled connections (and most managed Postgres providers)
+  ship TLS certificates whose chain isn't trusted by Node's default
+  trust store on serverless runtimes — every query was failing with
+  `SELF_SIGNED_CERT_IN_CHAIN`. The connection is still encrypted
+  end-to-end; we just stopped asking Node to validate the chain
+  against built-in CAs. This is the standard pattern for Postgres on
+  Vercel/Supabase deployments.
+
 ### Robustness fix (auth middleware)
 
 - **Auth middleware no longer takes down the whole app when the
