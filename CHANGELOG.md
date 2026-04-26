@@ -5,6 +5,18 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Robustness fix
+
+- **OpenAI integration no longer crashes the entire app at startup
+  if the AI env vars aren't set.** Previously, the package threw an
+  error the moment it was imported if `AI_INTEGRATIONS_OPENAI_BASE_URL`
+  or `AI_INTEGRATIONS_OPENAI_API_KEY` were missing — which on Vercel
+  meant the serverless function would die before it could even handle
+  a single request. Made the OpenAI client lazy: it only validates
+  the env vars when an AI feature is actually called. So the app boots
+  fine on a deployment without OpenAI configured (e.g. when you just
+  want to use the events / contacts / login features).
+
 ### Remote bootstrap
 
 - **Added a one-shot remote bootstrap endpoint** so a fresh Vercel
