@@ -66,6 +66,7 @@ async function buildAll() {
     },
     minify: true,
     external: externals,
+    loader: { ".sql": "text" },
     logLevel: "info",
   });
 
@@ -86,6 +87,10 @@ async function buildAll() {
     target: "node20",
     // pg-native is an optional native binding that pg tries to require dynamically
     external: ["pg-native"],
+    // Inline the drizzle migration .sql file as a string literal so the
+    // /api/bootstrap endpoint can run schema setup without shipping
+    // separate files alongside the function.
+    loader: { ".sql": "text" },
     logLevel: "info",
   });
 }
