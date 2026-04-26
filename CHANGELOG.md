@@ -5,6 +5,16 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Database
+
+- **Database connection now accepts the env var names that Vercel's
+  Supabase and Neon integrations set automatically** (`POSTGRES_URL`,
+  `POSTGRES_PRISMA_URL`), in addition to the original `DATABASE_URL`.
+  Previously you'd have had to manually create a `DATABASE_URL` env
+  var in Vercel that just duplicated `POSTGRES_URL`. Now the
+  Marketplace integration "just works" — connect the database, redeploy,
+  done. Verified locally that the bundle loads with either name set.
+
 ### Tooling
 
 - **Changelog is now enforced by a git hook.** Any commit that
