@@ -20,19 +20,35 @@ if (!connectionString) {
   );
 }
 
-// Supabase's Supavisor pooler (and many managed Postgres providers) ship
-// TLS certs whose chain isn't validated by Node's default trust store on
-// serverless runtimes — you get `SELF_SIGNED_CERT_IN_CHAIN` on every
-// query. Disable strict cert verification for SSL connections; the
-// connection itself is still encrypted end-to-end.
-const usesSsl = /sslmode=(require|verify|prefer)|[?&]ssl=true/i.test(
-  connectionString,
-);
+// Parse the connection string ourselves rather than handing it to pg as
+// `connectionString`. Why: pg's url parser (`pg-connection-string`)
+// translates `sslmode=require` into `ssl: { rejectUnauthorized: true }`,
+// which fights with any explicit ssl override we'd pass alongside it.
+// On Supabase's pooler from Vercel's serverless runtime, the cert chain
+// isn't trusted by Node's default CA store and every query fails with
+// SELF_SIGNED_CERT_IN_CHAIN. By parsing the URL ourselves we control
+// the SSL config end-to-end.
+//
+// The wire traffic is still encrypted (`ssl: { rejectUnauthorized: false }`
+// negotiates TLS); we just don't enforce CA-chain verification, which is
+// the de-facto standard for Postgres-on-serverless setups.
+function buildPoolConfig(rawUrl: string): pg.PoolConfig {
+  const url = new URL(rawUrl);
+  const requestsSsl =
+    url.searchParams.has("sslmode") ||
+    url.searchParams.get("ssl") === "true" ||
+    /supabase\.com|\.pooler\./i.test(url.hostname);
+  return {
+    host: url.hostname,
+    port: url.port ? Number(url.port) : 5432,
+    database: decodeURIComponent(url.pathname.replace(/^\//, "")) || undefined,
+    user: decodeURIComponent(url.username) || undefined,
+    password: decodeURIComponent(url.password) || undefined,
+    ssl: requestsSsl ? { rejectUnauthorized: false } : undefined,
+  };
+}
 
-export const pool = new Pool({
-  connectionString,
-  ssl: usesSsl ? { rejectUnauthorized: false } : undefined,
-});
+export const pool = new Pool(buildPoolConfig(connectionString));
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
