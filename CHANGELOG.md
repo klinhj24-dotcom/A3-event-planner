@@ -5,6 +5,23 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Remote bootstrap
+
+- **Added a one-shot remote bootstrap endpoint** so a fresh Vercel
+  deployment can go from "empty database" → "logged-in admin" with a
+  single HTTP request, no local pnpm/clone/CLI setup required. Hit
+  `POST /api/bootstrap` with an `Authorization: Bearer <secret>`
+  header and a JSON body containing the email and password you want
+  to log in with. The endpoint creates every database table from
+  scratch, then inserts your admin user. It refuses to run a second
+  time — once any user exists in the database, the endpoint becomes
+  inert, so it can't be reused or abused. Requires a `BOOTSTRAP_SECRET`
+  env var to be set in Vercel before calling.
+
+  Generated the initial schema migration with `drizzle-kit generate`
+  and committed it under `lib/db/drizzle/` so the same SQL gets
+  bundled into the function and used by the bootstrap endpoint.
+
 ### Admin bootstrap
 
 - **Added a one-shot script for creating (or resetting) an admin
