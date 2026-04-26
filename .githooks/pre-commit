@@ -1,0 +1,53 @@
+#!/usr/bin/env sh
+# Pre-commit hook: require an entry in CHANGELOG.md for any change.
+#
+# Skipped automatically for:
+#   - Merge commits (git creates these with auto-generated messages)
+#   - Commits where CHANGELOG.md is among the staged files
+#
+# Override (use sparingly, e.g. for purely cosmetic fixes):
+#   git commit --no-verify
+
+# Skip merge commits — git is in the middle of a merge.
+if [ -f .git/MERGE_HEAD ]; then
+  exit 0
+fi
+
+# Skip cherry-picks and reverts in progress (auto-generated messages).
+if [ -f .git/CHERRY_PICK_HEAD ] || [ -f .git/REVERT_HEAD ]; then
+  exit 0
+fi
+
+STAGED=$(git diff --cached --name-only)
+
+# Nothing staged — let git's own checks handle it (likely an empty commit).
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+# CHANGELOG.md was touched — good.
+if printf '%s\n' "$STAGED" | grep -qx 'CHANGELOG.md'; then
+  exit 0
+fi
+
+# Otherwise block with a helpful message.
+cat <<'MSG' >&2
+======================================================================
+✗ Commit blocked: CHANGELOG.md was not updated.
+
+This repo requires a plain-English changelog entry for every change.
+
+To fix:
+  1. Open CHANGELOG.md
+  2. Under today's `## YYYY-MM-DD` heading (add one if missing,
+     newest dates go at the top), add a bullet describing what
+     changed and why — written so a non-engineer can follow.
+  3. git add CHANGELOG.md
+  4. Re-run your commit.
+
+If the change is genuinely cosmetic (typo, formatting) and doesn't
+need a changelog entry, bypass with:
+  git commit --no-verify
+======================================================================
+MSG
+exit 1

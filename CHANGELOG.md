@@ -5,6 +5,15 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Tooling
+
+- **Changelog is now enforced by a git hook.** Any commit that
+  doesn't update `CHANGELOG.md` is blocked with a friendly message
+  explaining how to fix it. The hook lives in `.githooks/pre-commit`
+  (tracked in the repo) and gets activated automatically the next
+  time anyone runs `pnpm install`. To bypass for a genuinely cosmetic
+  change, use `git commit --no-verify`.
+
 ### Vercel deployment fixes
 
 - **Fixed the broken Vercel deployment.** The build was failing during
