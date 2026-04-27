@@ -5,6 +5,38 @@ For commit-level detail, see `git log`.
 
 ## 2026-04-26
 
+### Deployment safety net
+
+- **Added an automated safety net so future deploys "just work."**
+  Five pieces, all working together:
+  - **Strict health check at `/api/health`** that pings the database.
+    Returns 200 only if the function can reach Postgres. Useful for
+    uptime monitors and deploy gates.
+  - **Idempotent migration endpoint at `/api/migrate`** that applies
+    any pending Drizzle schema migrations. Safe to call repeatedly
+    (drizzle tracks what's applied). Means you never have to run
+    `drizzle-kit push` against production manually again.
+  - **Refactored `/api/bootstrap`** to delegate schema setup to the
+    shared migration runner instead of inlining a single SQL file.
+    Means the first-time bootstrap and ongoing schema changes go
+    through the same code path.
+  - **GitHub Actions smoke test** that runs on every successful
+    Vercel deploy (preview and production). It applies pending
+    migrations, hits `/api/health`, and hits `/api/auth/user` —
+    failing the check if any of those misbehave. Catches today's
+    failure modes (broken routing, broken DB connection, missing
+    env vars) automatically.
+  - **`DEPLOYMENT.md`** documenting every env var the app needs,
+    the safety net, and common operations like rollback / password
+    reset / first-admin bootstrap.
+
+  Net effect: pushing a change to main, including new code, new
+  npm deps, new env vars, or new schema, kicks off the safety net.
+  If anything's misconfigured the smoke test goes red on the PR or
+  commit, so you know before users do. To make the gate
+  enforceable, also turn on branch protection requiring this check
+  to pass before merge.
+
 ### API routing fix
 
 - **API endpoints with nested URL paths (like `/api/auth/user`) were

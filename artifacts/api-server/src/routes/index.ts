@@ -25,6 +25,7 @@ import guestListRouter from "./guest-list";
 import openMicRouter from "./open-mic";
 import cronRouter from "./cron";
 import bootstrapRouter from "./bootstrap";
+import migrateRouter from "./migrate";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(guestListRouter);
 router.use(openMicRouter);
 router.use(cronRouter);
 router.use(bootstrapRouter);
+router.use(migrateRouter);
 
 export default router;
