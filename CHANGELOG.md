@@ -5,6 +5,24 @@ For commit-level detail, see `git log`.
 
 ## 2026-05-06
 
+### Clerk auth migration — in progress (branch `clerk-auth-migration`)
+
+- **Starting to swap our login system from a homemade
+  email-and-password setup to Clerk** (a third-party login provider
+  that handles "create account / forgot password / sign in with
+  Google" out of the box). The current login still works while this
+  is being built — these changes are happening on a separate branch
+  and don't affect production until they're merged.
+- **Today's groundwork**: added a `clerk_id` slot on each user record
+  so Clerk can link itself to our existing accounts on first sign-in,
+  and added the Clerk libraries to both the website and the API
+  server. No login behavior has changed yet.
+- **Important for shared database**: the `clerk_id` slot is added in
+  code but **not yet applied to the database**. Whoever runs
+  `pnpm --filter @workspace/db push` will apply it. The change is
+  non-breaking — old code keeps working because nothing reads the
+  column yet.
+
 ### Skeleton loading states (no more blank flashes)
 
 - **Several pages now show a grey "skeleton" placeholder while data is
