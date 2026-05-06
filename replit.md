@@ -15,7 +15,7 @@ TMS Events & Contacts is an internal employee portal for The Music Space (TMS). 
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
-- **Auth**: Replit Auth (OpenID Connect with PKCE), sessions stored in PostgreSQL
+- **Auth**: Migrating to **Clerk** (`@clerk/clerk-react` on the frontend, `@clerk/express` on the API). During the transition the API server still accepts the legacy bcrypt email/password sessions stored in the `sessions` Postgres table, so users signed in under the old flow stay signed in. New sign-ins go through Clerk's hosted UI at `/sign-in` and `/sign-up`. The historical "Replit Auth (OIDC with PKCE)" line in this doc was inaccurate — the live system before Clerk was a homegrown bcrypt+sessions setup; the package name `@workspace/replit-auth-web` was just where it lived.
 - **Frontend**: React + Vite, TailwindCSS, Shadcn/UI, React Query, Wouter
 
 ## Structure
@@ -195,7 +195,8 @@ All routes require authentication except `/signup/:token`. Uses Replit Auth.
 ### `artifacts/api-server` (`@workspace/api-server`)
 
 Express 5 API server. Routes in `src/routes/`:
-- `auth.ts` — OIDC login/callback/logout; upserts user (preserves role on update)
+- `auth.ts` — legacy email/password login/logout (kept during Clerk migration). Pre-Clerk this was the only auth path; Clerk-native flows live in `clerk-webhooks.ts` and `@clerk/express` middleware
+- `clerk-webhooks.ts` — public POST `/api/webhooks/clerk`. Verifies svix signatures, then on `user.created` either inserts a new `users` row (default role `employee`) or back-fills `clerkId` on an existing row matched by email. On `user.updated` syncs name/email **but never role** (admin-set roles must persist across sign-ins). On `user.deleted` clears `clerkId` only, keeping the local row for FK integrity
 - `contacts.ts` — contacts CRUD + outreach logging (with userId attribution + auto-assign) + assignment CRUD; role-based filtering
 - `events.ts` — events CRUD + contacts/employees/signups
 - `employees.ts` — employees CRUD
@@ -237,4 +238,4 @@ Database layer using Drizzle ORM with PostgreSQL.
 - **SCHEMA CHANGES REQUIRE USER CONFIRMATION**: Before modifying any schema file (`lib/db/src/schema/`) or running `push-force`, always explicitly tell the user what is changing (new columns, new tables, dropped columns, etc.) and wait for their go-ahead. Never run a schema push without prior approval.
 - Generated files in `lib/api-zod/src/generated/` and `lib/api-client-react/src/generated/` have been manually extended to add `username` and `role` to `AuthUser`. Do NOT regenerate from spec without re-adding these fields.
 - `AuthUser.role` and `AuthUser.username` are NOT in the OpenAPI spec but ARE in the Zod schema and TypeScript interfaces.
-- The `upsertUser` function in auth.ts intentionally does NOT override `role` on conflict update, so admin-set roles persist across logins.
+- The Clerk webhook handler in `clerk-webhooks.ts` intentionally does NOT touch `role` or `canViewFinances` on `user.updated`, and uses match-by-email + back-fill on `user.created` so it never overwrites an existing row's role. Admin-set roles persist across sign-ins. Do not change this behavior.

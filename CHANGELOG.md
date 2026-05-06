@@ -44,6 +44,11 @@ For commit-level detail, see `git log`.
   `VITE_CLERK_PUBLISHABLE_KEY` env var isn't set yet, the app skips
   Clerk entirely and the legacy login still works as before. Set the
   key in `.env` (locally) and on Vercel to enable the new flow.
+- **Doc cleanup.** `replit.md` previously claimed the auth system was
+  "Replit Auth (OpenID Connect with PKCE)". That was inaccurate — the
+  live system was a homemade bcrypt setup that just happened to live
+  in a workspace package named `replit-auth-web`. The doc now
+  reflects reality and describes the Clerk migration.
 
 ### Skeleton loading states (no more blank flashes)
 
