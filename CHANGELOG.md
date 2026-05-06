@@ -22,6 +22,18 @@ For commit-level detail, see `git log`.
   `pnpm --filter @workspace/db push` will apply it. The change is
   non-breaking — old code keeps working because nothing reads the
   column yet.
+- **API server now accepts both old and new sign-ins side by side**
+  during the migration. Behind the scenes the server first checks
+  whether the request has a Clerk session; if not, it falls back to
+  the old session cookie. This means anyone already signed in stays
+  signed in, and as Clerk gets rolled out new sign-ins quietly take
+  over without requiring a "log everyone out" moment.
+- **Webhook hookup**: a new `/api/webhooks/clerk` endpoint listens for
+  Clerk events (`user.created`, `user.updated`, `user.deleted`) and
+  keeps our `users` table in sync. New users get a default `employee`
+  role; admin-set roles are never overwritten by Clerk events. The
+  endpoint won't actually receive anything until you create the
+  webhook in the Clerk dashboard and provide `CLERK_WEBHOOK_SECRET`.
 
 ### Skeleton loading states (no more blank flashes)
 
