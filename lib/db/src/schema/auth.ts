@@ -12,14 +12,20 @@ export const sessionsTable = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const usersTable = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Clerk owns the identity. clerkId is populated by the user.created webhook
+  // the first time a user signs in via Clerk. Existing rows stay null until
+  // their owner signs in via Clerk for the first time, at which point the
+  // webhook matches by email and back-fills this column.
+  clerkId: varchar("clerk_id").unique(),
   email: varchar("email").unique(),
   username: varchar("username"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  // passwordHash is kept temporarily so the legacy /api/login path still works
+  // during the soft-cutover window. Remove once Clerk is fully cut over.
   passwordHash: varchar("password_hash"),
   role: text("role").notNull().default("employee"), // 'admin' | 'employee'
   canViewFinances: boolean("can_view_finances").notNull().default(false),
