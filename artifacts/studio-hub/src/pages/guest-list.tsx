@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, Users, Music2, MapPin, Calendar } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import tmsLogoWhite from "@assets/TMS_Logo_Stacked_Large_White@4x_1773281994585.png";
 import { PublicFooter } from "@/components/public-footer";
@@ -88,8 +89,30 @@ export default function GuestListForm() {
         className="w-full max-w-md bg-[#1a1d1c] border border-white/10 rounded-2xl p-6 shadow-2xl"
       >
         {isLoading && (
-          <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-2/5" />
+            </div>
+            <div className="rounded-xl bg-[#7250ef]/5 border border-[#7250ef]/10 p-3.5 flex items-start gap-3">
+              <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-3 w-1/4" />
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-10 w-full rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-10 w-full rounded-xl" />
+              </div>
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
           </div>
         )}
 

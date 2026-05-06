@@ -3,6 +3,48 @@
 A plain-English log of changes to this project. Newest entries on top.
 For commit-level detail, see `git log`.
 
+## 2026-05-06
+
+### Skeleton loading states (no more blank flashes)
+
+- **Several pages now show a grey "skeleton" placeholder while data is
+  loading**, so the page no longer flashes blank or jumps around when
+  the real content arrives.
+  - **Contacts list:** the table now shows six placeholder rows that
+    match the real row layout, instead of a single small spinner in
+    one cell.
+  - **Reports:** the summary cards, monthly bar chart, and breakdown
+    table now show shaped placeholders during load, instead of
+    rendering with all-zero values until events fetch resolves.
+  - **Event Debrief side panel:** opening a debrief now shows a
+    skeleton form (image area, time fields, notes) instead of a tiny
+    centered spinner that left most of the panel empty.
+  - **Public Guest List form:** the page now shows a skeleton of the
+    form (event header, performer card, name & email fields, submit
+    button) instead of just a spinner that gets replaced with a
+    full-height form.
+- **New shared skeleton components** (`SkeletonTable`, `SkeletonStatCard`,
+  `SkeletonForm`, `SkeletonList`, `SkeletonCard`,
+  `SkeletonListItem`, `SkeletonTableRow`) added to
+  `artifacts/studio-hub/src/components/ui/skeleton.tsx` so future pages
+  can reuse them.
+
+## 2026-04-29
+
+### Empty states for first-time users
+
+- **Dashboard, Events, Contacts, and Bands now show a friendly empty
+  state when there's nothing to display yet**, instead of a blank
+  area or a bare "No items found" line. Each one explains what the
+  section is for and gives a primary call-to-action to get started
+  (create an event, add a contact, create a band). For Events and
+  Contacts, the empty state is distinct from the "no search results"
+  case — the helpful onboarding message only appears when the list
+  is genuinely empty, not when a filter or search has hidden
+  everything. Built on a new shared `EmptyState` component
+  (`artifacts/studio-hub/src/components/ui/empty-state.tsx`) so other
+  pages can reuse it later.
+
 ## 2026-04-26
 
 ### API routing fix

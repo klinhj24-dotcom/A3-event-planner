@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Upload, X, ImageIcon, CheckCircle2, TrendingUp, Lock } from "lucide-react";
+import { Skeleton, SkeletonForm } from "@/components/ui/skeleton";
 import { useUpload } from "@workspace/object-storage-web";
 import { useEventDebrief, useUpsertDebrief, useUpdateEventImage, useTeamMembers } from "@/hooks/use-team";
 import { useToast } from "@/hooks/use-toast";
@@ -242,8 +243,13 @@ export function DebriefSheet({ event, onClose }: DebriefSheetProps) {
         </SheetHeader>
 
         {isLoading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="flex-1 px-6 py-5 space-y-5">
+            <Skeleton className="aspect-video w-full rounded-xl" />
+            <div className="grid grid-cols-2 gap-3">
+              <Skeleton className="h-9 rounded-md" />
+              <Skeleton className="h-9 rounded-md" />
+            </div>
+            <SkeletonForm fields={5} />
           </div>
         ) : !canEdit ? (
           /* ── Read-only view for non-owners ── */

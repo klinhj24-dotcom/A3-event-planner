@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton, SkeletonStatCard } from "@/components/ui/skeleton";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { BarChart2, TrendingUp, Calendar, DollarSign, Users, Download } from "lucide-react";
 import { useListEvents } from "@workspace/api-client-react";
@@ -26,7 +27,7 @@ export default function Reports() {
   });
   const canViewFinances = currentUser?.canViewFinances === true || currentUser?.email === "justin@themusicspace.com";
 
-  const { data: events = [] } = useListEvents();
+  const { data: events = [], isLoading: eventsLoading } = useListEvents();
 
   const now = new Date();
   // Show 2 months back through 3 months ahead so upcoming events are visible
@@ -104,11 +105,55 @@ export default function Reports() {
             </h1>
             <p className="text-muted-foreground text-sm mt-0.5">Historical event and performance data</p>
           </div>
-          <Button variant="outline" size="sm" className="gap-2 rounded-xl" onClick={exportEventsCSV}>
+          <Button variant="outline" size="sm" className="gap-2 rounded-xl" onClick={exportEventsCSV} disabled={eventsLoading}>
             <Download className="h-4 w-4" /> Export Events CSV
           </Button>
         </div>
 
+        {eventsLoading ? (
+          <>
+            {/* Summary cards skeleton */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+              {canViewFinances && <SkeletonStatCard />}
+              {canViewFinances && <SkeletonStatCard />}
+            </div>
+
+            {/* Chart card skeleton */}
+            <Card className="rounded-2xl border-border/50 bg-card shadow-sm">
+              <CardHeader className="pb-2">
+                <Skeleton className="h-5 w-40" />
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end gap-3 h-40">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                      <Skeleton className="w-full" style={{ height: `${30 + ((i * 17) % 70)}px` }} />
+                      <Skeleton className="h-3 w-12" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Table skeleton */}
+            <Card className="rounded-2xl border-border/50 bg-card shadow-sm">
+              <CardHeader className="pb-2">
+                <Skeleton className="h-5 w-44" />
+              </CardHeader>
+              <CardContent className="p-5 space-y-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 flex-1 max-w-[60%]" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+        <>
         {/* Summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card className="rounded-2xl border-border/50 bg-card shadow-sm">
@@ -261,6 +306,8 @@ export default function Reports() {
             ))}
           </CardContent>
         </Card>
+        </>
+        )}
       </div>
     </AppLayout>
   );

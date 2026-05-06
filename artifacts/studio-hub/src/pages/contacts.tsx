@@ -23,9 +23,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, Plus, Phone, Mail, Building2, Calendar as CalendarIcon,
-  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck, Pencil, Download
+  MessageSquare, Loader2, Send, UserPlus, UserMinus, ShieldCheck, Pencil, Download, Users
 } from "lucide-react";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -41,6 +42,7 @@ import {
   useUnassignContact,
   useTeamMembers,
 } from "@/hooks/use-team";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -479,7 +481,38 @@ export default function Contacts() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Loading contacts...</TableCell></TableRow>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={`skeleton-${i}`} className="hover:bg-transparent">
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="mt-2 h-4 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <Skeleton className="h-4 w-28" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-3 w-40" />
+                        <Skeleton className="mt-2 h-3 w-32" />
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <Skeleton className="h-3 w-24" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="ml-auto h-7 w-20 rounded-md" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (contacts?.length ?? 0) === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="p-0">
+                      <EmptyState
+                        icon={Users}
+                        headline="No contacts yet"
+                        subline="Contacts are the people you invite, notify, and charge. Add them manually to start tracking outreach."
+                        cta={{ label: "Add a contact", onClick: () => setCreateOpen(true) }}
+                      />
+                    </TableCell>
+                  </TableRow>
                 ) : filteredContacts?.length === 0 ? (
                   <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No contacts found.</TableCell></TableRow>
                 ) : (
