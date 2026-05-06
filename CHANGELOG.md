@@ -34,6 +34,16 @@ For commit-level detail, see `git log`.
   role; admin-set roles are never overwritten by Clerk events. The
   endpoint won't actually receive anything until you create the
   webhook in the Clerk dashboard and provide `CLERK_WEBHOOK_SECRET`.
+- **New sign-in / sign-up pages** at `/sign-in` and `/sign-up` use
+  Clerk's hosted login UI inside our existing TMS-branded shell
+  (logo, dark gradient background, "Authorized Personnel Only"
+  footer). The old `/login` page stays alive during the transition;
+  any logged-out visit to a protected page now redirects to
+  `/sign-in` (the new flow) instead of `/login`.
+- **Clerk activates only when configured.** If the
+  `VITE_CLERK_PUBLISHABLE_KEY` env var isn't set yet, the app skips
+  Clerk entirely and the legacy login still works as before. Set the
+  key in `.env` (locally) and on Vercel to enable the new flow.
 
 ### Skeleton loading states (no more blank flashes)
 

@@ -1,11 +1,14 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ClerkProvider } from "@clerk/clerk-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@workspace/replit-auth-web";
 
 import Login from "@/pages/login";
+import SignInPage from "@/pages/sign-in";
+import SignUpPage from "@/pages/sign-up";
 import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
 import Events from "@/pages/events";
@@ -34,17 +37,19 @@ const queryClient = new QueryClient({
   },
 });
 
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!user) return <Redirect to="/login" />;
+  if (!user) return <Redirect to="/sign-in" />;
   return <Component />;
 }
 
 function AdminRoute({ component: Component }: { component: () => JSX.Element }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!user) return <Redirect to="/login" />;
+  if (!user) return <Redirect to="/sign-in" />;
   if ((user as any)?.role !== "admin") return <Redirect to="/my-schedule" />;
   return <Component />;
 }
@@ -52,6 +57,9 @@ function AdminRoute({ component: Component }: { component: () => JSX.Element }) 
 function Router() {
   return (
     <Switch>
+      {/* Auth — Clerk takes /sign-in, /sign-up; legacy /login kept during cutover */}
+      <Route path="/sign-in/:rest*" component={SignInPage} />
+      <Route path="/sign-up/:rest*" component={SignUpPage} />
       <Route path="/login" component={Login} />
       <Route path="/signup/:token" component={Signup} />
       <Route path="/ticket/:token" component={TicketForm} />
@@ -77,7 +85,7 @@ function Router() {
   );
 }
 
-function App() {
+function AppShell() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -87,6 +95,33 @@ function App() {
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function App() {
+  // Soft cutover: if VITE_CLERK_PUBLISHABLE_KEY isn't set yet, render the
+  // app without ClerkProvider so the legacy login flow still works in
+  // environments that haven't configured Clerk. Once the key is set in
+  // .env / Vercel, ClerkProvider activates and /sign-in becomes the
+  // primary path.
+  if (!CLERK_PUBLISHABLE_KEY) {
+    if (import.meta.env.DEV) {
+      console.warn("[clerk] VITE_CLERK_PUBLISHABLE_KEY is not set — Clerk is disabled, only legacy /login will work.");
+    }
+    return <AppShell />;
+  }
+
+  return (
+    <ClerkProvider
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignInUrl="/"
+      afterSignUpUrl="/"
+      afterSignOutUrl="/sign-in"
+    >
+      <AppShell />
+    </ClerkProvider>
   );
 }
 
