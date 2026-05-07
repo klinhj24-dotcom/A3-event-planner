@@ -18,6 +18,33 @@ import {
 import { useGetDashboardStats } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
+import { useClerk } from "@clerk/clerk-react";
+
+const CLERK_ENABLED = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+// Renders the sign-out button. When Clerk is configured we clear both
+// session types (Clerk session + legacy sid cookie) so a single button
+// works for either kind of session during cutover. Each clear is a
+// no-op if that session type doesn't exist for the user.
+//
+// useClerk() throws without a ClerkProvider in the tree, so this
+// component must only be rendered inside the Clerk-enabled branch.
+function ClerkAwareSignOut() {
+  const clerk = useClerk();
+  return (
+    <button
+      onClick={async () => {
+        try { await clerk.signOut(); } catch {}
+        try { await fetch("/api/logout", { method: "POST", credentials: "include" }); } catch {}
+        window.location.href = "/sign-in";
+      }}
+      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-[#cfcccc] transition-colors hover:bg-destructive/10 hover:text-destructive"
+    >
+      <LogOut className="h-4 w-4" />
+      <span>Sign Out</span>
+    </button>
+  );
+}
 import {
   Sidebar,
   SidebarContent,
@@ -144,13 +171,17 @@ export function AppSidebar() {
             </span>
           </div>
         </div>
-        <button 
-          onClick={() => logout()}
-          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-[#cfcccc] transition-colors hover:bg-destructive/10 hover:text-destructive"
-        >
-          <LogOut className="h-4 w-4" />
-          <span>Sign Out</span>
-        </button>
+        {CLERK_ENABLED ? (
+          <ClerkAwareSignOut />
+        ) : (
+          <button
+            onClick={() => logout()}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-[#cfcccc] transition-colors hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Sign Out</span>
+          </button>
+        )}
       </SidebarFooter>
     </Sidebar>
   );

@@ -5,6 +5,22 @@ For commit-level detail, see `git log`.
 
 ## 2026-05-07
 
+### Clerk migration — sign-out + sign-up race fix
+
+- **Sidebar Sign Out works for both kinds of session.** When Clerk is
+  configured, the Sign Out button now ends both the Clerk session and
+  the legacy session in one click before redirecting to `/sign-in`.
+  Whichever session type the user has, the right thing happens.
+- **First-sign-up race condition fixed.** Previously, in the brief
+  window between a brand-new Clerk sign-up and the webhook arriving
+  to create their database row, the user could get bounced into a
+  redirect loop (signed in to Clerk, but invisible to our backend).
+  The auth middleware now self-heals: if a valid Clerk session has
+  no matching local row, it fetches the user from Clerk's API and
+  inserts the row inline. The webhook's own insert is idempotent so
+  whichever finishes first wins; the other detects the duplicate and
+  reads back the winning row.
+
 ### Clerk migration — env-var setup
 
 - Added `.env*` patterns to `.gitignore` so secret keys can never be
