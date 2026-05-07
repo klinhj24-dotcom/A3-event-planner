@@ -51,3 +51,8 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Environment variables — secrets must never be committed
+.env
+.env.*
+!.env.example

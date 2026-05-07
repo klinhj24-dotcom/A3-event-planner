@@ -3,6 +3,19 @@
 A plain-English log of changes to this project. Newest entries on top.
 For commit-level detail, see `git log`.
 
+## 2026-05-07
+
+### Clerk migration — env-var setup
+
+- Added `.env*` patterns to `.gitignore` so secret keys can never be
+  committed by accident. (Previously the repo had no env-file
+  ignore rule — this is a hardening fix that should have always
+  been there.)
+- Added `.env.example` templates in `artifacts/studio-hub/` and
+  `artifacts/api-server/` listing the env vars Clerk needs, with
+  placeholder values and links to where each one is found in the
+  Clerk dashboard.
+
 ## 2026-05-06
 
 ### Clerk auth migration — in progress (branch `clerk-auth-migration`)
