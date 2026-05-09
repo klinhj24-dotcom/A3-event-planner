@@ -57,9 +57,15 @@ function AdminRoute({ component: Component }: { component: () => JSX.Element }) 
 function Router() {
   return (
     <Switch>
-      {/* Auth — Clerk takes /sign-in, /sign-up; legacy /login kept during cutover */}
-      <Route path="/sign-in/:rest*" component={SignInPage} />
-      <Route path="/sign-up/:rest*" component={SignUpPage} />
+      {/* Auth — Clerk takes /sign-in, /sign-up; legacy /login kept during cutover.
+          Each Clerk page needs both the bare path AND a /* catch-all so Clerk's
+          internal navigation (verify-email-address, factor-one, etc.) doesn't
+          fall through to NotFound. Wouter v3's path matching does not treat
+          a single :rest* param as zero-or-more segments here. */}
+      <Route path="/sign-in" component={SignInPage} />
+      <Route path="/sign-in/*" component={SignInPage} />
+      <Route path="/sign-up" component={SignUpPage} />
+      <Route path="/sign-up/*" component={SignUpPage} />
       <Route path="/login" component={Login} />
       <Route path="/signup/:token" component={Signup} />
       <Route path="/ticket/:token" component={TicketForm} />

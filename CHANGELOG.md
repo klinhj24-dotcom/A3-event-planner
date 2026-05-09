@@ -5,6 +5,16 @@ For commit-level detail, see `git log`.
 
 ## 2026-05-07
 
+### Clerk migration — fix /sign-in and /sign-up 404
+
+- **`/sign-up` and `/sign-in` were returning a 404 page** even after the
+  build went green. The route pattern I'd written (`/sign-up/:rest*`)
+  was supposed to match both the bare path and any sub-path Clerk
+  navigates to internally (email verification, factor-one, etc.) but in
+  Wouter v3 it doesn't match the bare path. Switched to two explicit
+  routes per page (`/sign-up` and `/sign-up/*`) which is what Wouter v3
+  expects. Sign-in / sign-up pages now load.
+
 ### Build fix — restore missing EmptyState component file
 
 - **The Vercel build has been failing since the loading-skeletons
