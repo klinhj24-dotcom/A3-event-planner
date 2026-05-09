@@ -5,6 +5,20 @@ For commit-level detail, see `git log`.
 
 ## 2026-05-07
 
+### Build fix — restore missing EmptyState component file
+
+- **The Vercel build has been failing since the loading-skeletons
+  commit hit `main`** because `contacts.tsx` imports a shared
+  `EmptyState` component whose source file (`components/ui/empty-state.tsx`)
+  was never committed — it lived on the dev machine but wasn't tracked
+  by git. Every deploy of `main` and the `clerk-auth-migration`
+  branch since then has errored with `ENOENT: empty-state`.
+- This commit ships the missing file so deploys go green again. The
+  file itself is unchanged from what was already on the dev machine —
+  same component the rest of the app expects. No behavior change for
+  end users; pages that already used `<EmptyState>` start rendering
+  it correctly instead of failing the build.
+
 ### Clerk migration — sign-out + sign-up race fix
 
 - **Sidebar Sign Out works for both kinds of session.** When Clerk is
