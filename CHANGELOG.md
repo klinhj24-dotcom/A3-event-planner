@@ -3,6 +3,21 @@
 A plain-English log of changes to this project. Newest entries on top.
 For commit-level detail, see `git log`.
 
+## 2026-05-07
+
+### Build fix — restore missing EmptyState component file
+
+- **The Vercel build has been failing since the loading-skeletons
+  commit hit `main`** because `contacts.tsx` imports a shared
+  `EmptyState` component whose source file
+  (`components/ui/empty-state.tsx`) was never tracked by git — it
+  lived on the dev machine but wasn't in the repo. Every deploy of
+  `main` since then has errored with `ENOENT: empty-state` and
+  production has been frozen on the Apr 26 deploy.
+- This commit ships the missing file so deploys go green again. No
+  behavior change for end users; pages that already use `<EmptyState>`
+  start rendering correctly instead of failing the build.
+
 ## 2026-05-06
 
 ### Skeleton loading states (no more blank flashes)
