@@ -28,6 +28,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { EventsCalendar } from "@/components/events-calendar";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useCommTasks, useGenerateCommTasks, useUpdateCommTask, useSendLateReport, useUpdateEventEmployee, useTeamMembers, type CommTask } from "@/hooks/use-team";
 import { DebriefSheet } from "@/components/debrief-sheet";
 import { LineupSheet } from "@/components/lineup-sheet";
@@ -1419,7 +1420,7 @@ function EventOverviewSheet({
     win.document.write(`<!DOCTYPE html>
 <html><head><title>Guest List — ${eventTitle}</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 13px; color: #111; margin: 24px; }
+  body { font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 13px; color: #111; margin: 24px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   p { margin: 0 0 16px; color: #555; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; }
@@ -3241,7 +3242,21 @@ export default function Events() {
                   {isLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Loading events...</TableCell></TableRow>
                   ) : filteredEvents?.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No events found.</TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={5} className="p-0">
+                        <EmptyState
+                          icon={CalendarDays}
+                          tone="teal"
+                          headline="Nothing on the books"
+                          subline={(events?.length ?? 0) === 0
+                            ? "Events are how recitals, shows, and lessons get coordinated — staff, bands, comms, and packing. Create your first event to start the flow."
+                            : "No events match your filters. Try widening the date range or clearing tags."}
+                          cta={(events?.length ?? 0) === 0
+                            ? { label: "Create event", onClick: () => setCreateOpen(true) }
+                            : undefined}
+                        />
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     filteredEvents?.map((event) => (
                       <TableRow key={event.id} className="hover:bg-muted/20 transition-colors">
