@@ -5,6 +5,17 @@ For commit-level detail, see `git log`.
 
 ## 2026-05-17
 
+### Re-sorted the TMS build board by dependency tier
+
+- **Added `BUILD_BOARD.md` at the repo root** — the original
+  Phase 0 / 1 / 2 / 3 checklist re-arranged by what's actually
+  blocking each item right now. Same items, no drops, just
+  regrouped into five tiers: do-now-code-only, needs-a-decision,
+  blocked-on-Justin, sequenced-after-auth-migration, and Henry-led
+  sales/GTM. Surfaces that the auth provider decision is the real
+  bottleneck — roughly 30 items can't start until that call is
+  made. Living doc; expected to drift.
+
 ### Frontend design refresh — first pass applying the new skill
 
 - **Replaced Inter with a real type pairing.** The studio-hub app
