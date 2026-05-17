@@ -1114,7 +1114,8 @@ function printRecitalOrder(title: string, slots: LineupSlot[], calcTimes: (strin
     }).join("");
 
   const html = `<!DOCTYPE html><html><head><title>Recital Order — ${title}</title>
-  <style>body{font-family:'Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#111;}
+  <style>body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#111;}
+  h1{font-family:'Fraunces',Georgia,serif;}
   h1{font-size:22px;margin-bottom:4px;}h2{font-size:13px;color:#666;font-weight:normal;margin-bottom:28px;}
   table{width:100%;border-collapse:collapse;}
   th{text-align:left;padding:8px 12px;background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:2px solid #e5e7eb;}

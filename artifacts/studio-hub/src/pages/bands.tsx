@@ -24,6 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -1254,11 +1255,15 @@ export default function Bands() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center space-y-2">
-            <Music2 className="h-8 w-8 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">{search ? "No bands match your search" : "No bands added yet"}</p>
-            {!search && <Button size="sm" variant="outline" onClick={() => setBandDlg("new")} className="gap-1.5"><Plus className="h-3.5 w-3.5" />Add Your First Band</Button>}
-          </div>
+          <EmptyState
+            icon={Music2}
+            tone="purple"
+            headline={search ? "No bands match" : "No bands yet"}
+            subline={search
+              ? "Nothing matches that search — try a different name or clear the filter."
+              : "Bands are the acts you book — original artists, student groups, open-mic regulars. Add one to track members, contacts, and invite history."}
+            cta={!search ? { label: "Add your first band", onClick: () => setBandDlg("new") } : undefined}
+          />
         ) : (
           <div className="divide-y divide-border/15">
             {filtered.map(band => {

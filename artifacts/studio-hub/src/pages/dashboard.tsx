@@ -76,11 +76,13 @@ export default function Dashboard() {
       <AppLayout>
         <div className="space-y-6">
           <div>
-            <Skeleton className="h-10 w-48 mb-2" />
-            <Skeleton className="h-5 w-64" />
+            <Skeleton className="h-4 w-40 mb-3" />
+            <Skeleton className="h-14 w-72 mb-2" />
+            <Skeleton className="h-6 w-80" />
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5">
+            <Skeleton className="sm:col-span-3 lg:col-span-2 h-48 rounded-2xl" />
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-2xl" />)}
           </div>
           <div className="grid gap-6 md:grid-cols-2">
             <Skeleton className="h-96 rounded-2xl" />
@@ -91,10 +93,37 @@ export default function Dashboard() {
     );
   }
 
-  // Use brand colors for stat cards
-  const statCards = [
-    { title: "Total Contacts", value: stats?.totalContacts || 0, icon: Users, color: "text-[#7250ef]", bg: "bg-[#7250ef]/10", href: "/contacts" },
-    { title: "Upcoming Events", value: stats?.upcomingEvents || 0, icon: Calendar, color: "text-[#00b199]", bg: "bg-[#00b199]/10", href: "/events" },
+  // Hero stat — "Upcoming Events" is the most actionable surface, so it gets the wide tile
+  const heroStat = {
+    title: "Upcoming Events",
+    value: stats?.upcomingEvents || 0,
+    icon: Calendar,
+    color: "text-[#00b199]",
+    bg: "bg-[#00b199]/10",
+    href: "/events",
+    ringColor: "#00b199",
+  };
+
+  // Supporting tiles — smaller, share the row
+  const supportingStats: Array<{
+    title: string; value: number; icon: typeof Users;
+    color: string; bg: string; href: string;
+    badge?: React.ReactNode;
+  }> = [
+    {
+      title: "Total Contacts",
+      value: stats?.totalContacts || 0,
+      icon: Users,
+      color: "text-[#7250ef]",
+      bg: "bg-[#7250ef]/10",
+      href: "/contacts",
+      badge: (stats?.overdueContacts ?? 0) > 0 ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-full px-2 py-0.5">
+          <AlertTriangle className="h-3 w-3" />
+          {stats!.overdueContacts} overdue
+        </span>
+      ) : undefined,
+    },
     { title: "Total Staff", value: stats?.totalEmployees || 0, icon: UserSquare2, color: "text-[#2e3bdb]", bg: "bg-[#2e3bdb]/10", href: "/employees" },
     { title: "Pending Card Charges", value: stats?.pendingCharges || 0, icon: CreditCard, color: "text-rose-400", bg: "bg-rose-500/10", href: "/charges" },
   ];
@@ -102,26 +131,87 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8 pb-8">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Overview</h1>
-          <p className="text-muted-foreground mt-1 text-lg">Here's what's happening at the studio today.</p>
+        <div className="rise-in" style={{ animationDelay: "0ms" }}>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70 font-medium mb-2">
+            {format(new Date(), "EEEE, MMMM d")}
+          </p>
+          <h1
+            className="font-display text-5xl md:text-6xl tracking-tight text-foreground"
+            style={{ fontVariationSettings: "'opsz' 144, 'SOFT' 60, 'wght' 480" }}
+          >
+            Overview<span className="text-[#7250ef]">.</span>
+          </h1>
+          <p className="text-muted-foreground mt-2 text-lg italic" style={{ fontFamily: "var(--font-display)", fontVariationSettings: "'opsz' 36, 'SOFT' 100, 'wght' 380" }}>
+            Here's what's happening at the studio today.
+          </p>
         </div>
 
-        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {statCards.map((stat, i) => {
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5">
+          {/* Hero — Upcoming Events */}
+          <Link
+            href={heroStat.href}
+            className="sm:col-span-3 lg:col-span-2 rise-in"
+            style={{ animationDelay: "80ms" }}
+          >
+            <Card className="relative h-full border-[#00b199]/25 bg-gradient-to-br from-[#00b199]/[0.08] via-card to-card shadow-xl shadow-black/20 hover:shadow-2xl hover:shadow-[#00b199]/10 hover:border-[#00b199]/40 transition-all duration-500 rounded-2xl overflow-hidden group cursor-pointer">
+              <CardContent className="p-7 md:p-9 relative">
+                {/* Decorative concentric arcs in teal — grid-breaking flourish */}
+                <svg
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-16 -top-16 opacity-40 group-hover:opacity-70 transition-opacity duration-700"
+                  width="280" height="280" viewBox="0 0 280 280" fill="none"
+                >
+                  <circle cx="140" cy="140" r="50"  stroke="#00b199" strokeWidth="1" />
+                  <circle cx="140" cy="140" r="95"  stroke="#00b199" strokeWidth="1" strokeDasharray="2 5" />
+                  <circle cx="140" cy="140" r="135" stroke="#00b199" strokeWidth="1" opacity="0.5" />
+                </svg>
+
+                <div className="relative z-10 flex flex-col gap-6">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[#00b199]/90 font-semibold">
+                      Upcoming Events
+                    </p>
+                    <div className="p-2.5 rounded-xl bg-[#00b199]/15 text-[#00b199] transition-transform group-hover:scale-110 duration-500">
+                      <Calendar className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <p
+                      className="font-display text-7xl md:text-8xl tracking-tight text-foreground leading-none"
+                      style={{ fontVariationSettings: "'opsz' 144, 'SOFT' 60, 'wght' 520" }}
+                    >
+                      {heroStat.value}
+                    </p>
+                    <span className="text-base text-muted-foreground italic" style={{ fontFamily: "var(--font-display)" }}>
+                      on the books
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground inline-flex items-center gap-1.5 group-hover:text-foreground transition-colors">
+                    View all events <ArrowUpRight className="h-4 w-4" />
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Supporting tiles */}
+          {supportingStats.map((stat, i) => {
             const card = (
-              <Card key={i} className={`border-border/10 bg-card shadow-md shadow-black/10 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group${stat.href ? " cursor-pointer" : ""}`}>
+              <Card
+                key={i}
+                className="h-full border-border/10 bg-card shadow-md shadow-black/10 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden group cursor-pointer"
+              >
                 <CardContent className="p-6 relative">
                   <div className="flex justify-between items-start">
                     <div className="space-y-2 z-10">
                       <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                      <p className="font-display text-4xl font-bold text-foreground tracking-tight">{stat.value}</p>
-                      {i === 0 && (stats?.overdueContacts ?? 0) > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-full px-2 py-0.5">
-                          <AlertTriangle className="h-3 w-3" />
-                          {stats!.overdueContacts} overdue
-                        </span>
-                      )}
+                      <p
+                        className="font-display text-4xl text-foreground tracking-tight"
+                        style={{ fontVariationSettings: "'opsz' 144, 'SOFT' 60, 'wght' 500" }}
+                      >
+                        {stat.value}
+                      </p>
+                      {stat.badge}
                     </div>
                     <div className={`p-3 rounded-xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300`}>
                       <stat.icon className="h-6 w-6" />
@@ -131,9 +221,16 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             );
-            return stat.href
-              ? <Link key={i} href={stat.href}>{card}</Link>
-              : card;
+            return (
+              <Link
+                key={i}
+                href={stat.href}
+                className="rise-in"
+                style={{ animationDelay: `${160 + i * 80}ms` }}
+              >
+                {card}
+              </Link>
+            );
           })}
         </div>
 

@@ -3,6 +3,68 @@
 A plain-English log of changes to this project. Newest entries on top.
 For commit-level detail, see `git log`.
 
+## 2026-05-17
+
+### Frontend design refresh — first pass applying the new skill
+
+- **Replaced Inter with a real type pairing.** The studio-hub app
+  was loading Inter (a generic AI-favorite font) on every page even
+  though the CSS didn't actually use it — dead weight AND off-brand.
+  Removed the Inter import and added **Fraunces** as the new display
+  font, paired with the existing **Instrument Sans** as the body
+  font. Fraunces is a variable serif with optical sizing and a
+  "soft" axis — it's what now renders every page title, card title,
+  and big number across the app. The result is more editorial /
+  music-magazine in feel; less software-template.
+- **New "atmospheric header" behind every page.** Added a soft
+  gradient mesh (Purple Rain → 90's Teal → faint Red glow at the
+  bottom) that sits behind the top portion of each page and fades
+  out before reaching the content. Gives the app a sense of place
+  instead of flat charcoal everywhere.
+- **Empty states with character, per surface.** The shared
+  `EmptyState` component now takes a `tone` prop (purple / teal /
+  amber / rose / violet / cream) and renders a decorative orbital
+  rings backdrop behind the icon. Headlines are big Fraunces. So
+  far applied to:
+  - Empty Events list → teal tone, "Nothing on the books", CTA to
+    create the first event (or "no matches" copy when filters are
+    active)
+  - Empty Bands list → purple tone, "No bands yet", CTA to add the
+    first band
+  - Contacts empty state automatically inherits the upgrade (no
+    code change needed there)
+- **Dashboard rebuilt around a hero stat.** The old "4 equal stat
+  cards in a 5-column grid" (which left an empty cell at XL) is
+  gone. "Upcoming Events" is now a wide hero tile with a 7xl
+  Fraunces number, decorative concentric arcs, and richer hover.
+  The other three stats (Contacts / Staff / Charges) sit beside
+  it as smaller tiles. The page title is also bigger — date
+  eyebrow, 6xl Fraunces heading with a purple period accent.
+- **Staggered page-load reveal on the dashboard.** Title, hero
+  card, and supporting cards rise in sequence (0ms → 80ms → 160ms
+  → 240ms → 320ms) for a single coordinated load moment instead of
+  scattered micro-interactions.
+- **Cleaned up Arial / Helvetica Neue fallbacks** in the two
+  printable HTML templates (guest list export, recital lineup
+  export) so the printed/PDF output uses Instrument Sans and
+  Fraunces too. The brand stays consistent on paper.
+- New utilities added to global CSS: `.bg-grain` (subtle film-grain
+  overlay), `.bg-mesh` (the gradient mesh), and `.rise-in`
+  animation keyframe — all available to future pages.
+
+### Installed the `frontend-design` skill at the project level
+
+- **Added Anthropic's `frontend-design` skill into the repo** at
+  `.claude/skills/frontend-design/SKILL.md` (copied verbatim from the
+  `anthropics/claude-code` plugins marketplace). This means any
+  Claude Code session opened against this repo — including ephemeral
+  web sessions — automatically picks up the skill, so we can ask
+  Claude to build polished UI without it defaulting to generic
+  "AI slop" aesthetics (Inter font, purple gradients, etc.). Useful
+  for the Phase 0 frontend audit work on the build board: empty
+  states, loading skeletons, mobile responsiveness, error
+  boundaries.
+
 ## 2026-05-07
 
 ### Build fix — restore missing EmptyState component file

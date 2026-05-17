@@ -69,9 +69,19 @@ export function AppLayout({ children, noPadding }: LayoutProps) {
               {children}
             </main>
           ) : (
-            <main className="flex-1 overflow-auto overscroll-contain p-4 md:p-6 lg:p-8">
-              <div className="mx-auto max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-                {children}
+            <main className="flex-1 overflow-auto overscroll-contain relative">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-[360px] bg-mesh"
+                style={{
+                  maskImage: "linear-gradient(to bottom, black 0%, black 55%, transparent 100%)",
+                  WebkitMaskImage: "linear-gradient(to bottom, black 0%, black 55%, transparent 100%)",
+                }}
+              />
+              <div className="relative p-4 md:p-6 lg:p-8">
+                <div className="mx-auto max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
+                  {children}
+                </div>
               </div>
             </main>
           )}
