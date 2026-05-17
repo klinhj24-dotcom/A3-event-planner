@@ -3,6 +3,21 @@
 A plain-English log of changes to this project. Newest entries on top.
 For commit-level detail, see `git log`.
 
+## 2026-05-17
+
+### Installed the `frontend-design` skill at the project level
+
+- **Added Anthropic's `frontend-design` skill into the repo** at
+  `.claude/skills/frontend-design/SKILL.md` (copied verbatim from the
+  `anthropics/claude-code` plugins marketplace). This means any
+  Claude Code session opened against this repo — including ephemeral
+  web sessions — automatically picks up the skill, so we can ask
+  Claude to build polished UI without it defaulting to generic
+  "AI slop" aesthetics (Inter font, purple gradients, etc.). Useful
+  for the Phase 0 frontend audit work on the build board: empty
+  states, loading skeletons, mobile responsiveness, error
+  boundaries.
+
 ## 2026-05-07
 
 ### Build fix — restore missing EmptyState component file
