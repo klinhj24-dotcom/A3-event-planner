@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v python3 >/dev/null 2>&1 && python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/learnings_beacon.py\" || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v python3 >/dev/null 2>&1 && python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/learnings_beacon.py\" || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
