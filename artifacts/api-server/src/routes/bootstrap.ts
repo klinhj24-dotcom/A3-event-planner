@@ -18,23 +18,10 @@
 // remove it.
 import { Router, type IRouter, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
-import { sql } from "drizzle-orm";
 import { db, pool, usersTable } from "@workspace/db";
-// Bundled at build time as a string via esbuild's `text` loader (see build.ts).
-// @ts-ignore — esbuild handles this; tsc doesn't know about .sql imports
-import migrationSql from "../../../../lib/db/drizzle/0000_yellow_vulture.sql";
+import { runMigrations } from "../lib/migrations";
 
 const router: IRouter = Router();
-
-// Postgres error codes we treat as "already exists" — safe to ignore so
-// retries after a partial run still work.
-const IGNORABLE_PG_ERRORS = new Set([
-  "42P07", // duplicate_table
-  "42710", // duplicate_object (e.g. constraint already exists)
-  "42701", // duplicate_column
-  "42P06", // duplicate_schema
-  "42P16", // invalid_table_definition (e.g. PK already exists)
-]);
 
 async function tableExists(name: string): Promise<boolean> {
   const result = await pool.query(
@@ -90,31 +77,16 @@ router.post("/bootstrap", async (req: Request, res: Response) => {
     }
   }
 
-  // Run schema migration. Split on drizzle's statement-breakpoint marker.
-  const statements = (migrationSql as string)
-    .split(/--\s*>\s*statement-breakpoint/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  let executed = 0;
-  let skipped = 0;
-  for (const stmt of statements) {
-    try {
-      await db.execute(sql.raw(stmt));
-      executed++;
-    } catch (err: any) {
-      if (err?.code && IGNORABLE_PG_ERRORS.has(err.code)) {
-        skipped++;
-        continue;
-      }
-      console.error("[bootstrap] schema statement failed:", stmt.slice(0, 100), err);
-      res.status(500).json({
-        error: "Schema setup failed",
-        detail: String(err?.message ?? err),
-        executed,
-      });
-      return;
-    }
+  // Run schema migrations via the shared idempotent runner.
+  try {
+    await runMigrations();
+  } catch (err: any) {
+    console.error("[bootstrap] migration failed:", err);
+    res.status(500).json({
+      error: "Schema setup failed",
+      detail: String(err?.message ?? err),
+    });
+    return;
   }
 
   // Create the admin user.
@@ -134,8 +106,6 @@ router.post("/bootstrap", async (req: Request, res: Response) => {
     res.json({
       ok: true,
       message: `Bootstrap complete. Admin ${user.email} created.`,
-      schemaStatementsExecuted: executed,
-      schemaStatementsSkipped: skipped,
       user,
     });
   } catch (err: any) {

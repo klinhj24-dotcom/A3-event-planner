@@ -1,0 +1,83 @@
+name: Smoke test deployment
+
+# Runs on every successful Vercel deployment (preview AND production).
+# Three jobs:
+#   1. Apply pending DB migrations via /api/migrate (idempotent — no-op
+#      if everything's already applied).
+#   2. Hit /api/health (DB-backed readiness check) — must return 200.
+#   3. Hit /api/auth/user as an unauthenticated GET — must return 200
+#      with `isAuthenticated: false`. Verifies routing works for nested
+#      paths, which silently broke once before.
+#
+# Required GitHub repo secret:
+#   BOOTSTRAP_SECRET — same value as the Vercel env var of the same
+#   name. Set it under repo Settings → Secrets and variables → Actions.
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Override URL to smoke-test (e.g. https://example.vercel.app)"
+        required: false
+        type: string
+
+jobs:
+  smoke:
+    # Only run after a successful deployment, or when triggered manually.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target URL
+        id: url
+        run: |
+          if [ -n "${{ inputs.url }}" ]; then
+            target="${{ inputs.url }}"
+          else
+            target="${{ github.event.deployment_status.environment_url }}"
+          fi
+          if [ -z "$target" ]; then
+            echo "::error::No deployment URL available"
+            exit 1
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Smoke-testing $target"
+
+      - name: Apply pending migrations
+        run: |
+          set -e
+          status=$(curl -sS -o /tmp/migrate.txt -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${{ secrets.BOOTSTRAP_SECRET }}" \
+            "${{ steps.url.outputs.target }}/api/migrate")
+          echo "HTTP $status"
+          cat /tmp/migrate.txt
+          if [ "$status" != "200" ]; then
+            echo "::error::Migration endpoint returned $status"
+            exit 1
+          fi
+
+      - name: Health check (DB-backed)
+        run: |
+          set -e
+          status=$(curl -sS -o /tmp/health.txt -w '%{http_code}' \
+            "${{ steps.url.outputs.target }}/api/health")
+          echo "HTTP $status"
+          cat /tmp/health.txt
+          if [ "$status" != "200" ]; then
+            echo "::error::Health check returned $status — function or DB is unhealthy"
+            exit 1
+          fi
+
+      - name: Routing check (nested /api path)
+        run: |
+          set -e
+          status=$(curl -sS -o /tmp/user.txt -w '%{http_code}' \
+            "${{ steps.url.outputs.target }}/api/auth/user")
+          echo "HTTP $status"
+          cat /tmp/user.txt
+          if [ "$status" != "200" ]; then
+            echo "::error::/api/auth/user returned $status — multi-segment /api routing is broken"
+            exit 1
+          fi

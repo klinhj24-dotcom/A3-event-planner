@@ -66,7 +66,6 @@ async function buildAll() {
     },
     minify: true,
     external: externals,
-    loader: { ".sql": "text" },
     logLevel: "info",
   });
 
@@ -90,7 +89,6 @@ async function buildAll() {
     // Inline the drizzle migration .sql file as a string literal so the
     // /api/bootstrap endpoint can run schema setup without shipping
     // separate files alongside the function.
-    loader: { ".sql": "text" },
     logLevel: "info",
   });
 }
